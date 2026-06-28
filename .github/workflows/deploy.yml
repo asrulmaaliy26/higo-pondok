@@ -47,7 +47,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: "staialmannan"
           key: ${{ secrets.VPS_SSH_KEY }}
-          port: 2121
+          port: 22
           source: "release.tar.gz"
           target: "/home/staialmannan/higo.lpialhidayah.or.id"
 
@@ -57,7 +57,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: "staialmannan"
           key: ${{ secrets.VPS_SSH_KEY }}
-          port: 2121
+          port: 22
           script: |
             cd /home/staialmannan/higo.lpialhidayah.or.id
 

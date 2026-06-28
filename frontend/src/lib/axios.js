@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore';
 
 const baseApiUrl = window.location.hostname === 'localhost' 
   ? 'http://localhost:8000' 
-  : `http://${window.location.hostname}:8000`;
+  : ''; // Jika production, gunakan relative path agar sesuai dengan domain saat ini
 
 const baseURL = `${baseApiUrl}/api`;
 

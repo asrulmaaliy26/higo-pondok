@@ -4,9 +4,8 @@ use Illuminate\Support\Facades\Route;
 
 // Tangkap semua route selain /api dan arahkan ke frontend React
 Route::get('/{any}', function () {
-    $path = public_path('spa/index.html');
-    if (file_exists($path)) {
-        return file_get_contents($path);
+    if (view()->exists('react_app')) {
+        return view('react_app');
     }
-    return "Tolong jalankan 'npm run build' di folder frontend terlebih dahulu.";
+    return "Tolong jalankan deployment agar file react_app.blade.php ter-generate.";
 })->where('any', '.*');

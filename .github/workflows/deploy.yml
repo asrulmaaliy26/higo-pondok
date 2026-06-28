@@ -38,6 +38,12 @@ jobs:
           npm install
           npm run build
 
+      - name: 🔄 Copy React Build to Laravel
+        run: |
+          cp -r ../frontend/dist/* public/
+          mv public/index.html resources/views/react_app.blade.php
+        working-directory: ./backend
+
       - name: 🗜️ Create Archive
         run: tar -czf /tmp/release.tar.gz --exclude=.git --exclude=frontend/node_modules --exclude=backend/node_modules . && mv /tmp/release.tar.gz .
 
@@ -61,17 +67,12 @@ jobs:
           script: |
             cd /home/staialmannan/higo.lpialhidayah.or.id
 
-            # Hapus file default Webuzo
-            rm -f default.html
-            rm -f public/default.html
-            rm -f backend/public/default.html
-
             # Ekstrak file
             tar -xzf release.tar.gz
             rm release.tar.gz
 
             cd backend
-            
+
             # Konfigurasi .env awal jika belum ada
             if [ ! -f .env ]; then
               if [ -f ".env.example" ]; then
@@ -92,6 +93,6 @@ jobs:
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
-            
+
             # Restart Apache dengan aman (Webuzo)
             /usr/local/apps/apache2/bin/apachectl graceful

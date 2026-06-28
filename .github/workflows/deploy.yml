@@ -39,7 +39,7 @@ jobs:
           npm run build
 
       - name: 🗜️ Create Archive
-        run: tar -czf release.tar.gz --exclude=.git --exclude=frontend/node_modules --exclude=backend/node_modules .
+        run: tar -czf release.tar.gz --exclude=release.tar.gz --exclude=.git --exclude=frontend/node_modules --exclude=backend/node_modules .
 
       - name: 📤 Upload Archive ke Server
         uses: appleboy/scp-action@v0.1.7

@@ -1,0 +1,80 @@
+name: Deploy to Server (SSH Archive)
+
+on:
+  push:
+    branches:
+      - main # Jalankan otomatis jika ada push ke branch main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🚚 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite, dom, filter, gd, json, libxml, openssl, pcre, phar, pdo, session, tokenizer, xmlwriter, fileinfo
+          coverage: none
+
+      - name: 📦 Install Backend Dependencies (Composer)
+        working-directory: ./backend
+        run: composer install --optimize-autoloader --no-dev --no-interaction --prefer-dist
+
+      - name: 📦 Setup Node.js (Untuk Frontend)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "frontend/package-lock.json"
+
+      - name: 🛠️ Build Frontend (React)
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: 🗜️ Create Archive
+        run: tar -czf release.tar.gz --exclude=.git --exclude=frontend/node_modules --exclude=backend/node_modules .
+
+      - name: 📤 Upload Archive ke Server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: "staialmannan"
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 2121
+          source: "release.tar.gz"
+          target: "/home/staialmannan/higo.lpialhidayah.or.id"
+
+      - name: ♻️ Extract & Setup di Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: "staialmannan"
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 2121
+          script: |
+            cd /home/staialmannan/higo.lpialhidayah.or.id
+
+            # Ekstrak file
+            tar -xzf release.tar.gz
+            rm release.tar.gz
+
+            cd backend
+
+            # Setup Permission Laravel
+            chmod -R 775 storage bootstrap/cache
+
+            # Link storage jika belum ada
+            php artisan storage:link || true
+
+            # Bersihkan cache
+            php artisan optimize:clear
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache

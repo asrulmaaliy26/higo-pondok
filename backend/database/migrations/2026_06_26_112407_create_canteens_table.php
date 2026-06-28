@@ -19,6 +19,17 @@ return new class extends Migration
             $table->string('image')->nullable();
             $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
             $table->boolean('is_open')->default(true);
+            $table->decimal('delivery_fee', 10, 2)->default(0);
+            $table->decimal('admin_fee', 10, 2)->default(0);
+            $table->decimal('admin_debt', 10, 2)->default(0);
+            $table->json('delivery_rates')->nullable();
+            $table->integer('sold_count')->default(0);
+            $table->decimal('latitude', 10, 8)->nullable();
+            $table->decimal('longitude', 11, 8)->nullable();
+            $table->string('whatsapp_number')->nullable();
+            $table->decimal('rating', 3, 2)->default(0);
+            $table->integer('rating_count')->default(0);
+            $table->softDeletes();
             $table->timestamps();
         });
     }

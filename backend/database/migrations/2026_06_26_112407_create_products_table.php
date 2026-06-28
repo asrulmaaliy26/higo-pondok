@@ -21,6 +21,11 @@ return new class extends Migration
             $table->integer('stock')->default(0);
             $table->string('image')->nullable();
             $table->boolean('is_available')->default(true);
+            $table->decimal('discount_price', 10, 2)->nullable();
+            $table->integer('sold_count')->default(0);
+            $table->decimal('rating', 3, 2)->default(0);
+            $table->integer('rating_count')->default(0);
+            $table->softDeletes();
             $table->timestamps();
         });
     }

@@ -11,8 +11,8 @@ export default defineConfig(({ command }) => ({
     },
   },
   build: {
-    outDir: '../backend/public/spa',
+    outDir: 'dist',
     emptyOutDir: true,
   },
-  base: command === 'serve' ? '/' : '/spa/',
+  base: '/',
 }))

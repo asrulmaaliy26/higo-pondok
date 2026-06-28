@@ -66,6 +66,14 @@ jobs:
             rm release.tar.gz
 
             cd backend
+            
+            # Konfigurasi .env awal jika belum ada
+            if [ ! -f .env ]; then
+              if [ -f ".env.example" ]; then
+                cp .env.example .env
+              fi
+              php artisan key:generate
+            fi
 
             # Setup Ownership dan Permission Laravel
             chown -R staialmannan:staialmannan /home/staialmannan/higo.lpialhidayah.or.id

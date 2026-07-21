@@ -13,20 +13,6 @@ use App\Domains\Canteen\Resources\ProductResource;
 
 class ProductController extends Controller
 {
-    private function getUploadPath($user)
-    {
-        // Get all roles and join with underscore
-        $rolesStr = implode('_', $user->roles->pluck('name')->map(function($r) {
-            return strtolower(str_replace(' ', '_', $r));
-        })->toArray());
-        
-        if (empty($rolesStr)) {
-            $rolesStr = 'user';
-        }
-
-        $userName = strtolower(str_replace(' ', '_', $user->name));
-        return 'products/' . $rolesStr . '_' . $userName;
-    }
 
     public function index(Request $request)
     {
@@ -42,7 +28,7 @@ class ProductController extends Controller
         $validated = $request->validated();
         
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store($this->getUploadPath($user), 'public');
+            $path = $request->file('image')->store($this->getUserUploadPath($user, 'products'), 'public');
             $validated['image'] = $path;
         }
 
@@ -66,7 +52,7 @@ class ProductController extends Controller
             if ($product->image && Storage::disk('public')->exists($product->image)) {
                 Storage::disk('public')->delete($product->image);
             }
-            $path = $request->file('image')->store($this->getUploadPath($user), 'public');
+            $path = $request->file('image')->store($this->getUserUploadPath($user, 'products'), 'public');
             $validated['image'] = $path;
         }
 

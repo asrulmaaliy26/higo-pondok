@@ -18,6 +18,12 @@ class Order extends Model
         'courier_id',
         'delivery_location',
         'proof_of_delivery',
+        'proof_of_payment',
+    ];
+
+    protected $casts = [
+        'proof_of_delivery' => 'array',
+        'proof_of_payment' => 'array',
     ];
 
     public function user()

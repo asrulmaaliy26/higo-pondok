@@ -6,9 +6,13 @@ import api, { getStorageUrl } from '../../lib/axios';
 
 export default function Pembayaran() {
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedProof, setSelectedProof] = useState(null);
+  const [selectedProofs, setSelectedProofs] = useState([]);
   const [expandedOrders, setExpandedOrders] = useState({});
   const [activeFilter, setActiveFilter] = useState('all');
+
+  const [showPaymentProofModal, setShowPaymentProofModal] = useState(false);
+  const [activeOrderForPaymentProof, setActiveOrderForPaymentProof] = useState(null);
+  const [paymentProofFiles, setPaymentProofFiles] = useState([]);
 
   const queryClient = useQueryClient();
 
@@ -32,6 +36,25 @@ export default function Pembayaran() {
       cancelMutation.mutate(orderId);
     }
   };
+
+  const uploadPaymentProofMutation = useMutation({
+    mutationFn: async ({ id, formData }) => {
+      const res = await api.post(`/orders/${id}/payment-proof`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['user_orders']);
+      toast.success('Bukti transfer berhasil diunggah!');
+      setShowPaymentProofModal(false);
+      setPaymentProofFiles([]);
+      setActiveOrderForPaymentProof(null);
+    },
+    onError: () => {
+      toast.error('Gagal mengunggah bukti transfer');
+    }
+  });
 
   const { data: ordersRes, isLoading } = useQuery({
     queryKey: ['user_orders'],
@@ -158,10 +181,51 @@ export default function Pembayaran() {
               {order.status === 'completed' && order.proof_of_delivery && (
                 <div className="mb-4 pt-3 border-t border-gray-100 dark:border-gray-800">
                   <button 
-                    onClick={() => setSelectedProof(getStorageUrl(order.proof_of_delivery))}
+                    onClick={() => {
+                      let proofs = [];
+                      if (Array.isArray(order.proof_of_delivery)) {
+                        proofs = order.proof_of_delivery.map(path => getStorageUrl(path));
+                      } else {
+                        proofs = [getStorageUrl(order.proof_of_delivery)];
+                      }
+                      setSelectedProofs(proofs);
+                    }}
                     className="w-full flex items-center justify-center gap-2 py-2 px-3 text-sm text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40 rounded-lg transition-colors font-semibold"
                   >
                     <ImageIcon className="w-4 h-4" /> Lihat Bukti Pengiriman
+                  </button>
+                </div>
+              )}
+
+              {order.payment_status === 'unpaid' && (
+                <div className="mb-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <button 
+                    onClick={() => {
+                      setActiveOrderForPaymentProof(order);
+                      setShowPaymentProofModal(true);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 text-sm text-green-600 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40 rounded-lg transition-colors font-semibold"
+                  >
+                    <ImageIcon className="w-4 h-4" /> Upload Bukti Transfer
+                  </button>
+                </div>
+              )}
+
+              {order.proof_of_payment && (
+                <div className="mb-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex gap-2">
+                  <button 
+                    onClick={() => {
+                      let proofs = [];
+                      if (Array.isArray(order.proof_of_payment)) {
+                        proofs = order.proof_of_payment.map(path => getStorageUrl(path));
+                      } else {
+                        proofs = [getStorageUrl(order.proof_of_payment)];
+                      }
+                      setSelectedProofs(proofs);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 py-2 px-3 text-sm text-indigo-600 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:hover:bg-indigo-900/40 rounded-lg transition-colors font-semibold"
+                  >
+                    <ImageIcon className="w-4 h-4" /> Lihat Bukti Transfer
                   </button>
                 </div>
               )}
@@ -328,24 +392,96 @@ export default function Pembayaran() {
         </div>
       )}
 
-      {/* PROOF OF DELIVERY FULL-SCREEN MODAL */}
-      {selectedProof && (
+      {/* PROOF OF DELIVERY / PAYMENT FULL-SCREEN MODAL */}
+      {selectedProofs.length > 0 && (
         <div className="fixed inset-0 z-[70] bg-black/90 flex flex-col animate-in fade-in duration-200">
-          <div className="flex justify-end p-4">
+          <div className="flex justify-between p-4 bg-black/50 sticky top-0">
+            <span className="text-white font-bold my-auto">{selectedProofs.length} Foto</span>
             <button 
-              onClick={() => setSelectedProof(null)}
+              onClick={() => setSelectedProofs([])}
               className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white z-10 hover:bg-white/20 active:scale-95 transition-all"
             >
               <X className="w-6 h-6" />
             </button>
           </div>
           
-          <div className="flex-1 overflow-hidden p-4 flex items-center justify-center">
-            <img 
-              src={selectedProof} 
-              alt="Bukti Pengiriman" 
-              className="max-w-full max-h-full object-contain rounded-lg"
-            />
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center gap-6 pb-20">
+            {selectedProofs.map((proof, idx) => (
+              <img 
+                key={idx}
+                src={proof} 
+                alt={`Bukti ${idx + 1}`} 
+                className="max-w-full object-contain rounded-lg shadow-lg"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* UPLOAD PAYMENT PROOF MODAL */}
+      {showPaymentProofModal && activeOrderForPaymentProof && (
+        <div className="fixed inset-0 z-[60] bg-black/60 flex flex-col justify-end animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 w-full rounded-t-3xl overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-8 duration-300">
+            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
+              <div>
+                <h3 className="font-bold text-gray-900 dark:text-white text-lg">Upload Bukti Transfer</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Order #{activeOrderForPaymentProof.id}</p>
+              </div>
+              <button onClick={() => {setShowPaymentProofModal(false); setPaymentProofFiles([]);}} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Foto Bukti Transfer (Bisa Lebih Dari 1) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    capture="environment"
+                    onChange={(e) => setPaymentProofFiles(Array.from(e.target.files))}
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-green-900/30 dark:file:text-green-400 dark:text-gray-400"
+                  />
+                </div>
+                {paymentProofFiles.length > 0 && (
+                  <div className="mt-4 grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-2">
+                    {paymentProofFiles.map((file, idx) => (
+                      <div key={idx} className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 aspect-square">
+                        <img src={URL.createObjectURL(file)} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-3 sticky bottom-0 bg-white dark:bg-gray-900">
+              <button 
+                onClick={() => {setShowPaymentProofModal(false); setPaymentProofFiles([]);}}
+                className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold"
+              >
+                Batal
+              </button>
+              <button 
+                disabled={paymentProofFiles.length === 0 || uploadPaymentProofMutation.isPending}
+                onClick={() => {
+                  const formData = new FormData();
+                  paymentProofFiles.forEach((file) => {
+                    formData.append('proof_of_payment[]', file);
+                  });
+                  uploadPaymentProofMutation.mutate({ id: activeOrderForPaymentProof.id, formData });
+                }}
+                className="flex-[2] py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
+              >
+                {uploadPaymentProofMutation.isPending ? 'Mengunggah...' : (
+                  <>Unggah Bukti <CheckCircle className="w-5 h-5"/></>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

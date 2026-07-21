@@ -63,6 +63,13 @@ class AuthController extends Controller
             $user->email = $request->email;
         }
         
+        $santriFields = ['santri_name', 'santri_room', 'santri_class', 'santri_level'];
+        foreach ($santriFields as $field) {
+            if ($request->has($field)) {
+                $user->$field = $request->$field;
+            }
+        }
+        
         if ($request->filled('password')) {
             $user->password = Hash::make($request->password);
         }
@@ -71,8 +78,9 @@ class AuthController extends Controller
             if ($user->avatar) {
                 Storage::disk('public')->delete($user->avatar);
             }
-            $fileName = 'user_' . $user->id . '/' . time() . '_' . $request->file('avatar')->getClientOriginalName();
-            $path = $request->file('avatar')->storeAs('avatars', $fileName, 'public');
+            $dir = $this->getUserUploadPath($user, 'avatars');
+            $fileName = time() . '_' . $request->file('avatar')->getClientOriginalName();
+            $path = $request->file('avatar')->storeAs($dir, $fileName, 'public');
             $user->avatar = $path;
         }
         

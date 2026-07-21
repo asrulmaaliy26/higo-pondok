@@ -9,8 +9,8 @@ export default function TugasKurir() {
   const fileInputRef = useRef(null);
   
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
-  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreviews, setPhotoPreviews] = useState([]);
+  const [photoFiles, setPhotoFiles] = useState([]);
 
   const { data: ordersRes, isLoading } = useQuery({
     queryKey: ['courier_orders'],
@@ -22,9 +22,11 @@ export default function TugasKurir() {
   });
 
   const completeOrderMutation = useMutation({
-    mutationFn: async ({ id, file }) => {
+    mutationFn: async ({ id, files }) => {
       const formData = new FormData();
-      formData.append('proof_of_delivery', file);
+      files.forEach(file => {
+        formData.append('proof_of_delivery[]', file);
+      });
       
       const res = await api.post(`/courier/orders/${id}/complete`, formData, {
         headers: {
@@ -44,21 +46,24 @@ export default function TugasKurir() {
   });
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Ukuran foto maksimal 5MB');
-        return;
-      }
-      setPhotoFile(file);
-      setPhotoPreview(URL.createObjectURL(file));
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      const validFiles = files.filter(file => {
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error(`Ukuran foto ${file.name} melebihi 5MB`);
+          return false;
+        }
+        return true;
+      });
+      setPhotoFiles(validFiles);
+      setPhotoPreviews(validFiles.map(file => URL.createObjectURL(file)));
     }
   };
 
   const handleCloseModal = () => {
     setSelectedOrder(null);
-    setPhotoFile(null);
-    setPhotoPreview(null);
+    setPhotoFiles([]);
+    setPhotoPreviews([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -74,11 +79,11 @@ export default function TugasKurir() {
   };
 
   const handleSubmitProof = () => {
-    if (!photoFile || !selectedOrder) {
+    if (photoFiles.length === 0 || !selectedOrder) {
       toast.error('Silakan unggah foto bukti pengiriman terlebih dahulu');
       return;
     }
-    completeOrderMutation.mutate({ id: selectedOrder.id, file: photoFile });
+    completeOrderMutation.mutate({ id: selectedOrder.id, files: photoFiles });
   };
 
   if (isLoading) {
@@ -214,15 +219,19 @@ export default function TugasKurir() {
               </p>
               
               <div 
-                className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors ${photoPreview ? 'border-green-500 bg-green-50/50 dark:bg-green-900/10' : 'border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors ${photoPreviews.length > 0 ? 'border-green-500 bg-green-50/50 dark:bg-green-900/10' : 'border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                 onClick={() => fileInputRef.current?.click()}
               >
-                {photoPreview ? (
-                  <div className="relative w-full aspect-video rounded-lg overflow-hidden group">
-                    <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <span className="text-white text-sm font-semibold flex items-center gap-2"><Camera className="w-4 h-4"/> Ganti Foto</span>
-                    </div>
+                {photoPreviews.length > 0 ? (
+                  <div className="w-full grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2">
+                    {photoPreviews.map((preview, idx) => (
+                      <div key={idx} className="relative w-full aspect-square rounded-lg overflow-hidden group">
+                        <img src={preview} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="text-white text-xs font-semibold flex items-center gap-1"><Camera className="w-3 h-3"/> Ganti</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="py-8 flex flex-col items-center text-gray-500">
@@ -234,6 +243,7 @@ export default function TugasKurir() {
                 <input 
                   type="file" 
                   accept="image/*"
+                  multiple
                   capture="environment" 
                   ref={fileInputRef} 
                   onChange={handleFileChange} 
@@ -251,7 +261,7 @@ export default function TugasKurir() {
               </button>
               <button 
                 onClick={handleSubmitProof}
-                disabled={!photoFile || completeOrderMutation.isPending}
+                disabled={photoFiles.length === 0 || completeOrderMutation.isPending}
                 className="flex-[2] py-2.5 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex justify-center items-center gap-2"
               >
                 {completeOrderMutation.isPending ? (

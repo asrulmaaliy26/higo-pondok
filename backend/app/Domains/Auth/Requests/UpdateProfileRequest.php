@@ -26,6 +26,10 @@ class UpdateProfileRequest extends FormRequest
             'email' => 'sometimes|required|string|email|max:255|unique:users,email,' . $this->user()->id,
             'password' => 'nullable|string|min:6',
             'avatar' => 'nullable|image|max:5120',
+            'santri_name' => 'nullable|string|max:255',
+            'santri_room' => 'nullable|string|max:255',
+            'santri_class' => 'nullable|string|max:255',
+            'santri_level' => 'nullable|string|max:255',
         ];
     }
 }

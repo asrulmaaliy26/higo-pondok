@@ -95,7 +95,7 @@ class CanteenController extends Controller
                 Storage::disk('public')->delete($canteen->image);
             }
             // Simpan gambar baru
-            $path = $request->file('image')->store('canteens', 'public');
+            $path = $request->file('image')->store($this->getUserUploadPath($request->user(), 'canteens'), 'public');
             $data['image'] = $path;
         }
 

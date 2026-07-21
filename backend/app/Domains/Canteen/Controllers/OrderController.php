@@ -32,6 +32,14 @@ class OrderController extends Controller
 
         $user = $request->user();
 
+        // Check if Santri Profile is complete
+        if (empty($user->santri_name) || empty($user->santri_room) || empty($user->santri_class) || empty($user->santri_level)) {
+            return response()->json([
+                'message' => 'Profil belum lengkap. Silakan isi Nama Santri, Asrama, Kelas, dan Jenjang terlebih dahulu di halaman Profil.',
+                'error_code' => 'INCOMPLETE_PROFILE'
+            ], 403);
+        }
+
         try {
             DB::beginTransaction();
 
@@ -194,16 +202,20 @@ class OrderController extends Controller
         }
 
         $request->validate([
-            'proof_of_delivery' => 'required|image|max:5120', // max 5MB
+            'proof_of_delivery' => 'required|array|min:1',
+            'proof_of_delivery.*' => 'image|max:5120',
         ]);
 
-        $path = $request->file('proof_of_delivery')->store('proofs', 'public');
+        $paths = [];
+        foreach ($request->file('proof_of_delivery') as $file) {
+            $paths[] = $file->store($this->getUserUploadPath($request->user(), 'proofs'), 'public');
+        }
 
-        DB::transaction(function () use ($order, $canteen, $path) {
+        DB::transaction(function () use ($order, $canteen, $paths) {
             $order->update([
                 'status' => 'completed',
                 'payment_status' => 'paid',
-                'proof_of_delivery' => $path,
+                'proof_of_delivery' => $paths,
             ]);
 
             // Add admin fee to canteen's debt
@@ -272,15 +284,19 @@ class OrderController extends Controller
         $order = Order::where('courier_id', $request->user()->id)->findOrFail($id);
 
         $request->validate([
-            'proof_of_delivery' => 'required|image|max:5120', // max 5MB
+            'proof_of_delivery' => 'required|array|min:1',
+            'proof_of_delivery.*' => 'image|max:5120',
         ]);
 
-        $path = $request->file('proof_of_delivery')->store('proofs', 'public');
+        $paths = [];
+        foreach ($request->file('proof_of_delivery') as $file) {
+            $paths[] = $file->store($this->getUserUploadPath($request->user(), 'proofs'), 'public');
+        }
 
-        DB::transaction(function () use ($order, $path) {
+        DB::transaction(function () use ($order, $paths) {
             $order->update([
                 'status' => 'completed',
-                'proof_of_delivery' => $path,
+                'proof_of_delivery' => $paths,
                 'payment_status' => 'paid', // Courier collects cash
             ]);
 
@@ -351,5 +367,27 @@ class OrderController extends Controller
             'message' => 'Pesanan berhasil dibatalkan',
             'order' => $order
         ]);
+    }
+
+    // For User: Upload Payment Proof
+    public function uploadPaymentProof(Request $request, $id)
+    {
+        $order = Order::where('user_id', $request->user()->id)->findOrFail($id);
+
+        $request->validate([
+            'proof_of_payment' => 'required|array|min:1',
+            'proof_of_payment.*' => 'image|max:5120',
+        ]);
+
+        $paths = [];
+        foreach ($request->file('proof_of_payment') as $file) {
+            $paths[] = $file->store($this->getUserUploadPath($request->user(), 'proofs'), 'public');
+        }
+
+        $order->update([
+            'proof_of_payment' => $paths,
+        ]);
+
+        return response()->json(['message' => 'Bukti transfer berhasil diunggah', 'order' => $order]);
     }
 }

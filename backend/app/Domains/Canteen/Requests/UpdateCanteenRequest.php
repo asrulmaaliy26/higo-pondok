@@ -27,6 +27,9 @@ class UpdateCanteenRequest extends FormRequest
             'is_open' => 'boolean',
             'image' => 'nullable|image|max:5120', // Maks 5MB
             'whatsapp_number' => 'nullable|string|max:20',
+            'delivery_fee' => 'nullable|numeric|min:0',
+            'delivery_rates' => 'nullable|array',
+            'delivery_rates.*' => 'nullable|numeric|min:0',
         ];
     }
 }

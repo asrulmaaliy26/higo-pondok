@@ -6,6 +6,10 @@ import { useAuthStore } from '../../store/authStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
+import santriData from '../../data/santri.json';
+
+const uniqueJenjang = [...new Set(santriData.data.filter(r => r.length > 5 && r[4]).map(r => r[4]))].sort();
+const uniqueAsrama = [...new Set(santriData.data.filter(r => r.length > 10 && r[10]).map(r => r[10]))].sort();
 
 export default function Profile() {
   const user = useAuthStore(state => state.user);
@@ -16,13 +20,19 @@ export default function Profile() {
   const userRole = getUserRole(user);
 
   const queryClient = useQueryClient();
+  const [filterGender, setFilterGender] = useState('');
   const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [showKeluargaModal, setShowKeluargaModal] = useState(false);
   const [userAvatarFile, setUserAvatarFile] = useState(null);
   const [userAvatarPreview, setUserAvatarPreview] = useState(null);
   const [userData, setUserData] = useState({
     name: user?.name || '',
     email: user?.email || '',
-    password: ''
+    password: '',
+    santri_name: user?.santri_name || '',
+    santri_room: user?.santri_room || '',
+    santri_class: user?.santri_class || '',
+    santri_level: user?.santri_level || ''
   });
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [showStoreModal, setShowStoreModal] = useState(false);
@@ -33,8 +43,33 @@ export default function Profile() {
     description: '',
     is_open: true,
     image: null,
-    whatsapp_number: ''
+    whatsapp_number: '',
+    delivery_fee: 0
   });
+
+  const availableKelas = React.useMemo(() => {
+    if (!userData.santri_level) {
+      return [...new Set(santriData.data.filter(r => r.length > 5 && r[5]).map(r => r[5]))].sort();
+    }
+    return [...new Set(santriData.data.filter(r => r.length > 5 && r[4] === userData.santri_level && r[5]).map(r => r[5]))].sort();
+  }, [userData.santri_level]);
+
+  const filteredSantris = React.useMemo(() => {
+    return santriData.data.filter(row => {
+      if (row.length < 6) return false;
+      const nameCol = row[1] || '';
+      const jenjang = row[4] || '';
+      const kelas = row[5] || '';
+      
+      let matchJenjang = userData.santri_level ? jenjang === userData.santri_level : true;
+      let matchKelas = userData.santri_class ? kelas === userData.santri_class : true;
+      let matchGender = true;
+      if (filterGender) {
+        matchGender = nameCol.endsWith(filterGender);
+      }
+      return matchJenjang && matchKelas && matchGender;
+    });
+  }, [userData.santri_level, userData.santri_class, filterGender]);
 
   const { data: canteenData, isLoading: isLoadingCanteen } = useQuery({
     queryKey: ['canteen'],
@@ -46,7 +81,8 @@ export default function Profile() {
         description: canteen.description || '',
         is_open: canteen.is_open === 1 || canteen.is_open === true,
         image: canteen.image || null,
-        whatsapp_number: canteen.whatsapp_number || ''
+        whatsapp_number: canteen.whatsapp_number || '',
+        delivery_fee: canteen.delivery_fee || 0
       });
       if (canteen.image) {
         setPreviewUrl(getStorageUrl(canteen.image));
@@ -64,6 +100,7 @@ export default function Profile() {
     onSuccess: (res) => {
       setUser(res.data.user);
       setShowEditUserModal(false);
+      setShowKeluargaModal(false);
       setUserData(prev => ({ ...prev, password: '' }));
       toast.success('Profil berhasil diperbarui!');
     },
@@ -78,6 +115,10 @@ export default function Profile() {
     if (userData.name && userData.name !== user?.name) formData.append('name', userData.name);
     if (userData.email && userData.email !== user?.email) formData.append('email', userData.email);
     if (userData.password) formData.append('password', userData.password);
+    if (userData.santri_name !== user?.santri_name) formData.append('santri_name', userData.santri_name);
+    if (userData.santri_room !== user?.santri_room) formData.append('santri_room', userData.santri_room);
+    if (userData.santri_class !== user?.santri_class) formData.append('santri_class', userData.santri_class);
+    if (userData.santri_level !== user?.santri_level) formData.append('santri_level', userData.santri_level);
     if (userAvatarFile) formData.append('avatar', userAvatarFile);
     await updateUserMutation.mutateAsync(formData);
   };
@@ -115,6 +156,7 @@ export default function Profile() {
     formData.append('name', profileData.name);
     formData.append('description', profileData.description);
     formData.append('is_open', profileData.is_open ? 1 : 0);
+    formData.append('delivery_fee', profileData.delivery_fee);
     if (profileData.whatsapp_number) {
       // Normalize: strip non-digits, convert 08xxx -> 628xxx
       let phone = profileData.whatsapp_number.replace(/\D/g, '');
@@ -222,11 +264,7 @@ export default function Profile() {
                 onClick={() => setShowStoreModal(true)} 
               />
             )}
-            <MenuItem icon={ShieldCheck} title="Keamanan akun" />
-            <MenuItem icon={PlusCircle} title="Higo PLUS" badge="Promo terbatas 🔥" badgeColor="bg-green-500" />
-            <MenuItem icon={CreditCard} title="Metode Pembayaran" />
-            <MenuItem icon={Users} title="Keluarga Santri" badge="Baru" badgeColor="bg-green-700" />
-            <MenuItem icon={Bookmark} title="Alamat tersimpan" isLast={true} />
+            <MenuItem icon={Users} title="Keluarga Santri" badge="Baru" badgeColor="bg-green-700" onClick={() => setShowKeluargaModal(true)} isLast={true} />
           </div>
         </div>
 
@@ -234,9 +272,7 @@ export default function Profile() {
         <div className="mb-5 sm:mb-6 animate-fade-in-up delay-75">
           <h3 className="px-1 text-xs sm:text-sm font-bold text-gray-600 dark:text-gray-400 mb-2 sm:mb-3">Aktivitas di Higo Pondok</h3>
           <div className="bg-white dark:bg-gray-900 rounded-[20px] sm:rounded-[24px] overflow-hidden shadow-[0_2px_10px_rgb(0,0,0,0.02)] border border-gray-100 dark:border-gray-800">
-            <MenuItem icon={Activity} title="Aktivitas" />
-            <MenuItem icon={Ticket} title="Promo & voucher" />
-            <MenuItem icon={Shield} title="Asuransiku" badge="Baru" badgeColor="bg-green-700" />
+            <MenuItem icon={Activity} title="Aktivitas" onClick={() => navigate({ to: '/dashboard/pembayaran' })} />
             <MenuItem icon={LogOut} title="Keluar / Logout" isLast={true} isRed={true} onClick={handleLogout} />
           </div>
         </div>
@@ -295,9 +331,11 @@ export default function Profile() {
                         <option value="false">Tutup / Istirahat</option>
                       </select>
                     </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="whatsapp_number" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Nomor WhatsApp Toko</label>
-                      <p className="text-[10px] text-gray-400 mb-1">Masukkan nomor HP format lokal (awalan 0) atau internasional (awalan 62). Otomatis dikonversi.</p>
+                      <p className="text-[10px] text-gray-400 mb-1">Masukkan nomor HP format lokal (awalan 0) atau internasional (awalan 62).</p>
                       <div className="mt-1 flex items-center border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800 focus-within:ring-2 focus-within:ring-green-500">
                         <span className="px-3 py-2 text-sm font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-700 shrink-0">+62 / 0</span>
                         <input 
@@ -306,6 +344,22 @@ export default function Profile() {
                           placeholder="812-3456-7890"
                           value={profileData.whatsapp_number} 
                           onChange={e => setProfileData({...profileData, whatsapp_number: e.target.value})} 
+                          className="flex-1 py-2 px-3 text-sm text-gray-900 dark:text-white bg-transparent focus:outline-none" 
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label htmlFor="delivery_fee" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Ongkos Kirim Default</label>
+                      <p className="text-[10px] text-gray-400 mb-1">Biaya pengiriman standar untuk setiap pesanan.</p>
+                      <div className="mt-1 flex items-center border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800 focus-within:ring-2 focus-within:ring-green-500">
+                        <span className="px-3 py-2 text-sm font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-700 shrink-0">Rp</span>
+                        <input 
+                          type="number" 
+                          id="delivery_fee" 
+                          placeholder="5000"
+                          min="0"
+                          value={profileData.delivery_fee} 
+                          onChange={e => setProfileData({...profileData, delivery_fee: e.target.value})} 
                           className="flex-1 py-2 px-3 text-sm text-gray-900 dark:text-white bg-transparent focus:outline-none" 
                         />
                       </div>
@@ -369,7 +423,8 @@ export default function Profile() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
                 <input required type="email" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" />
               </div>
-              <div>
+              
+              <div className="pt-4 border-t border-gray-100 dark:border-gray-800 mt-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password Baru (Opsional)</label>
                 <input type="password" placeholder="Kosongkan jika tak ingin diubah" value={userData.password} onChange={e => setUserData({...userData, password: e.target.value})} className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" />
               </div>
@@ -380,6 +435,127 @@ export default function Profile() {
                 </button>
                 <button type="submit" disabled={updateUserMutation.isPending} className="flex-[2] py-3 text-sm font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-70 flex items-center justify-center shadow-md transition-colors">
                   {updateUserMutation.isPending ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Simpan Profil'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Keluarga Santri */}
+      {showKeluargaModal && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-gray-900 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Keluarga Santri</h3>
+              <button onClick={() => setShowKeluargaModal(false)} className="text-gray-400 hover:text-gray-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveUser} className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="mb-2">
+                <h4 className="font-semibold text-gray-900 dark:text-white text-sm">Data Santri (Wajib diisi sebelum memesan)</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Pastikan nama dan lokasi kamar santri valid agar pengiriman makanan berjalan lancar.</p>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Jenjang</label>
+                    <select 
+                      value={userData.santri_level} 
+                      onChange={e => {
+                        setUserData({
+                          ...userData, 
+                          santri_level: e.target.value,
+                          santri_class: '',
+                          santri_name: '',
+                          santri_room: ''
+                        });
+                      }} 
+                      className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow"
+                    >
+                      <option value="">Semua Jenjang</option>
+                      {uniqueJenjang.map(j => <option key={j} value={j}>{j}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Kelas</label>
+                    <select 
+                      value={userData.santri_class} 
+                      onChange={e => {
+                        setUserData({
+                          ...userData, 
+                          santri_class: e.target.value,
+                          santri_name: '',
+                          santri_room: ''
+                        });
+                      }} 
+                      className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow"
+                    >
+                      <option value="">Semua Kelas</option>
+                      {availableKelas.map(k => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Jenis Kelamin</label>
+                  <select 
+                    value={filterGender} 
+                    onChange={e => {
+                      setFilterGender(e.target.value);
+                      setUserData({...userData, santri_name: '', santri_room: ''});
+                    }} 
+                    className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow"
+                  >
+                    <option value="">Semua</option>
+                    <option value="Laki-laki">Laki-laki</option>
+                    <option value="Perempuan">Perempuan</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Nama Santri</label>
+                  <select 
+                    value={userData.santri_name} 
+                    onChange={e => {
+                       const selectedName = e.target.value;
+                       const row = filteredSantris.find(r => r[1] && r[1].replace(' Laki-laki', '').replace(' Perempuan', '') === selectedName);
+                       setUserData({
+                         ...userData, 
+                         santri_name: selectedName,
+                         santri_room: row && row[10] ? row[10] : userData.santri_room
+                       });
+                    }} 
+                    className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow">
+                    <option value="">-- Pilih Santri --</option>
+                    {filteredSantris.map((row, i) => {
+                       const rawName = row[1] || '';
+                       const cleanName = rawName.replace(' Laki-laki', '').replace(' Perempuan', '');
+                       return <option key={i} value={cleanName}>{cleanName}</option>;
+                    })}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Asrama / Kamar</label>
+                  <select 
+                    value={userData.santri_room} 
+                    onChange={e => setUserData({...userData, santri_room: e.target.value})} 
+                    className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow"
+                  >
+                    <option value="">-- Pilih Asrama / Kamar --</option>
+                    {uniqueAsrama.map(a => <option key={a} value={a}>{a}</option>)}
+                    <option value="Lainnya">Lainnya</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-6 mt-2 flex gap-3">
+                <button type="button" onClick={() => setShowKeluargaModal(false)} className="flex-1 py-3 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors">
+                  Batal
+                </button>
+                <button type="submit" disabled={updateUserMutation.isPending} className="flex-[2] py-3 text-sm font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-70 flex items-center justify-center shadow-md transition-colors">
+                  {updateUserMutation.isPending ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Simpan Data Santri'}
                 </button>
               </div>
             </form>

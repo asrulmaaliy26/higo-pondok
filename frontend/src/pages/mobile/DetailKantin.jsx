@@ -1,33 +1,36 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from '@tanstack/react-router';
-import { ChevronLeft, MapPin, Store, Star, Clock, Info, CheckCircle2, X, Plus, Minus, Search, ShoppingBag } from 'lucide-react';
+import { ChevronLeft, MapPin, Store, Star, Clock, Info, CheckCircle2, X, Plus, Minus, Search, ShoppingBag, ShoppingCart } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
 import { SkeletonCard } from '../../components/ui/Skeleton';
 import { LocationModal } from '../../components/modals/LocationModal';
+import { useAuthStore } from '../../store/authStore';
 
 export default function DetailKantin() {
   const { id } = useParams({ strict: false });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const user = useAuthStore(state => state.user);
 
   const [cart, setCart] = useState({});
   const [selectedProduct, setSelectedProduct] = useState(null);
   
   // Location state
   const [showLocationModal, setShowLocationModal] = useState(false);
-  const [deliveryLocation, setDeliveryLocation] = useState('');
+  const [deliveryLocation, setDeliveryLocation] = useState(user?.santri_room || '');
   const [customLocation, setCustomLocation] = useState('');
+
+  // Profile Warning Modal
+  const [showProfileWarning, setShowProfileWarning] = useState(false);
 
   // Voucher
   const [voucherCode, setVoucherCode] = useState('');
   const [appliedVoucher, setAppliedVoucher] = useState(null);
   const [voucherError, setVoucherError] = useState('');
 
-  const predefinedLocations = [
-    'asmah 1', 'asmah 2', 'aminah 1', 'aminah 2', 'al majdi 1', 'al majdi 2'
-  ];
+  const predefinedLocations = user?.santri_room ? [user.santri_room] : [];
 
   const { data: canteen, isLoading: isLoadingCanteen } = useQuery({
     queryKey: ['canteen', id],
@@ -47,14 +50,20 @@ export default function DetailKantin() {
       const orderIdText = order ? `\n*ID Pesanan*: #${order.id}` : '';
 
       let waText = `Assalamu'alaikum Warahmatullahi Wabarakatuh, ${canteen.name}.\n\nSaya ingin mengonfirmasi pesanan saya:${orderIdText}\n\n`;
+      
+      const location = deliveryLocation === 'custom' ? customLocation : deliveryLocation;
+      
+      waText += `*Data Penerima*:\n`;
+      waText += `👤 Santri: ${user?.santri_name || user?.name || '-'}\n`;
+      waText += `📚 Kelas/Jenjang: ${user?.santri_class || '-'} / ${user?.santri_level || '-'}\n`;
+      waText += `🏠 Lokasi (Asrama/Kamar): ${location}\n\n`;
+
       waText += `*Rincian Pesanan*:\n`;
       Object.values(cart).forEach(item => {
         waText += `🔸 ${item.quantity}x ${item.product.name} @ Rp ${parseFloat(item.product.discount_price || item.product.price).toLocaleString('id-ID')}\n`;
       });
-      const location = deliveryLocation === 'custom' ? customLocation : deliveryLocation;
-      waText += `\n*Lokasi Pengiriman*: ${location}`;
       
-      waText += `\n\n*Ringkasan Biaya*:`;
+      waText += `\n*Ringkasan Biaya*:`;
       waText += `\n- Subtotal: Rp ${subtotalPrice.toLocaleString('id-ID')}`;
       waText += `\n- Ongkos Kirim: Rp ${deliveryFee.toLocaleString('id-ID')}`;
       if (adminFee > 0) {
@@ -79,8 +88,12 @@ export default function DetailKantin() {
       
       navigate({ to: '/dashboard/pembayaran' });
     },
-    onError: () => {
-      toast.error('Gagal membuat pesanan');
+    onError: (err) => {
+      if (err.response?.data?.error_code === 'INCOMPLETE_PROFILE') {
+        setShowProfileWarning(true);
+      } else {
+        toast.error(err.response?.data?.message || 'Gagal membuat pesanan');
+      }
     }
   });
 
@@ -199,6 +212,13 @@ export default function DetailKantin() {
 
   const handleCheckoutClick = () => {
     if (totalItems === 0) return;
+    
+    // Validasi Profil Wali Santri di Frontend
+    if (!user?.santri_name || !user?.santri_room || !user?.santri_class || !user?.santri_level) {
+      setShowProfileWarning(true);
+      return;
+    }
+    
     setShowLocationModal(true);
   };
 
@@ -534,6 +554,40 @@ export default function DetailKantin() {
         handleConfirmCheckout={handleConfirmCheckout}
         isPending={checkoutMutation.isPending}
       />
+
+      {/* PROFILE INCOMPLETE WARNING MODAL */}
+      {showProfileWarning && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col text-center">
+            <div className="p-6">
+              <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Info className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Lengkapi Data Santri</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                Sebelum dapat melakukan pesanan, Anda wajib mengisi data Nama Santri, Asrama/Kamar, Kelas, dan Jenjang pada halaman Profil.
+              </p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowProfileWarning(false)}
+                  className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 rounded-xl font-bold transition-colors"
+                >
+                  Nanti Saja
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowProfileWarning(false);
+                    navigate({ to: '/dashboard/profile' });
+                  }}
+                  className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors shadow-md shadow-green-600/20"
+                >
+                  Ke Profil
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

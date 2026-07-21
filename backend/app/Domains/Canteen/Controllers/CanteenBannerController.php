@@ -73,8 +73,7 @@ class CanteenBannerController extends Controller
             $existingBanner->delete();
         }
 
-        $userRole = 'admin_kantin_' . str_replace(' ', '_', strtolower($request->user()->name));
-        $imagePath = $request->file('image')->store($userRole . '/banners', 'public');
+        $imagePath = $request->file('image')->store($this->getUserUploadPath($request->user(), 'banners'), 'public');
 
         $banner = $canteen->banners()->create([
             'title' => $request->title,

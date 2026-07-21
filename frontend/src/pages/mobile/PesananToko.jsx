@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { ChevronLeft, ShoppingBag, CheckCircle, Clock, Truck, MessageCircle, X } from 'lucide-react';
+import { ChevronLeft, ShoppingBag, CheckCircle, Clock, Truck, MessageCircle, X, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../lib/axios';
 
@@ -14,7 +14,9 @@ export default function PesananToko() {
 
   const [showProofModal, setShowProofModal] = useState(false);
   const [activeOrderForProof, setActiveOrderForProof] = useState(null);
-  const [proofFile, setProofFile] = useState(null);
+  const [proofFiles, setProofFiles] = useState([]);
+  
+  const [selectedProofs, setSelectedProofs] = useState([]);
 
   const { data: ordersRes, isLoading } = useQuery({
     queryKey: ['canteen_orders'],
@@ -52,7 +54,7 @@ export default function PesananToko() {
       queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
       toast.success('Pesanan berhasil diselesaikan dan Lunas!');
       setShowProofModal(false);
-      setProofFile(null);
+      setProofFiles([]);
     },
     onError: (err) => {
       toast.error(err.response?.data?.message || 'Gagal menyelesaikan pesanan');
@@ -181,6 +183,43 @@ export default function PesananToko() {
                   return null;
                 })()}
               </div>
+
+              {(order.proof_of_payment || order.proof_of_delivery) && (
+                <div className="flex gap-2 mb-3">
+                  {order.proof_of_payment && (
+                    <button 
+                      onClick={() => {
+                        let proofs = [];
+                        if (Array.isArray(order.proof_of_payment)) {
+                          proofs = order.proof_of_payment.map(path => getStorageUrl(path));
+                        } else {
+                          proofs = [getStorageUrl(order.proof_of_payment)];
+                        }
+                        setSelectedProofs(proofs);
+                      }}
+                      className="flex-1 py-2 px-3 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" /> Bukti Transfer
+                    </button>
+                  )}
+                  {order.proof_of_delivery && (
+                    <button 
+                      onClick={() => {
+                        let proofs = [];
+                        if (Array.isArray(order.proof_of_delivery)) {
+                          proofs = order.proof_of_delivery.map(path => getStorageUrl(path));
+                        } else {
+                          proofs = [getStorageUrl(order.proof_of_delivery)];
+                        }
+                        setSelectedProofs(proofs);
+                      }}
+                      className="flex-1 py-2 px-3 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" /> Bukti Pengiriman
+                    </button>
+                  )}
+                </div>
+              )}
 
               <div className="flex justify-between items-center pt-3 border-t border-gray-100 dark:border-gray-800">
                 <p className="font-bold text-gray-900 dark:text-white flex flex-col">
@@ -342,7 +381,7 @@ export default function PesananToko() {
                 <h3 className="font-bold text-gray-900 dark:text-white text-lg">Upload Bukti Pengiriman</h3>
                 <p className="text-xs text-gray-500 mt-0.5">Order #{activeOrderForProof.id}</p>
               </div>
-              <button onClick={() => {setShowProofModal(false); setProofFile(null);}} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
+              <button onClick={() => {setShowProofModal(false); setProofFiles([]);}} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -360,14 +399,19 @@ export default function PesananToko() {
                   <input
                     type="file"
                     accept="image/*"
+                    multiple
                     capture="environment"
-                    onChange={(e) => setProofFile(e.target.files[0])}
+                    onChange={(e) => setProofFiles(Array.from(e.target.files))}
                     className="w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-green-900/30 dark:file:text-green-400 dark:text-gray-400"
                   />
                 </div>
-                {proofFile && (
-                  <div className="mt-4 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                    <img src={URL.createObjectURL(proofFile)} alt="Preview" className="w-full h-48 object-cover" />
+                {proofFiles.length > 0 && (
+                  <div className="mt-4 grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-2">
+                    {proofFiles.map((file, idx) => (
+                      <div key={idx} className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 aspect-square">
+                        <img src={URL.createObjectURL(file)} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -375,17 +419,19 @@ export default function PesananToko() {
 
             <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-3 sticky bottom-0 bg-white dark:bg-gray-900">
               <button 
-                onClick={() => {setShowProofModal(false); setProofFile(null);}}
+                onClick={() => {setShowProofModal(false); setProofFiles([]);}}
                 className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold"
               >
                 Batal
               </button>
               <button 
-                disabled={!proofFile || completeOrderMutation.isPending}
+                disabled={proofFiles.length === 0 || completeOrderMutation.isPending}
                 onClick={() => {
                   const formData = new FormData();
                   formData.append('_method', 'PUT');
-                  formData.append('proof_of_delivery', proofFile);
+                  proofFiles.forEach((file) => {
+                    formData.append('proof_of_delivery[]', file);
+                  });
                   completeOrderMutation.mutate({ id: activeOrderForProof.id, formData });
                 }}
                 className="flex-[2] py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:bg-gray-400 flex items-center justify-center gap-2 shadow-sm"
@@ -395,6 +441,32 @@ export default function PesananToko() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW PROOFS MODAL */}
+      {selectedProofs.length > 0 && (
+        <div className="fixed inset-0 z-[70] bg-black/90 flex flex-col animate-in fade-in duration-200">
+          <div className="flex justify-between p-4 bg-black/50 sticky top-0">
+            <span className="text-white font-bold my-auto">{selectedProofs.length} Foto</span>
+            <button 
+              onClick={() => setSelectedProofs([])}
+              className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white z-10 hover:bg-white/20 active:scale-95 transition-all"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center gap-6 pb-20">
+            {selectedProofs.map((proof, idx) => (
+              <img 
+                key={idx}
+                src={proof} 
+                alt={`Bukti ${idx + 1}`} 
+                className="max-w-full object-contain rounded-lg shadow-lg"
+              />
+            ))}
           </div>
         </div>
       )}

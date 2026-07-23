@@ -1,28 +1,81 @@
 import React, { useState } from 'react';
-import { Search, Plus, MoreVertical, Edit2, Trash2, Filter, Shield, User, Coffee, Bus, LogIn } from 'lucide-react';
+import { Search, Plus, MoreVertical, Edit2, Trash2, Filter, Shield, User, Coffee, Bus, LogIn, X } from 'lucide-react';
 import { ROLES } from '../../config/roles';
 import { useAuthStore } from '../../store/authStore';
 import { useNavigate } from '@tanstack/react-router';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../lib/axios';
-
-// Data simulasi (Mock Data) untuk preview UI
-const mockUsers = [
-  { id: 1, name: 'Administrator', email: 'admin@higopondok.com', role: 'admin', status: 'active', date: '26 Jun 2026' },
-  { id: 2, name: 'Santri Dummy', email: 'santri@higopondok.com', role: 'user', status: 'active', date: '26 Jun 2026' },
-  { id: 3, name: 'Kantin Barokah', email: 'kantin@higopondok.com', role: 'kantin', status: 'active', date: '26 Jun 2026' },
-  { id: 4, name: 'Kurir Amanah', email: 'kurir@higopondok.com', role: 'kurir', status: 'pending', date: '26 Jun 2026' },
-  { id: 5, name: 'Ahmad Fulan', email: 'ahmad@higopondok.com', role: 'user', status: 'active', date: '25 Jun 2026' },
-  { id: 6, name: 'Siti Fatimah', email: 'siti@higopondok.com', role: 'user', status: 'inactive', date: '20 Jun 2026' },
-];
 
 export default function UserManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
-  const impersonate = useAuthStore(state => state.impersonate);
-  const navigate = useNavigate();
+  
+  // Modal states
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState('add'); // 'add' or 'edit'
+  const [editingUserId, setEditingUserId] = useState(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'user',
+    status: 'active'
+  });
 
+  const impersonate = useAuthStore(state => state.impersonate);
+  const currentUser = useAuthStore(state => state.user);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  // Fetch users
+  const { data: users = [], isLoading } = useQuery({
+    queryKey: ['admin_users'],
+    queryFn: async () => {
+      const res = await api.get('/admin/users');
+      return res.data;
+    }
+  });
+
+  // Create User Mutation
+  const createUserMutation = useMutation({
+    mutationFn: (data) => api.post('/admin/users', data),
+    onSuccess: () => {
+      toast.success('User berhasil ditambahkan');
+      queryClient.invalidateQueries(['admin_users']);
+      closeModal();
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal menambahkan user');
+    }
+  });
+
+  // Update User Mutation
+  const updateUserMutation = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/admin/users/${id}`, data),
+    onSuccess: () => {
+      toast.success('User berhasil diperbarui');
+      queryClient.invalidateQueries(['admin_users']);
+      closeModal();
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal memperbarui user');
+    }
+  });
+
+  // Delete User Mutation
+  const deleteUserMutation = useMutation({
+    mutationFn: (id) => api.delete(`/admin/users/${id}`),
+    onSuccess: () => {
+      toast.success('User berhasil dihapus');
+      queryClient.invalidateQueries(['admin_users']);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal menghapus user');
+    }
+  });
+
+  // Impersonate Mutation
   const impersonateMutation = useMutation({
     mutationFn: (userId) => api.post(`/admin/impersonate/${userId}`),
     onSuccess: (res) => {
@@ -32,16 +85,59 @@ export default function UserManagement() {
       navigate({ to: '/dashboard' });
     },
     onError: (err) => {
-      toast.error(err.response?.data?.message || 'Gagal beralih akun. Mungkin user ini hanya data palsu/mock.');
+      toast.error(err.response?.data?.message || 'Gagal beralih akun.');
     }
   });
 
   const handleImpersonate = (user) => {
-    if(user.role === ROLES.ADMIN) return; // Don't impersonate another admin (or self)
+    if(user.role === ROLES.ADMIN) return;
     impersonateMutation.mutate(user.id);
   };
 
-  const filteredUsers = mockUsers.filter(user => {
+  const handleDelete = (user) => {
+    if (user.id === currentUser?.id) {
+      toast.error('Tidak bisa menghapus akun sendiri');
+      return;
+    }
+    if (window.confirm(`Yakin ingin menghapus user ${user.name}?`)) {
+      deleteUserMutation.mutate(user.id);
+    }
+  };
+
+  const openAddModal = () => {
+    setModalMode('add');
+    setFormData({ name: '', email: '', password: '', role: 'user', status: 'active' });
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (user) => {
+    setModalMode('edit');
+    setEditingUserId(user.id);
+    setFormData({
+      name: user.name,
+      email: user.email,
+      password: '', // Leave blank, only fill if changing
+      role: user.role,
+      status: user.status || 'active'
+    });
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingUserId(null);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (modalMode === 'add') {
+      createUserMutation.mutate(formData);
+    } else {
+      updateUserMutation.mutate({ id: editingUserId, data: formData });
+    }
+  };
+
+  const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           user.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = filterRole === 'all' || user.role === filterRole;
@@ -65,7 +161,7 @@ export default function UserManagement() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
+    <div className="space-y-6 animate-fade-in-up pb-24">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
         <div>
@@ -74,7 +170,10 @@ export default function UserManagement() {
             Kelola data akun administrator, user, pengelola kantin, dan kurir.
           </p>
         </div>
-        <button className="inline-flex items-center justify-center px-4 py-2 sm:py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-all shadow-sm shadow-green-500/20 w-full sm:w-auto">
+        <button 
+          onClick={openAddModal}
+          className="inline-flex items-center justify-center px-4 py-2 sm:py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-all shadow-sm shadow-green-500/20 w-full sm:w-auto"
+        >
           <Plus className="w-4 h-4 mr-2" />
           Tambah User
         </button>
@@ -115,12 +214,14 @@ export default function UserManagement() {
 
       {/* Users List (Card Layout for Mobile) */}
       <div className="space-y-4">
-        {filteredUsers.length > 0 ? (
+        {isLoading ? (
+          <div className="text-center py-8 text-gray-500">Memuat data...</div>
+        ) : filteredUsers.length > 0 ? (
           filteredUsers.map((user) => (
             <div key={user.id} className="glass-card rounded-xl p-4 border border-gray-200/50 dark:border-gray-800/50 shadow-sm relative">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center space-x-3 truncate">
-                  <div className="flex-shrink-0 h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center text-green-600 dark:text-green-400 font-bold">
+                  <div className="flex-shrink-0 h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center text-green-600 dark:text-green-400 font-bold uppercase">
                     {user.name.charAt(0)}
                   </div>
                   <div className="truncate">
@@ -130,14 +231,14 @@ export default function UserManagement() {
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
                    {getRoleBadge(user.role)}
-                   {getStatusBadge(user.status)}
+                   {getStatusBadge(user.status || 'active')}
                 </div>
               </div>
               
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-800/50">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   <span className="block font-medium mb-0.5">Terdaftar:</span>
-                  {user.date}
+                  {new Date(user.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </div>
                 
                 <div className="flex items-center gap-1">
@@ -150,10 +251,16 @@ export default function UserManagement() {
                       <LogIn className="w-4 h-4" />
                     </button>
                   )}
-                  <button className="p-1.5 text-gray-400 hover:text-green-600 transition-colors rounded-md hover:bg-green-50 dark:hover:bg-green-900/30" title="Edit">
+                  <button 
+                    onClick={() => openEditModal(user)}
+                    className="p-1.5 text-gray-400 hover:text-green-600 transition-colors rounded-md hover:bg-green-50 dark:hover:bg-green-900/30" title="Edit"
+                  >
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button className="p-1.5 text-gray-400 hover:text-red-600 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-900/30" title="Hapus">
+                  <button 
+                    onClick={() => handleDelete(user)}
+                    className="p-1.5 text-gray-400 hover:text-red-600 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-900/30" title="Hapus"
+                  >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -170,6 +277,113 @@ export default function UserManagement() {
           </div>
         )}
       </div>
+
+      {/* Modal CRUD */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-xl animate-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+              <h3 className="font-bold text-lg text-gray-900 dark:text-white">
+                {modalMode === 'add' ? 'Tambah User Baru' : 'Edit User'}
+              </h3>
+              <button onClick={closeModal} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full bg-gray-50 dark:bg-gray-800 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSubmit} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nama Lengkap</label>
+                <input 
+                  type="text" 
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  required
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                  placeholder="Masukkan nama"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                <input 
+                  type="email" 
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  required
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                  placeholder="email@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Password {modalMode === 'edit' && '(Kosongkan jika tidak diubah)'}
+                </label>
+                <input 
+                  type="password" 
+                  value={formData.password}
+                  onChange={(e) => setFormData({...formData, password: e.target.value})}
+                  required={modalMode === 'add'}
+                  minLength={8}
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                  placeholder={modalMode === 'edit' ? "Kosongkan jika tidak diubah" : "Minimal 8 karakter"}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Peran (Role)</label>
+                  <select 
+                    value={formData.role}
+                    onChange={(e) => setFormData({...formData, role: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                  >
+                    <option value="user">User / Santri</option>
+                    <option value="kantin">Kantin</option>
+                    <option value="kurir">Kurir</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                  <select 
+                    value={formData.status}
+                    onChange={(e) => setFormData({...formData, status: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                  >
+                    <option value="active">Aktif</option>
+                    <option value="inactive">Nonaktif</option>
+                    <option value="pending">Menunggu</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={closeModal}
+                  className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl transition-colors"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={createUserMutation.isPending || updateUserMutation.isPending}
+                  className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-xl transition-colors flex justify-center items-center"
+                >
+                  {(createUserMutation.isPending || updateUserMutation.isPending) ? (
+                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  ) : (
+                    'Simpan'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

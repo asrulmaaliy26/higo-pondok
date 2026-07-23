@@ -7,12 +7,8 @@ import toast from 'react-hot-toast';
 export default function Pertokoan() {
   const queryClient = useQueryClient();
   const [selectedCanteen, setSelectedCanteen] = useState(null);
-  const [deliveryRates, setDeliveryRates] = useState({});
-  const [adminFee, setAdminFee] = useState('');
-
-  const LOCATIONS = [
-    'Asmah 1', 'Asmah 2', 'Aminah 1', 'Aminah 2', 'Al Majdi 1', 'Al Majdi 2', 'Lainnya'
-  ];
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
+  const [withdrawalNotes, setWithdrawalNotes] = useState('');
 
   const { data: canteens, isLoading } = useQuery({
     queryKey: ['admin-canteens'],
@@ -42,55 +38,47 @@ export default function Pertokoan() {
     }
   });
 
-  const updateFeesMutation = useMutation({
-    mutationFn: async (data) => {
-      await axios.put(`/admin/canteens/${data.id}/fees`, {
-        delivery_rates: data.delivery_rates,
-        admin_fee: data.admin_fee
-      });
+  const approveCanteenMutation = useMutation({
+    mutationFn: async (id) => {
+      await axios.post(`/admin/canteens/${id}/approve`);
     },
     onSuccess: () => {
-      toast.success('Biaya berhasil disimpan');
+      toast.success('Kantin disetujui');
       queryClient.invalidateQueries(['admin-canteens']);
+      setSelectedCanteen(prev => prev ? { ...prev, status: 'approved' } : prev);
     }
   });
 
-  const payDebtMutation = useMutation({
+  const rejectCanteenMutation = useMutation({
     mutationFn: async (id) => {
-      const res = await axios.post(`/admin/canteens/${id}/pay-debt`);
+      await axios.post(`/admin/canteens/${id}/reject`);
+    },
+    onSuccess: () => {
+      toast.success('Kantin ditolak');
+      queryClient.invalidateQueries(['admin-canteens']);
+      setSelectedCanteen(null);
+    }
+  });
+
+  const withdrawMutation = useMutation({
+    mutationFn: async ({ id, amount, notes }) => {
+      const res = await axios.post(`/admin/canteens/${id}/withdraw`, { amount, notes });
       return res.data;
     },
     onSuccess: (data) => {
-      toast.success(data.message || 'Pembayaran diterima');
+      toast.success(data.message || 'Pencairan berhasil');
       queryClient.invalidateQueries(['admin-canteens']);
-      
-      // Update local state if modal is open
-      setSelectedCanteen(prev => prev ? { ...prev, admin_debt: 0 } : prev);
+      setSelectedCanteen(prev => prev ? { ...prev, balance: data.canteen.balance } : prev);
+      setWithdrawalAmount('');
+      setWithdrawalNotes('');
     },
     onError: (err) => {
-      toast.error(err.response?.data?.message || 'Gagal menerima pembayaran');
+      toast.error(err.response?.data?.message || 'Gagal memproses pencairan');
     }
   });
 
   const handleOpenDetail = (canteen) => {
     setSelectedCanteen(canteen);
-    
-    const initialRates = {};
-    LOCATIONS.forEach(loc => {
-      initialRates[loc] = canteen.delivery_rates?.[loc] ?? canteen.delivery_fee ?? 0;
-    });
-    setDeliveryRates(initialRates);
-    
-    setAdminFee(canteen.admin_fee?.toString() || '0');
-  };
-
-  const handleSaveFees = (e) => {
-    e.preventDefault();
-    updateFeesMutation.mutate({
-      id: selectedCanteen.id,
-      delivery_rates: deliveryRates,
-      admin_fee: parseFloat(adminFee)
-    });
   };
 
   return (
@@ -128,7 +116,10 @@ export default function Pertokoan() {
                   <div>
                     <h3 className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
                       {canteen.name}
-                      {!canteen.is_open && (
+                      {canteen.status === 'pending' && (
+                        <span className="px-2 py-0.5 bg-yellow-500 text-white text-[10px] rounded animate-pulse">PENDING REVIEW</span>
+                      )}
+                      {canteen.status === 'approved' && !canteen.is_open && (
                         <span className="px-2 py-0.5 bg-gray-500 text-white text-[10px] rounded">TUTUP</span>
                       )}
                     </h3>
@@ -136,11 +127,16 @@ export default function Pertokoan() {
                   </div>
                 </div>
                 
-                {pendingBanner && (
-                  <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-[10px] font-bold rounded-full animate-pulse">
-                    Ada Banner Pending
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                    Rp {parseFloat(canteen.balance || 0).toLocaleString('id-ID')}
                   </span>
-                )}
+                  {pendingBanner && (
+                    <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-[10px] font-bold rounded-full animate-pulse">
+                      Banner Pending
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })
@@ -169,74 +165,92 @@ export default function Pertokoan() {
           
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-20 space-y-6">
             
-            {/* Form Ongkir & Admin */}
-            <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
-              <h3 className="font-bold text-gray-900 dark:text-white mb-4">Pengaturan Biaya</h3>
-              <form onSubmit={handleSaveFees} className="space-y-4">
-                <div className="space-y-3">
-                  <label className="block text-sm font-bold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 mb-2">Ongkos Kirim per Tujuan (Rp)</label>
-                  {LOCATIONS.map(loc => (
-                    <div key={loc} className="flex items-center gap-3">
-                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300 w-1/3 truncate">{loc}</label>
-                      <input
-                        type="number"
-                        value={deliveryRates[loc] ?? ''}
-                        onChange={(e) => setDeliveryRates({...deliveryRates, [loc]: e.target.value ? parseFloat(e.target.value) : ''})}
-                        className="flex-1 rounded-xl border-gray-300 dark:border-gray-700 dark:bg-gray-800 shadow-sm focus:border-green-500 focus:ring-green-500 text-gray-900 dark:text-white py-2"
-                        placeholder="Tarif..."
-                        required
-                      />
-                    </div>
-                  ))}
+            {/* Approval Section */}
+            {selectedCanteen.status === 'pending' && (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-2xl border border-yellow-200 dark:border-yellow-800/50">
+                <h3 className="font-bold text-yellow-900 dark:text-yellow-400 mb-2">Review Toko Baru</h3>
+                <p className="text-sm text-yellow-800 dark:text-yellow-300 mb-4">Toko ini masih berstatus "Menunggu Review" dan belum bisa diakses oleh Santri. Setujui agar toko bisa beroperasi.</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`Setujui kantin ${selectedCanteen.name} untuk beroperasi?`)) {
+                        approveCanteenMutation.mutate(selectedCanteen.id);
+                      }
+                    }}
+                    disabled={approveCanteenMutation.isPending || rejectCanteenMutation.isPending}
+                    className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle size={18} />
+                    <span>Setujui</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`Tolak dan hapus pengajuan kantin ${selectedCanteen.name}?`)) {
+                        rejectCanteenMutation.mutate(selectedCanteen.id);
+                      }
+                    }}
+                    disabled={approveCanteenMutation.isPending || rejectCanteenMutation.isPending}
+                    className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-600 font-semibold rounded-lg shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <XCircle size={18} />
+                  </button>
                 </div>
+              </div>
+            )}
+
+            {/* Fund Withdrawal (Pencairan Dana) Section */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800/50">
+              <h3 className="font-bold text-blue-900 dark:text-blue-400 mb-2">Pencairan Dana Kantin</h3>
+              <div className="mb-4">
+                <p className="text-sm text-blue-800 dark:text-blue-300">Total Saldo (Bisa Dicairkan):</p>
+                <p className="text-2xl font-black text-blue-700 dark:text-blue-500">
+                  Rp {parseFloat(selectedCanteen.balance || 0).toLocaleString('id-ID')}
+                </p>
+              </div>
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (window.confirm(`Proses pencairan dana sebesar Rp ${parseFloat(withdrawalAmount).toLocaleString('id-ID')}?`)) {
+                    withdrawMutation.mutate({
+                      id: selectedCanteen.id,
+                      amount: parseFloat(withdrawalAmount),
+                      notes: withdrawalNotes
+                    });
+                  }
+                }}
+                className="space-y-3"
+              >
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Biaya Admin (Rp)</label>
+                  <label className="block text-xs font-medium text-blue-800 dark:text-blue-300 mb-1">Nominal (Rp)</label>
                   <input
                     type="number"
-                    value={adminFee}
-                    onChange={(e) => setAdminFee(e.target.value)}
-                    className="w-full rounded-xl border-gray-300 dark:border-gray-700 dark:bg-gray-800 shadow-sm focus:border-green-500 focus:ring-green-500 text-gray-900 dark:text-white"
-                    placeholder="Contoh: 2000"
+                    min="1000"
+                    max={selectedCanteen.balance || 0}
+                    value={withdrawalAmount}
+                    onChange={(e) => setWithdrawalAmount(e.target.value)}
+                    className="w-full rounded-xl border-blue-200 dark:border-blue-800/50 dark:bg-blue-900/30 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 dark:text-white"
+                    placeholder="Contoh: 50000"
                     required
                   />
                 </div>
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    disabled={updateFeesMutation.isPending}
-                    className="w-full flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 text-white p-3 rounded-xl font-medium transition-colors disabled:opacity-70 mt-2"
-                  >
-                    <Save size={18} />
-                    <span>Simpan Biaya</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* Admin Debt Section */}
-            <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl border border-amber-100 dark:border-amber-800/50">
-              <h3 className="font-bold text-amber-900 dark:text-amber-400 mb-2">Tagihan Pemeliharaan (Admin Fee)</h3>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm text-amber-800 dark:text-amber-300">Total Utang Kantin:</p>
-                  <p className="text-2xl font-black text-amber-700 dark:text-amber-500">
-                    Rp {parseFloat(selectedCanteen.admin_debt || 0).toLocaleString('id-ID')}
-                  </p>
+                  <label className="block text-xs font-medium text-blue-800 dark:text-blue-300 mb-1">Catatan (Opsional)</label>
+                  <input
+                    type="text"
+                    value={withdrawalNotes}
+                    onChange={(e) => setWithdrawalNotes(e.target.value)}
+                    className="w-full rounded-xl border-blue-200 dark:border-blue-800/50 dark:bg-blue-900/30 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 dark:text-white"
+                    placeholder="Transfer ke BNI / Kas Harian..."
+                  />
                 </div>
-                
                 <button
-                  onClick={() => {
-                    if (window.confirm('Terima setoran uang tunai dari kantin ini dan reset tagihan menjadi Rp 0?')) {
-                      payDebtMutation.mutate(selectedCanteen.id);
-                    }
-                  }}
-                  disabled={payDebtMutation.isPending || !selectedCanteen.admin_debt || selectedCanteen.admin_debt <= 0}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  type="submit"
+                  disabled={withdrawMutation.isPending || !withdrawalAmount || withdrawalAmount > (selectedCanteen.balance || 0)}
+                  className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-xl font-bold transition-colors disabled:opacity-50"
                 >
-                  <CheckCircle size={18} />
-                  <span>Terima Setoran</span>
+                  {withdrawMutation.isPending ? 'Memproses...' : 'Cairkan Dana'}
                 </button>
-              </div>
+              </form>
             </div>
 
             {/* Banner Section */}

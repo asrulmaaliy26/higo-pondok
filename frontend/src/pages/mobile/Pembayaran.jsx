@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ShoppingBag, ChevronLeft, CheckCircle, Clock, Store, MessageCircle, Image as ImageIcon, X, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import api, { getStorageUrl } from '../../lib/axios';
+import api, { getStorageUrl, getPublicUrl } from '../../lib/axios';
+import { useAuthStore } from '../../store/authStore';
 
 export default function Pembayaran() {
+  const user = useAuthStore(state => state.user);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedProofs, setSelectedProofs] = useState([]);
   const [expandedOrders, setExpandedOrders] = useState({});
@@ -13,6 +15,16 @@ export default function Pembayaran() {
   const [showPaymentProofModal, setShowPaymentProofModal] = useState(false);
   const [activeOrderForPaymentProof, setActiveOrderForPaymentProof] = useState(null);
   const [paymentProofFiles, setPaymentProofFiles] = useState([]);
+
+  // ⚙️ Konfigurasi Jam Layanan Pembayaran QRIS
+  // Ubah angka di bawah ini untuk mengatur jam buka/tutup pembayaran (format 24 jam)
+  const PAYMENT_START_HOUR = 0;  // Jam mulai (09:00)
+  const PAYMENT_END_HOUR   = 24; // Jam selesai (17:00)
+
+  const isPaymentTime = () => {
+    const hour = new Date().getHours();
+    return hour >= PAYMENT_START_HOUR && hour < PAYMENT_END_HOUR;
+  };
 
   const queryClient = useQueryClient();
 
@@ -91,11 +103,26 @@ export default function Pembayaran() {
   };
 
   const buildOrderWAText = (order) => {
-    let text = `Pesanan #${order.id}\n`;
+    const subtotal = order.items?.reduce((sum, item) => sum + parseFloat(item.subtotal), 0) || 0;
+    const ongkir = parseFloat(order.total_price) - subtotal;
+
+    let text = `Assalamu'alaikum Warahmatullahi Wabarakatuh, ${order.canteen?.name || 'Kantin'}.\n`;
+    text += `Saya ingin mengonfirmasi pesanan saya:\n`;
+    text += `*ID Pesanan*: #${order.id}\n\n`;
+    text += `*Data Penerima*:\n`;
+    text += `👤 Santri: ${user?.santri_name || user?.name || '-'}\n`;
+    text += `📚 Kelas/Jenjang: ${user?.santri_class || '-'} / ${user?.santri_level || '-'}\n`;
+    if (order.delivery_location) text += `🏠 Lokasi: ${order.delivery_location}\n`;
+    text += `\n*Rincian Pesanan*:\n`;
     order.items?.forEach(item => {
-      text += `- ${item.quantity}x ${item.product?.name}\n`;
+      text += `🔸 ${item.quantity}x ${item.product?.name} @ Rp ${parseFloat(item.price_per_item || (parseFloat(item.subtotal)/item.quantity)).toLocaleString('id-ID')}\n`;
     });
-    return text.trim();
+    text += `\n*Ringkasan Biaya*:`;
+    text += `\n- Subtotal: Rp ${subtotal.toLocaleString('id-ID')}`;
+    if (ongkir > 0) text += `\n- Ongkos Kirim: Rp ${ongkir.toLocaleString('id-ID')}`;
+    text += `\n\n*Total Tagihan: Rp ${parseFloat(order.total_price).toLocaleString('id-ID')}*\n\n`;
+    text += `Mohon segera diproses ya, Syukron Jazakumullah Khairan. 🙏`;
+    return text;
   };
 
   return (
@@ -152,7 +179,8 @@ export default function Pembayaran() {
                     order.status === 'processing' ? 'bg-indigo-100 text-indigo-700' :
                     'bg-gray-100 text-gray-700'
                   }`}>
-                    {order.status === 'pending' ? 'Menunggu Konfirmasi' : 
+                    {order.is_custom && parseFloat(order.total_price) === 0 ? 'Menunggu Penentuan Harga Toko' :
+                     order.status === 'pending' ? 'Menunggu Konfirmasi' : 
                      order.status === 'processing' ? 'Sedang Diproses/Dikirim' : 
                      order.status === 'completed' ? 'Selesai' : 
                      order.status === 'cancelled' ? 'Dibatalkan' : order.status}
@@ -161,6 +189,20 @@ export default function Pembayaran() {
               </div>
               
               <div className="space-y-2 mb-4">
+                {order.is_custom && (
+                  <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-900/50 mb-2">
+                    <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase block mb-1">Catatan Pesanan Khusus:</span>
+                    <p className="text-sm font-medium text-purple-900 dark:text-purple-200 whitespace-pre-wrap">
+                      {order.custom_notes || 'Tidak ada catatan.'}
+                    </p>
+                    {parseFloat(order.total_price) === 0 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 font-semibold mt-2">
+                        ⏳ Pihak toko sedang menghitung & menentukan total harga pesanan ini.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {order.items?.map(item => (
                   <div 
                     key={item.id} 
@@ -178,6 +220,25 @@ export default function Pembayaran() {
                 ))}
               </div>
 
+              {order.proof_of_purchase && order.proof_of_purchase.length > 0 && (
+                <div className="mb-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <button 
+                    onClick={() => {
+                      let proofs = [];
+                      if (Array.isArray(order.proof_of_purchase)) {
+                        proofs = order.proof_of_purchase.map(path => getStorageUrl(path));
+                      } else {
+                        proofs = [getStorageUrl(order.proof_of_purchase)];
+                      }
+                      setSelectedProofs(proofs);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 text-sm text-purple-600 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:hover:bg-purple-900/40 rounded-lg transition-colors font-semibold"
+                  >
+                    <ImageIcon className="w-4 h-4" /> Lihat Struk Pembelian (Kurir)
+                  </button>
+                </div>
+              )}
+
               {order.status === 'completed' && order.proof_of_delivery && (
                 <div className="mb-4 pt-3 border-t border-gray-100 dark:border-gray-800">
                   <button 
@@ -192,41 +253,69 @@ export default function Pembayaran() {
                     }}
                     className="w-full flex items-center justify-center gap-2 py-2 px-3 text-sm text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40 rounded-lg transition-colors font-semibold"
                   >
-                    <ImageIcon className="w-4 h-4" /> Lihat Bukti Pengiriman
+                    <ImageIcon className="w-4 h-4" /> Lihat Bukti Serah Terima
                   </button>
                 </div>
               )}
 
-              {order.payment_status === 'unpaid' && (
+              {/* Section Upload Pertama Kali */}
+              {order.payment_status === 'unpaid' && !order.proof_of_payment && (
                 <div className="mb-4 pt-3 border-t border-gray-100 dark:border-gray-800">
-                  <button 
-                    onClick={() => {
-                      setActiveOrderForPaymentProof(order);
-                      setShowPaymentProofModal(true);
-                    }}
-                    className="w-full flex items-center justify-center gap-2 py-2 px-3 text-sm text-green-600 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40 rounded-lg transition-colors font-semibold"
-                  >
-                    <ImageIcon className="w-4 h-4" /> Upload Bukti Transfer
-                  </button>
+                  {isPaymentTime() ? (
+                    <button 
+                      onClick={() => {
+                        setActiveOrderForPaymentProof(order);
+                        setShowPaymentProofModal(true);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-2 px-3 text-sm text-green-600 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40 rounded-lg transition-colors font-semibold"
+                    >
+                      <ImageIcon className="w-4 h-4" /> Upload Bukti Transfer
+                    </button>
+                  ) : (
+                    <div className="w-full flex flex-col items-center justify-center gap-1 py-3 px-3 text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400 rounded-lg border border-amber-100 dark:border-amber-900/50 text-center">
+                      <Clock className="w-5 h-5 mb-1" />
+                      <span className="font-semibold">Waktu Pembayaran Tutup</span>
+                      <span className="text-xs">Pembayaran QRIS hanya dilayani pukul 09:00 - 17:00 WIB</span>
+                    </div>
+                  )}
                 </div>
               )}
 
+              {/* Section Lihat Bukti & Tambah Bukti */}
               {order.proof_of_payment && (
-                <div className="mb-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex gap-2">
-                  <button 
-                    onClick={() => {
-                      let proofs = [];
-                      if (Array.isArray(order.proof_of_payment)) {
-                        proofs = order.proof_of_payment.map(path => getStorageUrl(path));
-                      } else {
-                        proofs = [getStorageUrl(order.proof_of_payment)];
-                      }
-                      setSelectedProofs(proofs);
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 px-3 text-sm text-indigo-600 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:hover:bg-indigo-900/40 rounded-lg transition-colors font-semibold"
-                  >
-                    <ImageIcon className="w-4 h-4" /> Lihat Bukti Transfer
-                  </button>
+                <div className="mb-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => {
+                        let proofs = [];
+                        if (Array.isArray(order.proof_of_payment)) {
+                          proofs = order.proof_of_payment.map(path => getStorageUrl(path));
+                        } else {
+                          proofs = [getStorageUrl(order.proof_of_payment)];
+                        }
+                        setSelectedProofs(proofs);
+                      }}
+                      className="flex-1 flex items-center justify-center gap-2 py-2 px-3 text-sm text-indigo-600 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:hover:bg-indigo-900/40 rounded-lg transition-colors font-semibold"
+                    >
+                      <ImageIcon className="w-4 h-4" /> Lihat Bukti Transfer
+                    </button>
+                    {isPaymentTime() && order.status !== 'cancelled' && (
+                      <button 
+                        onClick={() => {
+                          setActiveOrderForPaymentProof(order);
+                          setShowPaymentProofModal(true);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 text-sm text-green-600 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40 rounded-lg transition-colors font-semibold"
+                      >
+                        <ImageIcon className="w-4 h-4" /> Tambah Bukti
+                      </button>
+                    )}
+                  </div>
+                  {!isPaymentTime() && order.status !== 'cancelled' && (
+                    <div className="w-full mt-1 text-center text-xs text-amber-600 dark:text-amber-400">
+                      Upload tambahan sedang tutup (layanan QRIS: 09:00 - 17:00)
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -252,21 +341,13 @@ export default function Pembayaran() {
                       </span>
                     </div>
                     {(() => {
-                      const subtotal = order.items?.reduce((sum, item) => sum + parseFloat(item.subtotal), 0) || 0;
-                      const discount = parseFloat(order.discount_amount || 0);
-                      const fees = parseFloat(order.total_price) - subtotal + discount;
+                      const fees = parseFloat(order.total_price) - (order.items?.reduce((sum, item) => sum + parseFloat(item.subtotal), 0) || 0);
                       return (
                         <>
                           {fees > 0 && (
                             <div className="flex justify-between">
                               <span>Ongkir & Biaya Admin</span>
                               <span>Rp {fees.toLocaleString('id-ID')}</span>
-                            </div>
-                          )}
-                          {discount > 0 && (
-                            <div className="flex justify-between text-green-600">
-                              <span>Diskon Voucher</span>
-                              <span>- Rp {discount.toLocaleString('id-ID')}</span>
                             </div>
                           )}
                         </>
@@ -281,11 +362,10 @@ export default function Pembayaran() {
                     Rp {parseFloat(order.total_price).toLocaleString('id-ID')}
                   </p>
                 </div>
-                
-                
-                {/* Contact Buttons */}
+
+                {/* Contact Buttons — always visible */}
                 {(order.canteen?.whatsapp_number || order.courier?.phone) && (
-                  <div className="flex gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <div className="flex gap-2 pt-3 border-t border-gray-100 dark:border-gray-800 mt-0 mb-3">
                     {order.canteen?.whatsapp_number && (
                       <a 
                         href={formatPhoneWA(order.canteen.whatsapp_number) + `?text=${encodeURIComponent(buildOrderWAText(order))}`}
@@ -296,7 +376,7 @@ export default function Pembayaran() {
                         <MessageCircle className="w-4 h-4" /> Hubungi Toko
                       </a>
                     )}
-                    {order.courier?.phone && (
+                    {order.courier?.phone && order.status !== 'cancelled' && (
                       <a 
                         href={formatPhoneWA(order.courier.phone) + `?text=${encodeURIComponent(buildOrderWAText(order))}`}
                         target="_blank"
@@ -394,25 +474,43 @@ export default function Pembayaran() {
 
       {/* PROOF OF DELIVERY / PAYMENT FULL-SCREEN MODAL */}
       {selectedProofs.length > 0 && (
-        <div className="fixed inset-0 z-[70] bg-black/90 flex flex-col animate-in fade-in duration-200">
-          <div className="flex justify-between p-4 bg-black/50 sticky top-0">
-            <span className="text-white font-bold my-auto">{selectedProofs.length} Foto</span>
+        <div className="fixed inset-0 z-[70] bg-black flex flex-col animate-in fade-in duration-200">
+          {/* Header */}
+          <div className="flex justify-between items-center px-4 py-3 bg-black/80 shrink-0">
+            <span className="text-white font-bold text-sm">{selectedProofs.length} Foto</span>
             <button 
               onClick={() => setSelectedProofs([])}
-              className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white z-10 hover:bg-white/20 active:scale-95 transition-all"
+              className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
             >
               <X className="w-6 h-6" />
             </button>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center gap-6 pb-20">
+          {/* Images */}
+          <div className="flex-1 overflow-y-auto flex flex-col items-center gap-4 p-4 pb-10">
             {selectedProofs.map((proof, idx) => (
-              <img 
-                key={idx}
-                src={proof} 
-                alt={`Bukti ${idx + 1}`} 
-                className="max-w-full object-contain rounded-lg shadow-lg"
-              />
+              <div key={idx} className="w-full max-w-xl">
+                <p className="text-white/50 text-xs mb-1 text-center">Bukti {idx + 1}</p>
+                <img 
+                  src={proof}
+                  alt={`Bukti ${idx + 1}`}
+                  className="w-full rounded-xl shadow-2xl object-contain bg-gray-900"
+                  style={{ maxHeight: '80vh' }}
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+                <div
+                  style={{ display: 'none' }}
+                  className="w-full h-48 rounded-xl bg-gray-800 flex flex-col items-center justify-center text-gray-400 text-sm gap-2"
+                >
+                  <ImageIcon className="w-10 h-10 opacity-40" />
+                  <span>Gambar tidak dapat dimuat</span>
+                  <a href={proof} target="_blank" rel="noreferrer" className="text-green-400 text-xs underline break-all px-4 text-center">{proof}</a>
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -433,6 +531,24 @@ export default function Pembayaran() {
             </div>
             
             <div className="p-6 overflow-y-auto">
+              <div className="mb-6 text-center">
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
+                  Silakan scan QRIS di bawah ini untuk membayar sebesar
+                </p>
+                <p className="text-xl font-bold text-green-600 dark:text-green-400 mb-3">
+                  Rp {parseFloat(activeOrderForPaymentProof.total_price).toLocaleString('id-ID')}
+                </p>
+                <div 
+                  onClick={() => setSelectedProofs([getPublicUrl('QRISkantinalhidayah.jpeg')])}
+                  className="border-2 border-dashed border-green-400 dark:border-green-600 p-3 rounded-2xl inline-block bg-white shadow-md hover:shadow-lg cursor-pointer group transition-all"
+                  title="Klik untuk memperbesar QRIS"
+                >
+                  <img src={getPublicUrl('QRISkantinalhidayah.jpeg')} alt="QRIS Pembayaran" className="w-52 h-52 object-contain group-hover:scale-105 transition-transform rounded-lg" />
+                  <p className="text-xs font-bold text-green-600 dark:text-green-500 mt-2 flex items-center justify-center gap-1">
+                    🔍 Klik QRIS untuk Memperbesar
+                  </p>
+                </div>
+              </div>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

@@ -29,33 +29,66 @@ class CanteenController extends Controller
 
     public function show($id)
     {
-        $canteen = Canteen::with(['products', 'vouchers' => function($q) {
-            $q->where('is_active', true)
-              ->where(function($query) {
-                  $query->whereNull('valid_until')->orWhere('valid_until', '>=', now());
-              });
-        }])->findOrFail($id);
+        $canteen = Canteen::with(['products'])->findOrFail($id);
         return response()->json($canteen);
+    }
+
+    private function getActiveCanteen(Request $request)
+    {
+        $canteenId = $request->query('canteen_id') ?? $request->input('canteen_id');
+        if ($canteenId) {
+            return $request->user()->canteens()->where('id', $canteenId)->first();
+        }
+        return $request->user()->canteens()->first();
+    }
+
+    public function myCanteens(Request $request)
+    {
+        $canteens = $request->user()->canteens()
+            ->withCount(['orders as pending_orders_count' => function ($query) {
+                $query->whereIn('status', ['pending', 'processing']);
+            }])
+            ->get();
+        return CanteenResource::collection($canteens);
+    }
+
+    public function storeMyCanteen(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+        ]);
+        
+        $data['user_id'] = $request->user()->id;
+        $data['status'] = 'pending';
+        $data['is_open'] = false;
+        
+        $canteen = Canteen::create($data);
+        return response()->json([
+            'message' => 'Kantin baru berhasil dibuat. Menunggu persetujuan admin.',
+            'canteen' => new CanteenResource($canteen)
+        ]);
     }
 
     public function myCanteen(Request $request)
     {
-        // For kantin role
-        $canteen = $request->user()->canteen()->with(['products', 'banners', 'orders.items'])->first();
+        $canteen = $this->getActiveCanteen($request);
         
         if (!$canteen) {
             return response()->json(['message' => 'Kantin tidak ditemukan'], 404);
         }
+        $canteen->load(['products', 'banners', 'orders.items']);
         return new CanteenResource($canteen);
     }
 
     public function dashboardStats(Request $request)
     {
-        $canteen = $request->user()->canteen()->with(['products', 'orders.items'])->first();
+        $canteen = $this->getActiveCanteen($request);
         if (!$canteen) {
             return response()->json(['message' => 'Kantin tidak ditemukan'], 404);
         }
 
+        $canteen->load(['products', 'orders.items']);
         $pendingOrders = $canteen->orders()->whereIn('status', ['pending', 'processing'])->count();
         
         $todayIncome = 0;
@@ -66,7 +99,7 @@ class CanteenController extends Controller
             $itemsTotal = $order->items->sum('subtotal');
             $todayIncome += $itemsTotal;
             if (is_null($order->courier_id)) {
-                $delivery_fee = $order->total_price + $order->discount_amount - $itemsTotal;
+                $delivery_fee = $order->total_price - $itemsTotal;
                 $todayIncome += max(0, $delivery_fee);
             }
         }
@@ -85,16 +118,17 @@ class CanteenController extends Controller
 
     public function updateMyCanteen(UpdateCanteenRequest $request)
     {
-        $canteen = $request->user()->canteen()->firstOrFail();
+        $canteen = $this->getActiveCanteen($request);
+        if (!$canteen) {
+            return response()->json(['message' => 'Kantin tidak ditemukan'], 404);
+        }
         
         $data = $request->validated();
         
         if ($request->hasFile('image')) {
-            // Hapus gambar lama jika ada
             if ($canteen->image) {
                 Storage::disk('public')->delete($canteen->image);
             }
-            // Simpan gambar baru
             $path = $request->file('image')->store($this->getUserUploadPath($request->user(), 'canteens'), 'public');
             $data['image'] = $path;
         }
@@ -108,7 +142,10 @@ class CanteenController extends Controller
     }
     public function toggleOpenStatus(Request $request)
     {
-        $canteen = $request->user()->canteen()->firstOrFail();
+        $canteen = $this->getActiveCanteen($request);
+        if (!$canteen) {
+            return response()->json(['message' => 'Kantin tidak ditemukan'], 404);
+        }
         $canteen->is_open = !$canteen->is_open;
         $canteen->save();
 

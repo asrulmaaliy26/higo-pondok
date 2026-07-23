@@ -19,8 +19,7 @@ import DashboardLayout from './components/layout/mobile/DashboardLayout';
 import Dashboard from './pages/mobile/Dashboard';
 import UserManagement from './pages/mobile/UserManagement';
 import Pertokoan from './pages/mobile/Pertokoan';
-import Perkuriran from './pages/mobile/Perkuriran';
-import Persantrian from './pages/mobile/Persantrian';
+import BukuPanduan from './pages/mobile/BukuPanduan';
 import TokoSaya from './pages/mobile/TokoSaya';
 import Profile from './pages/mobile/Profile';
 import Kantin from './pages/mobile/Kantin';
@@ -29,6 +28,7 @@ import PesananToko from './pages/mobile/PesananToko';
 import PromoVoucher from './pages/mobile/PromoVoucher';
 import Pembayaran from './pages/mobile/Pembayaran';
 import TugasKurir from './pages/mobile/TugasKurir';
+import Keranjang from './pages/mobile/Keranjang';
 
 import RoleGuard from './components/RoleGuard';
 import { ROLES } from './config/roles';
@@ -83,12 +83,8 @@ function PertokoanPage() {
   return <RoleGuard allowedRoles={[ROLES.ADMIN]}><Pertokoan /></RoleGuard>;
 }
 
-function PerkuriranPage() {
-  return <RoleGuard allowedRoles={[ROLES.ADMIN]}><Perkuriran /></RoleGuard>;
-}
-
-function PersantrianPage() {
-  return <RoleGuard allowedRoles={[ROLES.ADMIN]}><Persantrian /></RoleGuard>;
+function BukuPanduanPage() {
+  return <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.USER, ROLES.KANTIN, ROLES.KURIR]}><BukuPanduan /></RoleGuard>;
 }
 
 function TokoSayaPage() {
@@ -113,6 +109,10 @@ function DetailKantinPage() {
 
 function PembayaranPage() {
   return <RoleGuard allowedRoles={[ROLES.USER]}><Pembayaran /></RoleGuard>;
+}
+
+function KeranjangPage() {
+  return <RoleGuard allowedRoles={[ROLES.USER]}><Keranjang /></RoleGuard>;
 }
 
 // Protected Dashboard Routes
@@ -147,16 +147,10 @@ const pertokoanRoute = createRoute({
   component: PertokoanPage,
 });
 
-const perkuriranRoute = createRoute({
+const panduanRoute = createRoute({
   getParentRoute: () => dashboardRoute,
-  path: '/perkuriran',
-  component: PerkuriranPage,
-});
-
-const persantrianRoute = createRoute({
-  getParentRoute: () => dashboardRoute,
-  path: '/persantrian',
-  component: PersantrianPage,
+  path: '/panduan',
+  component: BukuPanduanPage,
 });
 
 const tokoSayaRoute = createRoute({
@@ -209,6 +203,12 @@ const tugasKurirRoute = createRoute({
   ),
 });
 
+const keranjangRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: '/keranjang',
+  component: KeranjangPage,
+});
+
 const profileRoute = createRoute({
   getParentRoute: () => dashboardRoute,
   path: '/profile',
@@ -225,8 +225,7 @@ const routeTree = rootRoute.addChildren([
     dashboardIndexRoute, 
     userManagementRoute,
     pertokoanRoute,
-    perkuriranRoute,
-    persantrianRoute,
+    panduanRoute,
     tokoSayaRoute,
     promoVoucherRoute,
     kantinRoute,
@@ -234,6 +233,7 @@ const routeTree = rootRoute.addChildren([
     pesananTokoRoute,
     pembayaranRoute,
     tugasKurirRoute,
+    keranjangRoute,
     profileRoute
   ]),
 ]);

@@ -1,15 +1,28 @@
 import React, { useState } from 'react';
-import { Store, Save, Plus, Edit2, Trash2, X, ChevronLeft, ChevronRight, Star, Clock, CheckCircle2 } from 'lucide-react';
+import { Store, Save, Plus, Edit2, Trash2, X, ChevronLeft, ChevronRight, Star, Clock, CheckCircle2, ChevronDown } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
 import { SkeletonCard } from '../../components/ui/Skeleton';
 import { ProductFormModal } from '../../components/modals/ProductFormModal';
+import { useCanteenStore } from '../../store/canteenStore';
 
 export default function TokoSaya() {
   const queryClient = useQueryClient();
+  const { activeCanteenId, setActiveCanteenId, isStoreSelected, setIsStoreSelected } = useCanteenStore();
   const [page, setPage] = useState(1);
+
+  // Fetch all canteens owned by this user
+  const { data: canteensList } = useQuery({
+    queryKey: ['my_canteens_list'],
+    queryFn: async () => {
+      const res = await api.get('/my-canteens');
+      return res.data.data || res.data;
+    }
+  });
+
+
 
   // Product Form State (handled mostly in modal now, keeping simple state for toggling)
   const [showProductModal, setShowProductModal] = useState(false);
@@ -20,20 +33,22 @@ export default function TokoSaya() {
 
   // Queries
   const { data: canteen, isLoading: isLoadingCanteen } = useQuery({
-    queryKey: ['canteen'],
+    queryKey: ['canteen', activeCanteenId],
     queryFn: async () => {
-      const res = await api.get('/my-canteen');
+      const res = await api.get(`/my-canteen?canteen_id=${activeCanteenId}`);
       return res.data.data || res.data;
-    }
+    },
+    enabled: !!activeCanteenId
   });
 
   const { data: productsRes, isLoading: isLoadingProducts } = useQuery({
-    queryKey: ['products', page],
+    queryKey: ['products', page, activeCanteenId],
     queryFn: async () => {
-      const res = await api.get(`/my-products?page=${page}`);
+      const res = await api.get(`/my-products?page=${page}&canteen_id=${activeCanteenId}`);
       return res.data;
     },
-    keepPreviousData: true
+    keepPreviousData: true,
+    enabled: !!activeCanteenId
   });
 
   const products = productsRes?.data || [];
@@ -60,7 +75,7 @@ export default function TokoSaya() {
 
   const toggleOpenMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.put('/my-canteen/status');
+      const res = await api.put(`/my-canteen/status?canteen_id=${activeCanteenId}`);
       return res.data;
     },
     onSuccess: (data) => {
@@ -69,6 +84,7 @@ export default function TokoSaya() {
       
       queryClient.invalidateQueries({ queryKey: ['canteen'] });
       queryClient.invalidateQueries({ queryKey: ['admin-canteens'] });
+      queryClient.invalidateQueries({ queryKey: ['canteen_stats'] });
       toast.success('Status Kantin berhasil diubah');
     },
     onError: () => {
@@ -80,11 +96,11 @@ export default function TokoSaya() {
     mutationFn: (formDataPayload) => {
       if (editingProduct) {
         formDataPayload.append('_method', 'PUT');
-        return api.post(`/my-products/${editingProduct.id}`, formDataPayload, {
+        return api.post(`/my-products/${editingProduct.id}?canteen_id=${activeCanteenId}`, formDataPayload, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       }
-      return api.post('/my-products', formDataPayload, {
+      return api.post(`/my-products?canteen_id=${activeCanteenId}`, formDataPayload, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
     },
@@ -119,12 +135,13 @@ export default function TokoSaya() {
     if (file) {
       formData.append('image', file);
     }
+    formData.append('canteen_id', activeCanteenId);
     
     await saveProductMutation.mutateAsync(formData);
   };
 
   const deleteProductMutation = useMutation({
-    mutationFn: (id) => api.delete(`/my-products/${id}`),
+    mutationFn: (id) => api.delete(`/my-products/${id}?canteen_id=${activeCanteenId}`),
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: ['products', page] });
       const previousProductsRes = queryClient.getQueryData(['products', page]);
@@ -161,6 +178,82 @@ export default function TokoSaya() {
     return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div></div>;
   }
 
+  if (!isStoreSelected) {
+    return (
+      <div className="bg-gray-50 h-full min-h-screen dark:bg-gray-950">
+        <div className="bg-white dark:bg-gray-900 sticky top-0 z-20 shadow-sm px-4 py-3 flex items-center gap-3">
+          <button onClick={() => window.location.href = '/dashboard'} className="p-2 -ml-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white">Pilih Toko</h1>
+        </div>
+        
+        <div className="p-4 max-w-lg mx-auto space-y-3">
+          {!canteensList || canteensList.length === 0 ? (
+             <div className="text-center py-8">
+               <Store className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+               <p className="text-gray-500 dark:text-gray-400">Anda belum memiliki toko.</p>
+             </div>
+          ) : (
+            canteensList.map(c => (
+              <div key={c.id} className="flex flex-col p-4 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl shadow-sm gap-3 relative">
+                
+                {/* Toko Info (Click to enter) */}
+                <div onClick={() => { setActiveCanteenId(c.id); setIsStoreSelected(true); }} className="flex items-center justify-between cursor-pointer group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center overflow-hidden shrink-0 relative">
+                      {c.image ? (
+                        <img src={getStorageUrl(c.image)} alt={c.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Store className="w-6 h-6 text-green-600" />
+                      )}
+                      
+                      {/* Pending Orders Badge on Image */}
+                      {c.pending_orders_count > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white dark:border-gray-900 animate-pulse">
+                          {c.pending_orders_count}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 dark:text-white group-hover:text-green-600 transition-colors">{c.name}</h4>
+                      <p className="text-xs text-gray-500 line-clamp-1">{c.description || 'Toko Hidayah Go'}</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-green-500 transition-colors" />
+                </div>
+
+                {/* Quick Actions / Toggle Status */}
+                <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${c.is_open ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                    <span className={`text-xs font-medium ${c.is_open ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
+                      {c.is_open ? 'Toko Buka' : 'Toko Tutup'}
+                    </span>
+                  </div>
+                  
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      api.put(`/my-canteen/status?canteen_id=${c.id}`).then(() => {
+                        queryClient.invalidateQueries(['my_canteens_list']);
+                        toast.success(`Status ${c.name} diubah`);
+                      }).catch(() => toast.error('Gagal mengubah status'));
+                    }}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${c.is_open ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${c.is_open ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-gray-50 h-full pb-24 dark:bg-gray-950 font-sans relative">
       {/* HEADER BANNER */}
@@ -175,8 +268,8 @@ export default function TokoSaya() {
         )}
         
         {/* Top Navbar overlay */}
-        <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent lg:hidden">
-          <button onClick={() => window.location.href = '/dashboard'} className="w-10 h-10 rounded-full bg-black/30 flex items-center justify-center text-white backdrop-blur-sm transition-colors hover:bg-black/50">
+        <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent">
+          <button onClick={() => setIsStoreSelected(false)} className="w-10 h-10 rounded-full bg-black/40 flex items-center justify-center text-white backdrop-blur-md transition-colors hover:bg-black/60 shadow-sm border border-white/20">
             <ChevronLeft className="w-6 h-6" />
           </button>
         </div>
@@ -215,6 +308,12 @@ export default function TokoSaya() {
                   className="text-xs font-medium text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400"
                 >
                   Pesanan Masuk
+                </button>
+                <button 
+                  onClick={() => window.location.href = '/dashboard/profile'}
+                  className="text-xs font-medium text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300"
+                >
+                  Pengaturan Toko (Profil)
                 </button>
               </div>
             </div>
@@ -288,8 +387,8 @@ export default function TokoSaya() {
                   </h3>
                   <div className="flex items-center gap-2 mt-1">
                     <p className="text-xs text-gray-500 line-clamp-1">{product.category || 'Kategori Umum'}</p>
-                    <span className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded border border-green-200 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400">
-                      Sisa: {product.stock}
+                    <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-400">
+                      Dipesan: {product.sold_count || 0}x
                     </span>
                   </div>
                   

@@ -32,8 +32,8 @@ class User extends Authenticatable
         ];
     }
 
-    public function canteen()
+    public function canteens()
     {
-        return $this->hasOne(\App\Domains\Canteen\Canteen::class);
+        return $this->hasMany(\App\Domains\Canteen\Canteen::class);
     }
 }

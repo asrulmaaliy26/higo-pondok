@@ -153,4 +153,35 @@ class AdminController extends Controller
             'canteen' => $canteen
         ]);
     }
+
+    public function processWithdrawal(Request $request, $id)
+    {
+        $canteen = Canteen::findOrFail($id);
+        
+        $data = $request->validate([
+            'amount' => 'required|numeric|min:1000',
+            'notes' => 'nullable|string|max:255',
+        ]);
+
+        if ($canteen->balance < $data['amount']) {
+            return response()->json([
+                'message' => 'Saldo kantin tidak mencukupi untuk pencairan ini.',
+                'current_balance' => $canteen->balance
+            ], 400);
+        }
+
+        $canteen->decrement('balance', $data['amount']);
+
+        \App\Domains\Canteen\CanteenWithdrawal::create([
+            'canteen_id' => $canteen->id,
+            'admin_id' => $request->user()->id,
+            'amount' => $data['amount'],
+            'notes' => $data['notes']
+        ]);
+
+        return response()->json([
+            'message' => 'Pencairan dana berhasil diproses.',
+            'canteen' => $canteen->fresh()
+        ]);
+    }
 }

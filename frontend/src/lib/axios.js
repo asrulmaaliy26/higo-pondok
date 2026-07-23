@@ -13,6 +13,11 @@ export const getStorageUrl = (path) => {
   return `${baseApiUrl}/storage/${path}`;
 };
 
+export const getPublicUrl = (path) => {
+  if (!path) return null;
+  return `${baseApiUrl}/${path}`;
+};
+
 const api = axios.create({
     baseURL: baseURL,
     headers: {

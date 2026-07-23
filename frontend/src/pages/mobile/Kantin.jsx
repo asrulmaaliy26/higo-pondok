@@ -23,14 +23,7 @@ export default function Kantin() {
     }
   });
 
-  // Fetch Vouchers
-  const { data: vouchers, isLoading: loadingVouchers } = useQuery({
-    queryKey: ['vouchers'],
-    queryFn: async () => {
-      const res = await axios.get('/vouchers');
-      return res.data;
-    }
-  });
+
 
 
 
@@ -79,27 +72,7 @@ export default function Kantin() {
           )}
         </div>
 
-        {/* Vouchers Carousel */}
-        <div className="relative z-10 mb-4">
-          {loadingVouchers ? (
-             <div className="w-full h-12 bg-emerald-200 dark:bg-emerald-900 rounded-xl animate-pulse"></div>
-          ) : (
-             <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide space-x-3 pb-2">
-               {Array.isArray(vouchers) && vouchers.map((voucher) => (
-                 <div key={voucher.id} className="snap-center shrink-0 bg-gradient-to-r from-amber-400 to-orange-500 rounded-xl p-3 flex items-center justify-between min-w-[240px] shadow-sm">
-                    <div className="flex items-center space-x-2">
-                       <Ticket size={24} className="text-white" />
-                       <div>
-                         <p className="text-white font-bold text-sm">Diskon Rp{voucher.discount_amount.toLocaleString('id-ID')}</p>
-                         <p className="text-amber-100 text-[10px]">Min. Blj Rp{voucher.min_purchase.toLocaleString('id-ID')}</p>
-                       </div>
-                    </div>
-                    <button className="bg-white text-orange-600 text-xs font-bold px-3 py-1 rounded-full shadow-sm">Klaim</button>
-                 </div>
-               ))}
-             </div>
-          )}
-        </div>
+
       </div>
 
       {/* SEARCH BAR (Overlapping) */}
@@ -115,22 +88,7 @@ export default function Kantin() {
         </div>
       </div>
 
-      {/* QUICK ACTIONS */}
-      <div className="px-4 grid grid-cols-4 gap-3 mb-8">
-        {[
-          { icon: <MapPin size={24} className="text-red-500" />, label: 'Toko Terdekat' },
-          { icon: <Bike size={24} className="text-amber-500" />, label: 'Ongkir Murah' },
-          { icon: <Users size={24} className="text-emerald-500" />, label: 'Group Order' },
-          { icon: <Zap size={24} className="text-blue-500" />, label: 'Menu Cepat' },
-        ].map((item, index) => (
-          <div key={index} className="flex flex-col items-center">
-            <div className="bg-white dark:bg-gray-800 w-16 h-16 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center relative mb-2">
-              {item.icon}
-            </div>
-            <span className="text-xs font-semibold text-center text-gray-700 dark:text-gray-300">{item.label}</span>
-          </div>
-        ))}
-      </div>
+
 
 
 

@@ -56,7 +56,13 @@ class CanteenBannerController extends Controller
             'image' => 'required|image|mimes:jpeg,png,jpg|max:2048'
         ]);
 
-        $canteen = $request->user()->canteen()->first();
+        $canteenId = $request->input('canteen_id') ?? $request->query('canteen_id');
+        $canteen = null;
+        if ($canteenId) {
+            $canteen = $request->user()->canteens()->where('id', $canteenId)->first();
+        } else {
+            $canteen = $request->user()->canteens()->first();
+        }
         
         if (!$canteen) {
             return response()->json(['message' => 'Toko tidak ditemukan'], 404);

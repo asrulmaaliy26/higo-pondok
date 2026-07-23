@@ -26,10 +26,11 @@ export default function DashboardLayout() {
   const isTokoSaya = location.pathname.startsWith('/dashboard/toko-saya');
   const isPesanan = location.pathname.startsWith('/dashboard/pesanan');
   const isPerkuriran = location.pathname.startsWith('/dashboard/perkuriran') || location.pathname.startsWith('/dashboard/tugas-kurir');
+  const isKeranjang = location.pathname === '/dashboard/keranjang';
   
   // Pages that manage their own full-bleed layout
-  const isEdgeToEdgePage = isKantinDetail || isKantinList || isProfile || isPembayaran || isTokoSaya || isPesanan || isPerkuriran;
-  const hideBottomNav = isKantinDetail;
+  const isEdgeToEdgePage = isKantinDetail || isKantinList || isProfile || isPembayaran || isTokoSaya || isPesanan || isPerkuriran || isKeranjang;
+  const hideBottomNav = isKantinDetail || isKeranjang;
 
   return (
     <div className="flex w-full h-screen bg-slate-50 dark:bg-gray-950 overflow-hidden">

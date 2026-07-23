@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, Edit2, ShieldCheck, PlusCircle, CreditCard, Users, Bookmark, Activity, Ticket, Shield, LogOut, ChevronRight, Store, Camera, Save, X } from 'lucide-react';
+import { ArrowLeft, Edit2, ShieldCheck, PlusCircle, CreditCard, Users, Bookmark, Activity, Ticket, Shield, LogOut, ChevronRight, Store, Camera, Save, X, Plus } from 'lucide-react';
 import { ROLES, getUserRole } from '../../config/roles';
 import { useAuthStore } from '../../store/authStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -34,10 +34,17 @@ export default function Profile() {
     santri_class: user?.santri_class || '',
     santri_level: user?.santri_level || ''
   });
+  
+  // Store Management States
+  const [showStoreListModal, setShowStoreListModal] = useState(false);
+  const [showEditStoreModal, setShowEditStoreModal] = useState(false);
+  const [showAddStoreModal, setShowAddStoreModal] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [showStoreModal, setShowStoreModal] = useState(false);
+  const [selectedCanteenId, setSelectedCanteenId] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  
+  // State for Editing
   const [profileData, setProfileData] = useState({
     name: '',
     description: '',
@@ -45,6 +52,12 @@ export default function Profile() {
     image: null,
     whatsapp_number: '',
     delivery_fee: 0
+  });
+
+  // State for Adding
+  const [newStoreData, setNewStoreData] = useState({
+    name: '',
+    description: ''
   });
 
   const availableKelas = React.useMemo(() => {
@@ -71,27 +84,16 @@ export default function Profile() {
     });
   }, [userData.santri_level, userData.santri_class, filterGender]);
 
-  const { data: canteenData, isLoading: isLoadingCanteen } = useQuery({
-    queryKey: ['canteen'],
+  // Fetch multiple canteens
+  const { data: canteens = [], isLoading: isLoadingCanteens } = useQuery({
+    queryKey: ['canteens'],
     queryFn: async () => {
-      const res = await api.get('/my-canteen');
-      const canteen = res.data.data || res.data;
-      setProfileData({
-        name: canteen.name || '',
-        description: canteen.description || '',
-        is_open: canteen.is_open === 1 || canteen.is_open === true,
-        image: canteen.image || null,
-        whatsapp_number: canteen.whatsapp_number || '',
-        delivery_fee: canteen.delivery_fee || 0
-      });
-      if (canteen.image) {
-        setPreviewUrl(getStorageUrl(canteen.image));
-      }
-      return canteen;
+      const res = await api.get('/my-canteens');
+      return res.data.data || res.data;
     },
     enabled: userRole === ROLES.KANTIN,
     onError: () => {
-      toast.error('Gagal mengambil data kantin. Pastikan Anda memiliki profil kantin.');
+      toast.error('Gagal mengambil daftar kantin.');
     }
   });
 
@@ -123,42 +125,53 @@ export default function Profile() {
     await updateUserMutation.mutateAsync(formData);
   };
 
-  const updateProfileMutation = useMutation({
-    mutationFn: (formData) => api.post('/my-canteen?_method=PUT', formData),
-    onMutate: async (newData) => {
-      await queryClient.cancelQueries({ queryKey: ['canteen'] });
-      const previousCanteen = queryClient.getQueryData(['canteen']);
-      
-      if (previousCanteen) {
-        queryClient.setQueryData(['canteen'], {
-          ...previousCanteen,
-          ...newData
-        });
-      }
-      return { previousCanteen };
+  // Add Store Mutation
+  const addStoreMutation = useMutation({
+    mutationFn: (data) => api.post('/my-canteens', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['canteens'] });
+      toast.success('Toko baru berhasil dibuat!');
+      setShowAddStoreModal(false);
+      setNewStoreData({ name: '', description: '' });
+      setShowStoreListModal(true);
     },
-    onError: (err, newData, context) => {
-      if (context?.previousCanteen) {
-        queryClient.setQueryData(['canteen'], context.previousCanteen);
-      }
-      toast.error('Koneksi terputus. Gagal menyimpan profil.');
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['canteen'] });
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal membuat toko');
     }
   });
 
+  // Update Store Mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: ({ id, formData }) => api.post(`/my-canteen?_method=PUT&canteen_id=${id}`, formData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['canteens'] });
+      toast.success('Profil toko berhasil disimpan!');
+      setShowEditStoreModal(false);
+      setImageFile(null);
+      setShowStoreListModal(true);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal menyimpan profil.');
+    }
+  });
+
+  const handleAddStore = async (e) => {
+    e.preventDefault();
+    addStoreMutation.mutate(newStoreData);
+  };
+
   const handleSaveProfile = async (e) => {
     e.preventDefault();
+    if (!selectedCanteenId) return;
+
     setIsSavingProfile(true);
     
     const formData = new FormData();
     formData.append('name', profileData.name);
-    formData.append('description', profileData.description);
+    formData.append('description', profileData.description || '');
     formData.append('is_open', profileData.is_open ? 1 : 0);
     formData.append('delivery_fee', profileData.delivery_fee);
     if (profileData.whatsapp_number) {
-      // Normalize: strip non-digits, convert 08xxx -> 628xxx
       let phone = profileData.whatsapp_number.replace(/\D/g, '');
       if (phone.startsWith('0')) phone = '62' + phone.substring(1);
       formData.append('whatsapp_number', phone);
@@ -167,11 +180,24 @@ export default function Profile() {
       formData.append('image', imageFile);
     }
     
-    await updateProfileMutation.mutateAsync(formData);
+    await updateProfileMutation.mutateAsync({ id: selectedCanteenId, formData });
     setIsSavingProfile(false);
-    toast.success('Profil toko berhasil disimpan!');
-    setShowStoreModal(false);
-    setImageFile(null); // Reset image input
+  };
+
+  const openEditStore = (canteen) => {
+    setSelectedCanteenId(canteen.id);
+    setProfileData({
+      name: canteen.name || '',
+      description: canteen.description || '',
+      is_open: canteen.is_open === 1 || canteen.is_open === true,
+      image: canteen.image || null,
+      whatsapp_number: canteen.whatsapp_number || '',
+      delivery_fee: canteen.delivery_fee || 0
+    });
+    setPreviewUrl(canteen.image ? getStorageUrl(canteen.image) : null);
+    setImageFile(null);
+    setShowStoreListModal(false);
+    setShowEditStoreModal(true);
   };
 
   const handleImageChange = (e) => {
@@ -256,15 +282,22 @@ export default function Profile() {
           <h3 className="px-1 text-xs sm:text-sm font-bold text-gray-600 dark:text-gray-400 mb-2 sm:mb-3">Preferensi</h3>
           <div className="bg-white dark:bg-gray-900 rounded-[20px] sm:rounded-[24px] overflow-hidden shadow-[0_2px_10px_rgb(0,0,0,0.02)] border border-gray-100 dark:border-gray-800">
             {userRole === ROLES.KANTIN && (
-              <MenuItem 
-                icon={Store} 
-                title="Profil Toko" 
-                badge={canteenData?.is_open ? 'Buka' : 'Tutup'} 
-                badgeColor={canteenData?.is_open ? 'bg-green-500' : 'bg-red-500'}
-                onClick={() => setShowStoreModal(true)} 
-              />
+              <>
+                <MenuItem 
+                  icon={Store} 
+                  title="Kelola Toko Saya" 
+                  badge={canteens.length > 0 ? `${canteens.length} Toko` : null} 
+                  badgeColor="bg-green-600"
+                  onClick={() => setShowStoreListModal(true)} 
+                />
+                <MenuItem 
+                  icon={Ticket} 
+                  title="Pengajuan Promo Toko" 
+                  onClick={() => navigate({ to: '/dashboard/toko-saya/promo' })} 
+                  isLast={true}
+                />
+              </>
             )}
-            <MenuItem icon={Users} title="Keluarga Santri" badge="Baru" badgeColor="bg-green-700" onClick={() => setShowKeluargaModal(true)} isLast={true} />
           </div>
         </div>
 
@@ -279,104 +312,205 @@ export default function Profile() {
 
         </div>
 
-      {/* Modal Manajemen Kantin */}
-      {userRole === ROLES.KANTIN && showStoreModal && (
+      {/* Modal Daftar Toko (Multi-Store) */}
+      {userRole === ROLES.KANTIN && showStoreListModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Pengaturan Profil Toko</h3>
-              <button onClick={() => setShowStoreModal(false)} className="text-gray-400 hover:text-gray-500">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Kelola Toko Saya</h3>
+              <button onClick={() => setShowStoreListModal(false)} className="text-gray-400 hover:text-gray-500">
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            {isLoadingCanteen ? (
-              <div className="flex justify-center items-center h-48">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-              </div>
-            ) : (
-              <form onSubmit={handleSaveProfile} className="flex-1 overflow-y-auto">
-                <div className="h-28 sm:h-32 bg-gradient-to-r from-green-400 to-green-600 relative">
-                  <div className="absolute -bottom-10 left-4 sm:left-6">
-                    <div className="relative">
-                      <div className="w-20 h-20 rounded-2xl bg-white dark:bg-gray-800 border-4 border-white dark:border-gray-900 flex items-center justify-center overflow-hidden shadow-md">
-                        {previewUrl ? (
-                          <img src={previewUrl} alt="Store" className="w-full h-full object-cover" />
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {isLoadingCanteens ? (
+                <div className="flex justify-center items-center h-32">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                </div>
+              ) : canteens.length === 0 ? (
+                <div className="text-center py-8">
+                  <Store className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 dark:text-gray-400">Anda belum memiliki toko.</p>
+                </div>
+              ) : (
+                canteens.map(c => (
+                  <div key={c.id} onClick={() => openEditStore(c)} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl cursor-pointer transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center overflow-hidden shrink-0">
+                        {c.image ? (
+                          <img src={getStorageUrl(c.image)} alt={c.name} className="w-full h-full object-cover" />
                         ) : (
-                          <Store className="w-8 h-8 text-green-500" />
+                          <Store className="w-6 h-6 text-green-600" />
                         )}
                       </div>
-                      <label htmlFor="upload-banner" className="absolute -bottom-1 -right-1 p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-full shadow-lg transition-colors cursor-pointer">
-                        <Camera className="w-3 h-3" />
-                      </label>
-                      <input id="upload-banner" type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="pt-14 pb-5 px-4 sm:px-6">
-                  <div className="space-y-4">
-                    <div>
-                      <label htmlFor="name" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Nama Kantin</label>
-                      <input type="text" id="name" required value={profileData.name} onChange={e => setProfileData({...profileData, name: e.target.value})} className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 py-2 px-3 text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors" />
-                    </div>
-                    <div>
-                      <label htmlFor="description" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Deskripsi Singkat</label>
-                      <textarea id="description" rows="2" value={profileData.description} onChange={e => setProfileData({...profileData, description: e.target.value})} className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 py-2 px-3 text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors" />
-                    </div>
-                    <div>
-                      <label htmlFor="is_open" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Status Operasional</label>
-                      <select id="is_open" value={profileData.is_open} onChange={e => setProfileData({...profileData, is_open: e.target.value === 'true'})} className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 py-2 px-3 text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors">
-                        <option value="true">Buka (Menerima Pesanan)</option>
-                        <option value="false">Tutup / Istirahat</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="whatsapp_number" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Nomor WhatsApp Toko</label>
-                      <p className="text-[10px] text-gray-400 mb-1">Masukkan nomor HP format lokal (awalan 0) atau internasional (awalan 62).</p>
-                      <div className="mt-1 flex items-center border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800 focus-within:ring-2 focus-within:ring-green-500">
-                        <span className="px-3 py-2 text-sm font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-700 shrink-0">+62 / 0</span>
-                        <input 
-                          type="tel" 
-                          id="whatsapp_number" 
-                          placeholder="812-3456-7890"
-                          value={profileData.whatsapp_number} 
-                          onChange={e => setProfileData({...profileData, whatsapp_number: e.target.value})} 
-                          className="flex-1 py-2 px-3 text-sm text-gray-900 dark:text-white bg-transparent focus:outline-none" 
-                        />
+                      <div>
+                        <h4 className="font-semibold text-gray-900 dark:text-white">{c.name}</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          {c.status === 'pending' ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">Menunggu Review</span>
+                          ) : c.status === 'rejected' ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700">Ditolak</span>
+                          ) : c.is_open ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700">Buka</span>
+                          ) : (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">Tutup</span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <label htmlFor="delivery_fee" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Ongkos Kirim Default</label>
-                      <p className="text-[10px] text-gray-400 mb-1">Biaya pengiriman standar untuk setiap pesanan.</p>
-                      <div className="mt-1 flex items-center border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800 focus-within:ring-2 focus-within:ring-green-500">
-                        <span className="px-3 py-2 text-sm font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-700 shrink-0">Rp</span>
-                        <input 
-                          type="number" 
-                          id="delivery_fee" 
-                          placeholder="5000"
-                          min="0"
-                          value={profileData.delivery_fee} 
-                          onChange={e => setProfileData({...profileData, delivery_fee: e.target.value})} 
-                          className="flex-1 py-2 px-3 text-sm text-gray-900 dark:text-white bg-transparent focus:outline-none" 
-                        />
-                      </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-100 dark:border-gray-800">
+              <button 
+                onClick={() => {
+                  setShowStoreListModal(false);
+                  setShowAddStoreModal(true);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-500 font-semibold rounded-xl hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors border border-green-200 dark:border-green-800/50"
+              >
+                <Plus className="w-5 h-5" />
+                Tambah Toko Baru
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tambah Toko Baru */}
+      {showAddStoreModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-2">
+                <button onClick={() => {
+                  setShowAddStoreModal(false);
+                  setShowStoreListModal(true);
+                }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Tambah Toko Baru</h3>
+              </div>
+            </div>
+            <form onSubmit={handleAddStore} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Nama Toko/Kantin</label>
+                <input required type="text" value={newStoreData.name} onChange={e => setNewStoreData({...newStoreData, name: e.target.value})} className="w-full rounded-lg border border-gray-300 dark:border-gray-700 py-2.5 px-3 text-sm bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500" placeholder="Misal: Kantin Barokah 2" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Deskripsi Singkat</label>
+                <textarea rows="3" value={newStoreData.description} onChange={e => setNewStoreData({...newStoreData, description: e.target.value})} className="w-full rounded-lg border border-gray-300 dark:border-gray-700 py-2.5 px-3 text-sm bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500" placeholder="Menjual berbagai makanan..."></textarea>
+              </div>
+              <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800/50 rounded-lg flex gap-3">
+                <ShieldCheck className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-yellow-800 dark:text-yellow-500">Toko baru memerlukan persetujuan Admin sebelum bisa berjualan. Anda dapat melengkapi profil (foto, dll) setelah menambahkan toko ini.</p>
+              </div>
+              <button type="submit" disabled={addStoreMutation.isPending} className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl flex justify-center shadow-md">
+                {addStoreMutation.isPending ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Tambah Toko'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Edit Kantin */}
+      {userRole === ROLES.KANTIN && showEditStoreModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-2">
+                <button onClick={() => {
+                  setShowEditStoreModal(false);
+                  setShowStoreListModal(true);
+                }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Pengaturan Profil Toko</h3>
+              </div>
+            </div>
+            
+            <form onSubmit={handleSaveProfile} className="flex-1 overflow-y-auto">
+              <div className="h-28 sm:h-32 bg-gradient-to-r from-green-400 to-green-600 relative">
+                <div className="absolute -bottom-10 left-4 sm:left-6">
+                  <div className="relative">
+                    <div className="w-20 h-20 rounded-2xl bg-white dark:bg-gray-800 border-4 border-white dark:border-gray-900 flex items-center justify-center overflow-hidden shadow-md">
+                      {previewUrl ? (
+                        <img src={previewUrl} alt="Store" className="w-full h-full object-cover" />
+                      ) : (
+                        <Store className="w-8 h-8 text-green-500" />
+                      )}
+                    </div>
+                    <label htmlFor="upload-banner" className="absolute -bottom-1 -right-1 p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-full shadow-lg transition-colors cursor-pointer">
+                      <Camera className="w-3 h-3" />
+                    </label>
+                    <input id="upload-banner" type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="pt-14 pb-5 px-4 sm:px-6">
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="name" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Nama Kantin</label>
+                    <input type="text" id="name" required value={profileData.name} onChange={e => setProfileData({...profileData, name: e.target.value})} className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 py-2 px-3 text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors" />
+                  </div>
+                  <div>
+                    <label htmlFor="description" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Deskripsi Singkat</label>
+                    <textarea id="description" rows="2" value={profileData.description} onChange={e => setProfileData({...profileData, description: e.target.value})} className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 py-2 px-3 text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors" />
+                  </div>
+                  <div>
+                    <label htmlFor="is_open" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Status Operasional</label>
+                    <select id="is_open" value={profileData.is_open} onChange={e => setProfileData({...profileData, is_open: e.target.value === 'true'})} className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 py-2 px-3 text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors">
+                      <option value="true">Buka (Menerima Pesanan)</option>
+                      <option value="false">Tutup / Istirahat</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label htmlFor="whatsapp_number" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Nomor WhatsApp Toko</label>
+                    <p className="text-[10px] text-gray-400 mb-1">Masukkan nomor HP format lokal (awalan 0) atau internasional (awalan 62).</p>
+                    <div className="mt-1 flex items-center border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800 focus-within:ring-2 focus-within:ring-green-500">
+                      <span className="px-3 py-2 text-sm font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-700 shrink-0">+62 / 0</span>
+                      <input 
+                        type="tel" 
+                        id="whatsapp_number" 
+                        placeholder="812-3456-7890"
+                        value={profileData.whatsapp_number} 
+                        onChange={e => setProfileData({...profileData, whatsapp_number: e.target.value})} 
+                        className="flex-1 py-2 px-3 text-sm text-gray-900 dark:text-white bg-transparent focus:outline-none" 
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="delivery_fee" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Ongkos Kirim Default</label>
+                    <p className="text-[10px] text-gray-400 mb-1">Biaya pengiriman standar untuk setiap pesanan.</p>
+                    <div className="mt-1 flex items-center border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800 focus-within:ring-2 focus-within:ring-green-500">
+                      <span className="px-3 py-2 text-sm font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-700 shrink-0">Rp</span>
+                      <input 
+                        type="number" 
+                        id="delivery_fee" 
+                        placeholder="5000"
+                        min="0"
+                        value={profileData.delivery_fee} 
+                        onChange={e => setProfileData({...profileData, delivery_fee: e.target.value})} 
+                        className="flex-1 py-2 px-3 text-sm text-gray-900 dark:text-white bg-transparent focus:outline-none" 
+                      />
                     </div>
                   </div>
                 </div>
-                <div className="px-4 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 mt-4">
-                  <button type="button" onClick={() => setShowStoreModal(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700">
-                    Batal
-                  </button>
-                  <button type="submit" disabled={isSavingProfile} className="inline-flex items-center justify-center px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors disabled:opacity-70">
-                    {isSavingProfile ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></span> : <Save className="w-4 h-4 mr-2" />}
-                    Simpan
-                  </button>
-                </div>
-              </form>
-            )}
+              </div>
+              <div className="px-4 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 mt-4">
+                <button type="submit" disabled={isSavingProfile} className="w-full inline-flex items-center justify-center px-5 py-3 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors disabled:opacity-70">
+                  {isSavingProfile ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></span> : <Save className="w-4 h-4 mr-2" />}
+                  Simpan Perubahan
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

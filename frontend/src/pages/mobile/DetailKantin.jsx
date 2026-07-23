@@ -1,99 +1,35 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from '@tanstack/react-router';
-import { ChevronLeft, MapPin, Store, Star, Clock, Info, CheckCircle2, X, Plus, Minus, Search, ShoppingBag, ShoppingCart } from 'lucide-react';
+import { ChevronLeft, MapPin, Store, Star, Clock, Info, X, Plus, Minus, Search, ShoppingCart } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
 import { SkeletonCard } from '../../components/ui/Skeleton';
-import { LocationModal } from '../../components/modals/LocationModal';
 import { useAuthStore } from '../../store/authStore';
+import { useCartStore } from '../../store/cartStore';
 
 export default function DetailKantin() {
   const { id } = useParams({ strict: false });
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const user = useAuthStore(state => state.user);
+  const { addItem, removeItem, getCanteenItems } = useCartStore();
 
-  const [cart, setCart] = useState({});
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   
-  // Location state
-  const [showLocationModal, setShowLocationModal] = useState(false);
-  const [deliveryLocation, setDeliveryLocation] = useState(user?.santri_room || '');
-  const [customLocation, setCustomLocation] = useState('');
-
-  // Profile Warning Modal
-  const [showProfileWarning, setShowProfileWarning] = useState(false);
-
-  // Voucher
-  const [voucherCode, setVoucherCode] = useState('');
-  const [appliedVoucher, setAppliedVoucher] = useState(null);
-  const [voucherError, setVoucherError] = useState('');
-
-  const predefinedLocations = user?.santri_room ? [user.santri_room] : [];
+  // Custom Order state
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [customNotes, setCustomNotes] = useState('');
+  const [customLocation, setCustomLocation] = useState(
+    user ? `Santri: ${user.santri_name || user.name} | ${user.santri_room || ''} | ${user.santri_class || ''}/${user.santri_level || ''}` : ''
+  );
+  const [isSubmittingCustom, setIsSubmittingCustom] = useState(false);
 
   const { data: canteen, isLoading: isLoadingCanteen } = useQuery({
     queryKey: ['canteen', id],
     queryFn: async () => {
       const res = await api.get(`/canteens/${id}`);
       return res.data;
-    }
-  });
-
-  const checkoutMutation = useMutation({
-    mutationFn: (payload) => api.post('/orders', payload),
-    onSuccess: (res) => {
-      toast.success('Pesanan berhasil dibuat!');
-      
-      // Build WhatsApp Message with location
-      const order = res.data?.order;
-      const orderIdText = order ? `\n*ID Pesanan*: #${order.id}` : '';
-
-      let waText = `Assalamu'alaikum Warahmatullahi Wabarakatuh, ${canteen.name}.\n\nSaya ingin mengonfirmasi pesanan saya:${orderIdText}\n\n`;
-      
-      const location = deliveryLocation === 'custom' ? customLocation : deliveryLocation;
-      
-      waText += `*Data Penerima*:\n`;
-      waText += `👤 Santri: ${user?.santri_name || user?.name || '-'}\n`;
-      waText += `📚 Kelas/Jenjang: ${user?.santri_class || '-'} / ${user?.santri_level || '-'}\n`;
-      waText += `🏠 Lokasi (Asrama/Kamar): ${location}\n\n`;
-
-      waText += `*Rincian Pesanan*:\n`;
-      Object.values(cart).forEach(item => {
-        waText += `🔸 ${item.quantity}x ${item.product.name} @ Rp ${parseFloat(item.product.discount_price || item.product.price).toLocaleString('id-ID')}\n`;
-      });
-      
-      waText += `\n*Ringkasan Biaya*:`;
-      waText += `\n- Subtotal: Rp ${subtotalPrice.toLocaleString('id-ID')}`;
-      waText += `\n- Ongkos Kirim: Rp ${deliveryFee.toLocaleString('id-ID')}`;
-      if (adminFee > 0) {
-        waText += `\n- Biaya Admin: Rp ${adminFee.toLocaleString('id-ID')}`;
-      }
-      
-      if (appliedVoucher) {
-        waText += `\n- Diskon (${appliedVoucher.code}): -Rp ${parseFloat(appliedVoucher.discount_amount).toLocaleString('id-ID')}`;
-      }
-      
-      waText += `\n\n*Total Tagihan: Rp ${totalPrice.toLocaleString('id-ID')}*\n\n`;
-      waText += `Mohon segera diproses ya, Syukron Jazakumullah Khairan. 🙏`;
-      
-      // Normalize phone: strip non-digits, convert 08xxx -> 628xxx
-      let waPhone = (canteen.whatsapp_number || '').replace(/\D/g, '');
-      if (waPhone.startsWith('0')) waPhone = '62' + waPhone.substring(1);
-      const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(waText)}`;
-      
-      setCart({});
-      setShowLocationModal(false);
-      window.open(waUrl, '_blank');
-      
-      navigate({ to: '/dashboard/pembayaran' });
-    },
-    onError: (err) => {
-      if (err.response?.data?.error_code === 'INCOMPLETE_PROFILE') {
-        setShowProfileWarning(true);
-      } else {
-        toast.error(err.response?.data?.message || 'Gagal membuat pesanan');
-      }
     }
   });
 
@@ -109,139 +45,36 @@ export default function DetailKantin() {
     return <div className="p-8 text-center text-gray-500">Kantin tidak ditemukan</div>;
   }
 
+  // Cart from global store for this specific canteen
+  const canteenCart = getCanteenItems(canteen.id);
+  const cartItems = Object.values(canteenCart);
+  const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
   const handleAddToCart = (product) => {
     if (!canteen?.is_open) {
       toast.error('Kantin sedang tutup');
       return;
     }
-    
-    setCart(prev => {
-      const existing = prev[product.id];
-      const newQuantity = existing ? existing.quantity + 1 : 1;
-      
-      if (newQuantity > product.stock) {
-        toast.error(`Stok ${product.name} hanya tersisa ${product.stock}`);
-        return prev;
-      }
-      
-      return {
-        ...prev,
-        [product.id]: {
-          product,
-          quantity: newQuantity
-        }
-      };
-    });
+    const current = canteenCart[String(product.id)];
+    const currentQty = current?.quantity || 0;
+    if (currentQty >= product.stock) {
+      toast.error(`Stok ${product.name} hanya tersisa ${product.stock}`);
+      return;
+    }
+    addItem(canteen, product);
   };
 
   const handleRemoveFromCart = (productId) => {
-    setCart(prev => {
-      const existing = prev[productId];
-      if (!existing) return prev;
-      
-      const newCart = { ...prev };
-      if (existing.quantity > 1) {
-        newCart[productId] = { ...existing, quantity: existing.quantity - 1 };
-      } else {
-        delete newCart[productId];
-      }
-      return newCart;
-    });
+    removeItem(canteen.id, productId);
   };
 
-  const cartItems = Object.values(cart);
-  const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-  
-  // Calculate Subtotal (only products)
-  const subtotalPrice = cartItems.reduce((sum, item) => {
-    const price = item.product.discount_price || item.product.price;
-    return sum + (price * item.quantity);
-  }, 0);
-
-  // Determine current delivery fee based on selected location
-  // Map predefined locations to capitalized ones matching the database format
-  const getMappedLocation = (loc) => {
-    if (!loc) return null;
-    if (loc === 'custom') return 'Lainnya';
-    // Title case the location to match DB keys ('Asmah 1', etc)
-    return loc.replace(/\b\w/g, l => l.toUpperCase());
-  };
-  
-  const mappedLocation = getMappedLocation(deliveryLocation);
-  
-  const currentRate = mappedLocation 
-    ? canteen.delivery_rates?.[mappedLocation]
-    : null;
-    
-  const deliveryFee = currentRate !== null && currentRate !== undefined 
-    ? parseFloat(currentRate) 
-    : parseFloat(canteen.delivery_fee || 0);
-
-  const adminFee = parseFloat(canteen?.admin_fee || 0);
-
-  let discountAmount = 0;
-  if (appliedVoucher) {
-    discountAmount = parseFloat(appliedVoucher.discount_amount);
-  }
-
-  const rawTotal = totalItems > 0 ? subtotalPrice + deliveryFee + adminFee : 0;
-  const totalPrice = totalItems > 0 ? Math.max(0, rawTotal - discountAmount) : 0;
-
-  const handleApplyVoucher = () => {
-    setVoucherError('');
-    if (!voucherCode.trim()) return;
-    
-    const code = voucherCode.trim().toUpperCase();
-    const found = canteen.vouchers?.find(v => v.code === code && v.is_active);
-    
-    if (!found) {
-      setVoucherError('Voucher tidak ditemukan atau tidak aktif');
-      setAppliedVoucher(null);
-      return;
-    }
-    
-    if (parseFloat(found.min_purchase) > subtotalPrice) {
-      setVoucherError(`Minimal belanja Rp ${parseFloat(found.min_purchase).toLocaleString('id-ID')} untuk menggunakan voucher ini`);
-      setAppliedVoucher(null);
-      return;
-    }
-    
-    setAppliedVoucher(found);
-    toast.success('Voucher berhasil digunakan!');
+  const handleGoToCart = () => {
+    navigate({ to: '/dashboard/keranjang' });
   };
 
-  const handleCheckoutClick = () => {
-    if (totalItems === 0) return;
-    
-    // Validasi Profil Wali Santri di Frontend
-    if (!user?.santri_name || !user?.santri_room || !user?.santri_class || !user?.santri_level) {
-      setShowProfileWarning(true);
-      return;
-    }
-    
-    setShowLocationModal(true);
-  };
-
-  const handleConfirmCheckout = () => {
-    if (!deliveryLocation || (deliveryLocation === 'custom' && !customLocation.trim())) {
-      toast.error('Silakan pilih atau masukkan lokasi pengiriman');
-      return;
-    }
-    
-    const finalLocation = deliveryLocation === 'custom' ? customLocation : deliveryLocation;
-    
-    const payload = {
-      canteen_id: canteen.id,
-      delivery_location: finalLocation,
-      voucher_id: appliedVoucher ? appliedVoucher.id : null,
-      items: cartItems.map(item => ({
-        product_id: item.product.id,
-        quantity: item.quantity
-      }))
-    };
-    
-    checkoutMutation.mutate(payload);
-  };
+  const filteredProducts = canteen.products?.filter(p =>
+    !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase())
+  ) || [];
 
   return (
     <div className="bg-gray-50 h-full min-h-screen pb-32 dark:bg-gray-950 font-sans relative">
@@ -252,36 +85,46 @@ export default function DetailKantin() {
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gradient-to-r from-green-100 to-green-50 dark:from-gray-800 dark:to-gray-900">
             <Store className="w-12 h-12 mb-2 opacity-50" />
-            <span className="text-sm font-medium text-green-800/50 dark:text-green-200/50">Tidak ada foto</span>
+            <span className="text-xs font-medium opacity-50">Belum ada foto</span>
           </div>
         )}
-        
-        {/* Top Navbar overlay */}
-        <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent">
-          <button onClick={() => navigate({ to: '/dashboard' })} className="w-10 h-10 rounded-full bg-black/30 flex items-center justify-center text-white backdrop-blur-sm transition-colors hover:bg-black/50">
-            <ChevronLeft className="w-6 h-6" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+        <button
+          onClick={() => navigate({ to: '/dashboard/kantin' })}
+          className="absolute top-4 left-4 w-10 h-10 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white z-10"
+        >
+          <ChevronLeft className="w-6 h-6" />
+        </button>
+        {/* Cart quick-access at top right */}
+        {totalItems > 0 && (
+          <button
+            onClick={handleGoToCart}
+            className="absolute top-4 right-4 w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white z-10 shadow-lg relative"
+          >
+            <ShoppingCart className="w-5 h-5" />
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
+              {totalItems}
+            </span>
           </button>
+        )}
+        <div className="absolute bottom-0 left-0 right-0 p-4">
+          <h1 className="text-2xl font-bold text-white drop-shadow-md">{canteen.name}</h1>
+          <div className="flex items-center gap-3 text-xs text-white/80 mt-1">
+            <span className={`font-semibold px-2 py-0.5 rounded-full ${canteen.is_open ? 'bg-green-500/80' : 'bg-red-500/80'}`}>
+              {canteen.is_open ? '● Buka' : '● Tutup'}
+            </span>
+            <span>⭐ {parseFloat(canteen.rating || 0).toFixed(1)}</span>
+          </div>
         </div>
       </div>
 
-      {/* STORE INFO CARD */}
-      <div className="px-4 md:px-8 max-w-7xl mx-auto -mt-12 relative z-10">
-        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-md p-4 md:p-6 border border-gray-100 dark:border-gray-800">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white leading-tight flex items-center gap-2">
-            {canteen.name}
-            {!canteen.is_open && (
-              <span className="px-2 py-0.5 bg-gray-500 text-white text-xs rounded font-medium">TUTUP</span>
-            )}
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-            {canteen.description || 'Kantin Higopondok'}
-          </p>
-          
-          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-300 mt-3">
-            <div className="flex items-center font-medium">
-              <span className="text-yellow-400 mr-1">★</span>
-              {parseFloat(canteen.rating || 0).toFixed(1)} <span className="text-gray-400 ml-1 font-normal">({canteen.rating_count || 0})</span>
-            </div>
+      {/* CANTEEN INFO */}
+      <div className="bg-white dark:bg-gray-900 px-4 py-4 border-b border-gray-100 dark:border-gray-800">
+        <div className="max-w-7xl mx-auto">
+          {canteen.description && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{canteen.description}</p>
+          )}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
             {canteen.distance && (
               <div className="flex items-center">
                 <span className="mr-1 text-gray-400">📍</span>
@@ -290,28 +133,53 @@ export default function DetailKantin() {
             )}
             <div className="flex items-center">
                <span className="mr-1 text-gray-400">🛵</span>
-               Rp{deliveryFee.toLocaleString('id-ID')} (Ongkir)
+               Rp{parseFloat(canteen.delivery_fee || 0).toLocaleString('id-ID')} (Ongkir)
             </div>
-            {adminFee > 0 && (
-               <div className="flex items-center">
-                 <span className="mr-1 text-gray-400">⚙️</span>
-                 Rp{adminFee.toLocaleString('id-ID')} (Biaya Admin)
-              </div>
-            )}
           </div>
+        </div>
+      </div>
+
+      {/* SEARCH */}
+      <div className="px-4 py-3 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
+        <div className="max-w-7xl mx-auto relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Cari menu..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
         </div>
       </div>
 
       {/* PRODUCT LIST */}
       <div className="mt-6 px-4 md:px-8 max-w-7xl mx-auto">
+        {/* CUSTOM ORDER BANNER */}
+        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-4 text-white mb-6 shadow-md flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full">Barang Luar Menu</span>
+            <h3 className="font-bold text-base mt-1">Pesanan Khusus / Titip Beli</h3>
+            <p className="text-xs text-white/80 mt-0.5">Ingin barang yang tidak ada di menu? Kirim catatan & harga ditentukan oleh toko.</p>
+          </div>
+          <button 
+            onClick={() => setShowCustomModal(true)}
+            className="px-3 py-2 bg-white text-purple-700 hover:bg-purple-50 rounded-xl font-bold text-xs shrink-0 shadow-sm transition-transform active:scale-95"
+          >
+            ＋ Buat Pesanan
+          </button>
+        </div>
+
         <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Daftar Menu</h2>
         
-        {(!canteen.products || canteen.products.length === 0) ? (
-          <div className="text-center py-10 text-gray-500">Belum ada menu di kantin ini.</div>
+        {filteredProducts.length === 0 ? (
+          <div className="text-center py-10 text-gray-500">
+            {searchQuery ? `Tidak ada menu "${searchQuery}"` : 'Belum ada menu di kantin ini.'}
+          </div>
         ) : (
           <div className="space-y-4">
-            {canteen.products.map((product) => {
-              const inCart = cart[product.id]?.quantity || 0;
+            {filteredProducts.map((product) => {
+              const inCart = canteenCart[String(product.id)]?.quantity || 0;
               const isAvailable = product.is_available === 1 || product.is_available === true;
               
               return (
@@ -341,25 +209,13 @@ export default function DetailKantin() {
                     </h3>
                     <div className="flex items-center gap-2 mt-1">
                       <p className="text-xs text-gray-500 line-clamp-1">{product.category || 'Makanan'}</p>
-                      <span className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded border border-green-200">
-                        Sisa: {product.stock}
-                      </span>
                     </div>
                     
                     <div className="mt-auto flex items-center justify-between">
                       <div>
-                        {product.discount_price ? (
-                          <div className="flex flex-col">
-                            <span className="text-xs text-gray-400 line-through">Rp {parseFloat(product.price).toLocaleString('id-ID')}</span>
-                            <span className="font-bold text-sm text-green-600 dark:text-green-400">
-                              Rp {parseFloat(product.discount_price).toLocaleString('id-ID')}
-                            </span>
-                          </div>
-                        ) : (
-                          <p className={`font-bold text-sm ${!isAvailable ? 'text-gray-400' : 'text-gray-900 dark:text-white'}`}>
-                            Rp {parseFloat(product.price).toLocaleString('id-ID')}
-                          </p>
-                        )}
+                        <p className={`font-bold text-sm ${!isAvailable ? 'text-gray-400' : 'text-gray-900 dark:text-white'}`}>
+                          Rp {parseFloat(product.price).toLocaleString('id-ID')}
+                        </p>
                       </div>
                       
                       {/* Add to Cart Actions */}
@@ -380,8 +236,11 @@ export default function DetailKantin() {
                               </button>
                             </div>
                           ) : (
-                            <button onClick={(e) => { e.stopPropagation(); handleAddToCart(product); }} className="px-4 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-400 rounded-full text-sm font-semibold transition-colors">
-                              Tambah
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleAddToCart(product); }}
+                              className="w-8 h-8 flex items-center justify-center rounded-full bg-green-600 hover:bg-green-700 text-white shadow-sm"
+                            >
+                              <Plus className="w-4 h-4" />
                             </button>
                           )}
                         </div>
@@ -409,18 +268,17 @@ export default function DetailKantin() {
                 </div>
               </div>
               <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Total Pembayaran</p>
-                <p className="font-bold text-lg text-gray-900 dark:text-white">Rp {totalPrice.toLocaleString('id-ID')}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">Termasuk ongkir & admin</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{totalItems} item dari toko ini</p>
+                <p className="font-bold text-sm text-gray-900 dark:text-white">+ item dari toko lain</p>
               </div>
             </div>
             
             <button 
-              onClick={handleCheckoutClick}
-              disabled={checkoutMutation.isPending}
-              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold transition-colors shadow-lg shadow-green-600/30 disabled:opacity-70 flex items-center"
+              onClick={handleGoToCart}
+              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold transition-colors shadow-lg shadow-green-600/30 flex items-center gap-2"
             >
-              {checkoutMutation.isPending ? 'Memproses...' : 'Checkout & WA'}
+              <ShoppingCart className="w-4 h-4" />
+              Lihat Keranjang
             </button>
           </div>
         </div>
@@ -455,11 +313,8 @@ export default function DetailKantin() {
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white pr-4">{selectedProduct.name}</h2>
                 <div className="flex items-center gap-2 mt-2">
                   <span className="text-sm text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md">{selectedProduct.category || 'Makanan'}</span>
-                  <span className="text-sm bg-green-50 text-green-700 px-2 py-1 rounded-md border border-green-200">Sisa Stok: {selectedProduct.stock}</span>
                 </div>
-                {selectedProduct.discount_price && (
-                  <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-bold rounded">PROMO</span>
-                )}
+
               </div>
               
               <div className="flex items-center gap-2 mb-4 text-sm text-gray-500">
@@ -469,18 +324,9 @@ export default function DetailKantin() {
               </div>
               
               <div className="flex items-center mb-6">
-                {selectedProduct.discount_price ? (
-                  <div className="flex flex-col">
-                    <span className="text-sm text-gray-400 line-through">Rp {parseFloat(selectedProduct.price).toLocaleString('id-ID')}</span>
-                    <span className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      Rp {parseFloat(selectedProduct.discount_price).toLocaleString('id-ID')}
-                    </span>
-                  </div>
-                ) : (
                   <span className="text-2xl font-bold text-gray-900 dark:text-white">
                     Rp {parseFloat(selectedProduct.price).toLocaleString('id-ID')}
                   </span>
-                )}
               </div>
               
               <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
@@ -498,21 +344,21 @@ export default function DetailKantin() {
               <div className="flex flex-col">
                 <span className="text-xs text-gray-500">Total Produk Ini</span>
                 <span className="font-bold text-lg text-gray-900 dark:text-white">
-                  {cart[selectedProduct.id]?.quantity || 0} item
+                  {canteenCart[String(selectedProduct.id)]?.quantity || 0} item
                 </span>
               </div>
               
               <div className="flex items-center gap-3">
-                {(cart[selectedProduct.id]?.quantity || 0) > 0 ? (
+                {(canteenCart[String(selectedProduct.id)]?.quantity || 0) > 0 ? (
                   <div className="flex items-center bg-green-50 dark:bg-green-900/30 rounded-full border border-green-200 dark:border-green-800 shadow-sm w-[120px] justify-between">
                     <button onClick={() => handleRemoveFromCart(selectedProduct.id)} className="w-10 h-10 flex items-center justify-center text-green-700 dark:text-green-400 rounded-full active:bg-green-100 dark:active:bg-green-800">
                       <Minus className="w-5 h-5" />
                     </button>
-                    <span className="text-lg font-bold text-green-700 dark:text-green-400 w-8 text-center">{(cart[selectedProduct.id]?.quantity || 0)}</span>
+                    <span className="text-lg font-bold text-green-700 dark:text-green-400 w-8 text-center">{(canteenCart[String(selectedProduct.id)]?.quantity || 0)}</span>
                     <button 
                       onClick={() => handleAddToCart(selectedProduct)} 
-                      disabled={(cart[selectedProduct.id]?.quantity || 0) >= selectedProduct.stock}
-                      className={`w-10 h-10 flex items-center justify-center rounded-full ${(cart[selectedProduct.id]?.quantity || 0) >= selectedProduct.stock ? 'text-gray-300' : 'text-green-700 dark:text-green-400 active:bg-green-100 dark:active:bg-green-800'}`}
+                      disabled={(canteenCart[String(selectedProduct.id)]?.quantity || 0) >= selectedProduct.stock}
+                      className={`w-10 h-10 flex items-center justify-center rounded-full ${(canteenCart[String(selectedProduct.id)]?.quantity || 0) >= selectedProduct.stock ? 'text-gray-300' : 'text-green-700 dark:text-green-400 active:bg-green-100 dark:active:bg-green-800'}`}
                     >
                       <Plus className="w-5 h-5" />
                     </button>
@@ -531,59 +377,82 @@ export default function DetailKantin() {
           </div>
         </div>
       )}
+      {/* CUSTOM ORDER MODAL */}
+      {showCustomModal && (
+        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl">
+            <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Pesanan Khusus / Titip Beli</h3>
+              <button onClick={() => setShowCustomModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
 
-      {/* LOCATION SELECTION MODAL */}
-      <LocationModal 
-        isOpen={showLocationModal}
-        onClose={() => setShowLocationModal(false)}
-        canteen={canteen}
-        predefinedLocations={predefinedLocations}
-        getMappedLocation={getMappedLocation}
-        deliveryLocation={deliveryLocation}
-        setDeliveryLocation={setDeliveryLocation}
-        customLocation={customLocation}
-        setCustomLocation={setCustomLocation}
-        voucherCode={voucherCode}
-        setVoucherCode={setVoucherCode}
-        appliedVoucher={appliedVoucher}
-        setAppliedVoucher={setAppliedVoucher}
-        voucherError={voucherError}
-        setVoucherError={setVoucherError}
-        handleApplyVoucher={handleApplyVoucher}
-        totalPrice={totalPrice}
-        handleConfirmCheckout={handleConfirmCheckout}
-        isPending={checkoutMutation.isPending}
-      />
+            <div className="p-4 sm:p-6 space-y-4">
+              <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl border border-purple-100 dark:border-purple-900/50">
+                <p className="text-xs text-purple-800 dark:text-purple-300">
+                  Tuliskan barang atau pesanan khusus yang Anda perlukan di toko <strong>{canteen.name}</strong>. Pihak toko akan memeriksa dan menentukan total harganya.
+                </p>
+              </div>
 
-      {/* PROFILE INCOMPLETE WARNING MODAL */}
-      {showProfileWarning && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col text-center">
-            <div className="p-6">
-              <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Info className="w-8 h-8" />
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Catatan Barang / Titipan <span className="text-red-500">*</span></label>
+                <textarea
+                  rows={4}
+                  value={customNotes}
+                  onChange={e => setCustomNotes(e.target.value)}
+                  placeholder="Contoh: Tolong belikan Obat Maag 1 strip di apotek terdekat, atau Nasi Bungkus Lauk Ayam Goreng..."
+                  className="w-full p-3 border rounded-xl text-sm dark:bg-gray-800 dark:border-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Lengkapi Data Santri</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                Sebelum dapat melakukan pesanan, Anda wajib mengisi data Nama Santri, Asrama/Kamar, Kelas, dan Jenjang pada halaman Profil.
-              </p>
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => setShowProfileWarning(false)}
-                  className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 rounded-xl font-bold transition-colors"
-                >
-                  Nanti Saja
-                </button>
-                <button 
-                  onClick={() => {
-                    setShowProfileWarning(false);
-                    navigate({ to: '/dashboard/profile' });
-                  }}
-                  className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors shadow-md shadow-green-600/20"
-                >
-                  Ke Profil
-                </button>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Lokasi Pengantaran</label>
+                <input
+                  type="text"
+                  value={customLocation}
+                  onChange={e => setCustomLocation(e.target.value)}
+                  className="w-full p-3 border rounded-xl text-sm dark:bg-gray-800 dark:border-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                />
               </div>
+            </div>
+
+            <div className="p-4 sm:p-6 pt-0 flex gap-3">
+              <button 
+                onClick={() => setShowCustomModal(false)}
+                className="flex-1 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                disabled={!customNotes.trim() || isSubmittingCustom}
+                onClick={async () => {
+                  if (!canteen.is_open) {
+                    toast.error('Kantin sedang tutup');
+                    return;
+                  }
+                  try {
+                    setIsSubmittingCustom(true);
+                    await api.post('/orders', {
+                      canteen_id: canteen.id,
+                      is_custom: true,
+                      custom_notes: customNotes,
+                      delivery_location: customLocation
+                    });
+                    toast.success('Pesanan khusus berhasil dibuat! Menunggu penentuan harga dari toko.');
+                    setShowCustomModal(false);
+                    setCustomNotes('');
+                    navigate({ to: '/dashboard/pembayaran' });
+                  } catch (err) {
+                    toast.error(err.response?.data?.message || 'Gagal membuat pesanan khusus');
+                  } finally {
+                    setIsSubmittingCustom(false);
+                  }
+                }}
+                className="flex-[2] py-2.5 rounded-xl font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors flex justify-center items-center gap-2 shadow-sm"
+              >
+                {isSubmittingCustom ? 'Mengirim...' : 'Kirim Pesanan Khusus'}
+              </button>
             </div>
           </div>
         </div>

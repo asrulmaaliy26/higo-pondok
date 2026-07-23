@@ -27,9 +27,9 @@ class CanteenResource extends JsonResource
                 
                 // If it was delivered by the canteen itself (no courier_id)
                 // The canteen keeps the delivery fee which is:
-                // total_price + discount_amount - items_total
+                // total_price - items_total
                 if (is_null($order->courier_id)) {
-                    $delivery_fee = $order->total_price + $order->discount_amount - $itemsTotal;
+                    $delivery_fee = $order->total_price - $itemsTotal;
                     $delivery_income += max(0, $delivery_fee);
                 }
             }
@@ -46,6 +46,7 @@ class CanteenResource extends JsonResource
             'rating_count' => $this->rating_count,
             'delivery_fee' => $this->delivery_fee,
             'admin_fee' => $this->admin_fee,
+            'pending_orders_count' => $this->whenCounted('pending_orders_count', 0),
             'admin_debt' => $this->admin_debt,
             'sold_count' => $this->sold_count,
             'latitude' => $this->latitude,

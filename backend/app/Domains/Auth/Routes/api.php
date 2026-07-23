@@ -19,10 +19,16 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Admin routes
     Route::middleware('role:admin')->group(function () {
+        Route::get('/admin/users', [\App\Domains\Auth\Controllers\UserController::class, 'index']);
+        Route::post('/admin/users', [\App\Domains\Auth\Controllers\UserController::class, 'store']);
+        Route::put('/admin/users/{id}', [\App\Domains\Auth\Controllers\UserController::class, 'update']);
+        Route::delete('/admin/users/{id}', [\App\Domains\Auth\Controllers\UserController::class, 'destroy']);
+
         Route::get('/admin/canteens', [AdminController::class, 'allCanteens']);
         Route::get('/admin/stats', [AdminController::class, 'dashboardStats']);
         Route::put('/admin/canteens/{id}/fees', [AdminController::class, 'updateFees']);
         Route::post('/admin/canteens/{id}/pay-debt', [AdminController::class, 'payAdminDebt']);
+        Route::post('/admin/canteens/{id}/withdraw', [AdminController::class, 'processWithdrawal']);
         
         Route::get('/admin/canteens/pending', [AdminController::class, 'pendingCanteens']);
         Route::post('/admin/canteens/{id}/approve', [AdminController::class, 'approveCanteen']);

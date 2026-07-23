@@ -19,6 +19,8 @@ class Order extends Model
         'delivery_location',
         'proof_of_delivery',
         'proof_of_payment',
+        'is_courier_paid_by_canteen',
+        'proof_courier_paid',
     ];
 
     protected $casts = [

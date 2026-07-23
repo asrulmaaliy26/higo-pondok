@@ -14,9 +14,18 @@ use App\Domains\Canteen\Resources\ProductResource;
 class ProductController extends Controller
 {
 
+    private function getActiveCanteen(Request $request)
+    {
+        $canteenId = $request->query('canteen_id') ?? $request->input('canteen_id');
+        if ($canteenId) {
+            return $request->user()->canteens()->where('id', $canteenId)->firstOrFail();
+        }
+        return $request->user()->canteens()->firstOrFail();
+    }
+
     public function index(Request $request)
     {
-        $canteen = $request->user()->canteen()->firstOrFail();
+        $canteen = $this->getActiveCanteen($request);
         $products = $canteen->products()->latest()->paginate(10);
         return ProductResource::collection($products);
     }
@@ -24,7 +33,7 @@ class ProductController extends Controller
     public function store(StoreProductRequest $request)
     {
         $user = $request->user();
-        $canteen = $user->canteen()->firstOrFail();
+        $canteen = $this->getActiveCanteen($request);
         $validated = $request->validated();
         
         if ($request->hasFile('image')) {
@@ -43,7 +52,7 @@ class ProductController extends Controller
     public function update(UpdateProductRequest $request, $id)
     {
         $user = $request->user();
-        $canteen = $user->canteen()->firstOrFail();
+        $canteen = $this->getActiveCanteen($request);
         $product = $canteen->products()->findOrFail($id);
         $validated = $request->validated();
         
@@ -66,7 +75,7 @@ class ProductController extends Controller
 
     public function destroy(Request $request, $id)
     {
-        $canteen = $request->user()->canteen()->firstOrFail();
+        $canteen = $this->getActiveCanteen($request);
         $product = $canteen->products()->findOrFail($id);
         
         // Hapus gambar jika ada

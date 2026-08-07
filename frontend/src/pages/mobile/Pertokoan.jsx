@@ -9,32 +9,16 @@ export default function Pertokoan() {
   const [selectedCanteen, setSelectedCanteen] = useState(null);
   const [withdrawalAmount, setWithdrawalAmount] = useState('');
   const [withdrawalNotes, setWithdrawalNotes] = useState('');
+  
+  // Jam Operasional states
+  const [openTime, setOpenTime] = useState('');
+  const [closeTime, setCloseTime] = useState('');
 
   const { data: canteens, isLoading } = useQuery({
     queryKey: ['admin-canteens'],
     queryFn: async () => {
       const res = await axios.get('/admin/canteens');
       return res.data;
-    }
-  });
-
-  const approveMutation = useMutation({
-    mutationFn: async (id) => {
-      await axios.post(`/admin/banners/${id}/approve`);
-    },
-    onSuccess: () => {
-      toast.success('Banner disetujui');
-      queryClient.invalidateQueries(['admin-canteens']);
-    }
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: async (id) => {
-      await axios.post(`/admin/banners/${id}/reject`);
-    },
-    onSuccess: () => {
-      toast.success('Banner ditolak');
-      queryClient.invalidateQueries(['admin-canteens']);
     }
   });
 
@@ -77,8 +61,25 @@ export default function Pertokoan() {
     }
   });
 
+  const updateHoursMutation = useMutation({
+    mutationFn: async ({ id, open_time, close_time }) => {
+      const res = await axios.put(`/admin/canteens/${id}/hours`, { open_time, close_time });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Jam operasional berhasil diperbarui');
+      queryClient.invalidateQueries(['admin-canteens']);
+      setSelectedCanteen(prev => prev ? { ...prev, open_time: data.canteen.open_time, close_time: data.canteen.close_time } : prev);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal memperbarui jam operasional');
+    }
+  });
+
   const handleOpenDetail = (canteen) => {
     setSelectedCanteen(canteen);
+    setOpenTime(canteen.open_time?.substring(0, 5) || '09:00');
+    setCloseTime(canteen.close_time?.substring(0, 5) || '17:00');
   };
 
   return (
@@ -102,7 +103,6 @@ export default function Pertokoan() {
           </div>
         ) : Array.isArray(canteens) && canteens.length > 0 ? (
           canteens.map((canteen) => {
-            const pendingBanner = canteen.banners?.find(b => b.status === 'pending');
             return (
               <div 
                 key={canteen.id} 
@@ -131,11 +131,6 @@ export default function Pertokoan() {
                   <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
                     Rp {parseFloat(canteen.balance || 0).toLocaleString('id-ID')}
                   </span>
-                  {pendingBanner && (
-                    <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-[10px] font-bold rounded-full animate-pulse">
-                      Banner Pending
-                    </span>
-                  )}
                 </div>
               </div>
             );
@@ -164,12 +159,49 @@ export default function Pertokoan() {
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-20 space-y-6">
-            
-            {/* Approval Section */}
-            {selectedCanteen.status === 'pending' && (
+            {/* Data Profil Pemilik Toko */}
+            <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
+              <h3 className="font-bold text-gray-900 dark:text-white mb-3">Profil Pemilik Toko</h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="block text-gray-500 dark:text-gray-400 text-xs mb-0.5">Nama Pemilik:</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{selectedCanteen.user?.name || '-'}</span>
+                </div>
+                <div>
+                  <span className="block text-gray-500 dark:text-gray-400 text-xs mb-0.5">WhatsApp:</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">
+                    {selectedCanteen.user?.whatsapp_number ? (
+                      <a href={`https://wa.me/${selectedCanteen.user.whatsapp_number}`} target="_blank" rel="noreferrer" className="text-emerald-600 dark:text-emerald-400 hover:underline">
+                        {selectedCanteen.user.whatsapp_number}
+                      </a>
+                    ) : (
+                      <span className="text-red-500">Belum diisi</span>
+                    )}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-gray-500 dark:text-gray-400 text-xs mb-0.5">Nama Santri:</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{selectedCanteen.user?.santri_name || <span className="text-red-500 text-xs">Belum diisi</span>}</span>
+                </div>
+                <div>
+                  <span className="block text-gray-500 dark:text-gray-400 text-xs mb-0.5">Kamar/Asrama:</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{selectedCanteen.user?.santri_room || <span className="text-red-500 text-xs">Belum diisi</span>}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="block text-gray-500 dark:text-gray-400 text-xs mb-0.5">Kelas/Jenjang:</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">
+                    {selectedCanteen.user?.santri_class ? `${selectedCanteen.user.santri_class} - ${selectedCanteen.user.santri_level}` : <span className="text-red-500 text-xs">Belum diisi</span>}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Status & Approval Section */}
+            {selectedCanteen.status === 'pending' ? (
               <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-2xl border border-yellow-200 dark:border-yellow-800/50">
                 <h3 className="font-bold text-yellow-900 dark:text-yellow-400 mb-2">Review Toko Baru</h3>
                 <p className="text-sm text-yellow-800 dark:text-yellow-300 mb-4">Toko ini masih berstatus "Menunggu Review" dan belum bisa diakses oleh Santri. Setujui agar toko bisa beroperasi.</p>
+
                 <div className="flex gap-3">
                   <button
                     onClick={() => {
@@ -196,7 +228,94 @@ export default function Pertokoan() {
                   </button>
                 </div>
               </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-800/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-1">Status Persetujuan</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {selectedCanteen.status === 'approved' 
+                        ? 'Kantin aktif dan memiliki izin untuk membuka toko.' 
+                        : 'Kantin dinonaktifkan (Izin dicabut).'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (selectedCanteen.status === 'approved') {
+                        if (window.confirm(`Nonaktifkan izin kantin ${selectedCanteen.name}? Kantin tidak akan bisa membuka tokonya.`)) {
+                          rejectCanteenMutation.mutate(selectedCanteen.id);
+                        }
+                      } else {
+                        if (window.confirm(`Aktifkan kembali izin kantin ${selectedCanteen.name}?`)) {
+                          approveCanteenMutation.mutate(selectedCanteen.id);
+                        }
+                      }
+                    }}
+                    disabled={approveCanteenMutation.isPending || rejectCanteenMutation.isPending}
+                    className={`relative inline-flex h-6 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      selectedCanteen.status === 'approved' ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'
+                    } disabled:opacity-50`}
+                    role="switch"
+                    aria-checked={selectedCanteen.status === 'approved'}
+                  >
+                    <span 
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        selectedCanteen.status === 'approved' ? 'translate-x-6' : 'translate-x-0'
+                      }`} 
+                    />
+                  </button>
+                </div>
+              </div>
             )}
+
+            {/* Jam Operasional Section */}
+            <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-2xl border border-orange-100 dark:border-orange-800/50">
+              <h3 className="font-bold text-orange-900 dark:text-orange-400 mb-2">Jam Operasional Toko</h3>
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (window.confirm(`Perbarui jam operasional kantin ${selectedCanteen.name}?`)) {
+                    updateHoursMutation.mutate({
+                      id: selectedCanteen.id,
+                      open_time: openTime,
+                      close_time: closeTime
+                    });
+                  }
+                }}
+                className="space-y-3"
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-orange-800 dark:text-orange-300 mb-1">Jam Buka</label>
+                    <input
+                      type="time"
+                      value={openTime}
+                      onChange={(e) => setOpenTime(e.target.value)}
+                      className="w-full rounded-xl border-orange-200 dark:border-orange-800/50 dark:bg-orange-900/30 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-gray-900 dark:text-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-orange-800 dark:text-orange-300 mb-1">Jam Tutup</label>
+                    <input
+                      type="time"
+                      value={closeTime}
+                      onChange={(e) => setCloseTime(e.target.value)}
+                      className="w-full rounded-xl border-orange-200 dark:border-orange-800/50 dark:bg-orange-900/30 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-gray-900 dark:text-white"
+                      required
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={updateHoursMutation.isPending}
+                  className="w-full mt-2 bg-orange-600 hover:bg-orange-700 text-white p-3 rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <Save size={18} />
+                  <span>{updateHoursMutation.isPending ? 'Menyimpan...' : 'Simpan Jam Operasional'}</span>
+                </button>
+              </form>
+            </div>
 
             {/* Fund Withdrawal (Pencairan Dana) Section */}
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800/50">
@@ -251,66 +370,6 @@ export default function Pertokoan() {
                   {withdrawMutation.isPending ? 'Memproses...' : 'Cairkan Dana'}
                 </button>
               </form>
-            </div>
-
-            {/* Banner Section */}
-            <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
-              <h3 className="font-bold text-gray-900 dark:text-white mb-4">Promo / Banner Kantin</h3>
-              
-              {(() => {
-                // Get the most recent pending or approved banner
-                const banner = selectedCanteen.banners?.[0];
-                
-                if (!banner) {
-                  return <p className="text-gray-500 text-sm">Kantin ini belum mengunggah banner promo.</p>;
-                }
-
-                return (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-700">
-                    <img src={getStorageUrl(banner.image_path)} alt={banner.title} className="w-full h-40 sm:h-48 object-cover" />
-                    <div className="p-4">
-                      <h4 className="font-bold text-gray-900 dark:text-white">{banner.title}</h4>
-                      <p className="text-xs mt-1 text-gray-500">Status: <span className="font-semibold uppercase">{banner.status}</span></p>
-                      
-                      <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
-                        {banner.status !== 'rejected' && (
-                          <button 
-                            onClick={() => {
-                              rejectMutation.mutate(banner.id);
-                              setSelectedCanteen(prev => ({
-                                ...prev,
-                                banners: prev.banners.map(b => b.id === banner.id ? { ...b, status: 'rejected' } : b)
-                              }));
-                            }}
-                            disabled={rejectMutation.isPending || approveMutation.isPending}
-                            className="flex-1 flex items-center justify-center space-x-1 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 disabled:opacity-50 text-sm font-medium transition-colors"
-                          >
-                            <XCircle size={16} />
-                            <span>Tolak / Batalkan</span>
-                          </button>
-                        )}
-                        {banner.status !== 'approved' && (
-                          <button 
-                            onClick={() => {
-                              approveMutation.mutate(banner.id);
-                              // Optimistically update local selectedCanteen state
-                              setSelectedCanteen(prev => ({
-                                ...prev,
-                                banners: prev.banners.map(b => b.id === banner.id ? { ...b, status: 'approved' } : b)
-                              }));
-                            }}
-                            disabled={approveMutation.isPending || rejectMutation.isPending}
-                            className="flex-1 flex items-center justify-center space-x-1 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-50 text-sm font-medium transition-colors"
-                          >
-                            <CheckCircle size={16} />
-                            <span>Setujui</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
             </div>
 
           </div>

@@ -20,10 +20,9 @@ export default function DetailKantin() {
   // Custom Order state
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customNotes, setCustomNotes] = useState('');
-  const [customLocation, setCustomLocation] = useState(
-    user ? `Santri: ${user.santri_name || user.name} | ${user.santri_room || ''} | ${user.santri_class || ''}/${user.santri_level || ''}` : ''
-  );
+  const [customLocation, setCustomLocation] = useState(user?.santri_room || '');
   const [isSubmittingCustom, setIsSubmittingCustom] = useState(false);
+  const [showProfileAlert, setShowProfileAlert] = useState(false);
 
   const { data: canteen, isLoading: isLoadingCanteen } = useQuery({
     queryKey: ['canteen', id],
@@ -51,14 +50,10 @@ export default function DetailKantin() {
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleAddToCart = (product) => {
-    if (!canteen?.is_open) {
-      toast.error('Kantin sedang tutup');
-      return;
-    }
     const current = canteenCart[String(product.id)];
     const currentQty = current?.quantity || 0;
-    if (currentQty >= product.stock) {
-      toast.error(`Stok ${product.name} hanya tersisa ${product.stock}`);
+    if (currentQty >= 99) {
+      toast.error(`Maksimal pesanan untuk 1 menu adalah 99`);
       return;
     }
     addItem(canteen, product);
@@ -99,7 +94,7 @@ export default function DetailKantin() {
         {totalItems > 0 && (
           <button
             onClick={handleGoToCart}
-            className="absolute top-4 right-4 w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white z-10 shadow-lg relative"
+            className="absolute top-4 right-4 w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white z-10 shadow-lg"
           >
             <ShoppingCart className="w-5 h-5" />
             <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
@@ -229,8 +224,8 @@ export default function DetailKantin() {
                               <span className="w-6 text-center text-sm font-semibold text-green-700 dark:text-green-400">{inCart}</span>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleAddToCart(product); }} 
-                                disabled={inCart >= product.stock}
-                                className={`w-8 h-8 flex items-center justify-center ${inCart >= product.stock ? 'text-gray-300' : 'text-green-700 dark:text-green-400'}`}
+                                disabled={inCart >= 99}
+                                className={`w-8 h-8 flex items-center justify-center ${inCart >= 99 ? 'text-gray-300' : 'text-green-700 dark:text-green-400'}`}
                               >
                                 <Plus className="w-4 h-4" />
                               </button>
@@ -357,8 +352,8 @@ export default function DetailKantin() {
                     <span className="text-lg font-bold text-green-700 dark:text-green-400 w-8 text-center">{(canteenCart[String(selectedProduct.id)]?.quantity || 0)}</span>
                     <button 
                       onClick={() => handleAddToCart(selectedProduct)} 
-                      disabled={(canteenCart[String(selectedProduct.id)]?.quantity || 0) >= selectedProduct.stock}
-                      className={`w-10 h-10 flex items-center justify-center rounded-full ${(canteenCart[String(selectedProduct.id)]?.quantity || 0) >= selectedProduct.stock ? 'text-gray-300' : 'text-green-700 dark:text-green-400 active:bg-green-100 dark:active:bg-green-800'}`}
+                      disabled={(canteenCart[String(selectedProduct.id)]?.quantity || 0) >= 99}
+                      className={`w-10 h-10 flex items-center justify-center rounded-full ${(canteenCart[String(selectedProduct.id)]?.quantity || 0) >= 99 ? 'text-gray-300' : 'text-green-700 dark:text-green-400 active:bg-green-100 dark:active:bg-green-800'}`}
                     >
                       <Plus className="w-5 h-5" />
                     </button>
@@ -366,7 +361,7 @@ export default function DetailKantin() {
                 ) : (
                   <button 
                     onClick={() => handleAddToCart(selectedProduct)}
-                    disabled={!(selectedProduct.is_available === 1 || selectedProduct.is_available === true) || selectedProduct.stock <= 0}
+                    disabled={!(selectedProduct.is_available === 1 || selectedProduct.is_available === true)}
                     className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold transition-colors disabled:opacity-50 disabled:bg-gray-400"
                   >
                     Tambah ke Keranjang
@@ -427,6 +422,11 @@ export default function DetailKantin() {
               <button 
                 disabled={!customNotes.trim() || isSubmittingCustom}
                 onClick={async () => {
+                  if (!user?.phone || !user?.santri_name || !user?.santri_room || !user?.santri_class || !user?.santri_level) {
+                    setShowCustomModal(false);
+                    setShowProfileAlert(true);
+                    return;
+                  }
                   if (!canteen.is_open) {
                     toast.error('Kantin sedang tutup');
                     return;
@@ -457,6 +457,39 @@ export default function DetailKantin() {
           </div>
         </div>
       )}
+      
+      {/* Profil Belum Lengkap Modal */}
+      {showProfileAlert && (
+        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl p-6 text-center">
+            <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-amber-600 dark:text-amber-500" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Profil Belum Lengkap</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              Silakan isi identitas santri dan nomor telepon (WhatsApp) di halaman Profil terlebih dahulu sebelum melakukan Checkout.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowProfileAlert(false)}
+                className="flex-1 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 transition-colors"
+              >
+                Nanti Saja
+              </button>
+              <button 
+                onClick={() => {
+                  setShowProfileAlert(false);
+                  navigate({ to: '/dashboard/profile' });
+                }}
+                className="flex-1 py-2.5 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 transition-colors"
+              >
+                Ke Profil
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

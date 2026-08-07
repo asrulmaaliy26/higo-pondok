@@ -18,4 +18,15 @@ class CanteenBanner extends Model
     {
         return $this->belongsTo(Canteen::class);
     }
+
+    protected static function booted()
+    {
+        static::deleting(function (CanteenBanner $banner) {
+            if ($banner->image_path) {
+                // Remove /storage/ prefix if it exists in the path
+                $path = str_replace('/storage/', '', $banner->image_path);
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($path);
+            }
+        });
+    }
 }

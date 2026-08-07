@@ -10,42 +10,15 @@ use Illuminate\Support\Facades\Storage;
 
 class CanteenBannerController extends Controller
 {
-    // Publik / User (hanya banner yang disetujui)
+    // Publik / User (hanya banner yang aktif)
     public function index()
     {
         $banners = CanteenBanner::with('canteen:id,name')
-            ->where('status', 'approved')
+            ->where('status', 'active')
             ->latest()
             ->get();
             
         return response()->json($banners);
-    }
-
-    // Admin: Lihat semua pending
-    public function pending()
-    {
-        $banners = CanteenBanner::with('canteen:id,name')
-            ->where('status', 'pending')
-            ->latest()
-            ->get();
-            
-        return response()->json($banners);
-    }
-
-    // Admin: Approve
-    public function approve($id)
-    {
-        $banner = CanteenBanner::findOrFail($id);
-        $banner->update(['status' => 'approved']);
-        return response()->json(['message' => 'Banner disetujui']);
-    }
-
-    // Admin: Reject
-    public function reject($id)
-    {
-        $banner = CanteenBanner::findOrFail($id);
-        $banner->update(['status' => 'rejected']);
-        return response()->json(['message' => 'Banner ditolak']);
     }
 
     // Kantin: Upload banner baru
@@ -68,25 +41,40 @@ class CanteenBannerController extends Controller
             return response()->json(['message' => 'Toko tidak ditemukan'], 404);
         }
 
-        // Cek jika kantin sudah punya banner (maks 1 per kantin, hapus yang lama jika ada)
-        // Sesuai permintaan user: "setiap toko 1 lalu admin menyetujui itu"
-        $existingBanner = $canteen->banners()->first();
-        if ($existingBanner) {
-            // Kita bisa menimpa yang lama
-            if (Storage::disk('public')->exists(str_replace('/storage/', '', $existingBanner->image_path))) {
-                Storage::disk('public')->delete(str_replace('/storage/', '', $existingBanner->image_path));
-            }
-            $existingBanner->delete();
-        }
-
         $imagePath = $request->file('image')->store($this->getUserUploadPath($request->user(), 'banners'), 'public');
 
         $banner = $canteen->banners()->create([
             'title' => $request->title,
             'image_path' => '/storage/' . $imagePath,
-            'status' => 'pending' // kembali ke pending jika diupdate
+            'status' => 'active'
         ]);
 
-        return response()->json(['message' => 'Banner berhasil diunggah dan menunggu persetujuan admin', 'banner' => $banner]);
+        return response()->json(['message' => 'Banner berhasil ditambahkan', 'banner' => $banner]);
+    }
+
+    // Kantin: Toggle status banner
+    public function toggleStatus(Request $request, $id)
+    {
+        $canteenId = $request->input('canteen_id') ?? $request->query('canteen_id');
+        $canteen = $canteenId ? $request->user()->canteens()->where('id', $canteenId)->first() : $request->user()->canteens()->first();
+        if (!$canteen) return response()->json(['message' => 'Toko tidak ditemukan'], 404);
+
+        $banner = $canteen->banners()->findOrFail($id);
+        $banner->update(['status' => $banner->status === 'active' ? 'inactive' : 'active']);
+        
+        return response()->json(['message' => 'Status banner berhasil diubah', 'banner' => $banner]);
+    }
+
+    // Kantin: Hapus banner
+    public function destroy(Request $request, $id)
+    {
+        $canteenId = $request->input('canteen_id') ?? $request->query('canteen_id');
+        $canteen = $canteenId ? $request->user()->canteens()->where('id', $canteenId)->first() : $request->user()->canteens()->first();
+        if (!$canteen) return response()->json(['message' => 'Toko tidak ditemukan'], 404);
+
+        $banner = $canteen->banners()->findOrFail($id);
+        $banner->delete(); // File handling is usually done in Model boot method or deleting event
+
+        return response()->json(['message' => 'Banner berhasil dihapus']);
     }
 }

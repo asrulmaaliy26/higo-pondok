@@ -17,6 +17,7 @@ export default function Keranjang() {
   const [deliveryLocation, setDeliveryLocation] = useState(user?.santri_room || '');
   const [customLocation, setCustomLocation] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showProfileAlert, setShowProfileAlert] = useState(false);
 
   const predefinedLocations = user?.santri_room ? [user.santri_room] : [];
   const canteenEntries = Object.entries(cart); // [[canteenId, { canteen, items }], ...]
@@ -44,22 +45,16 @@ export default function Keranjang() {
 
   const handleCheckoutAll = async () => {
     // Validasi
-    if (!user?.santri_name || !user?.santri_room || !user?.santri_class || !user?.santri_level) {
-      toast.error('Lengkapi data santri di halaman Profil terlebih dahulu.');
-      navigate({ to: '/dashboard/profile' });
+    if (!user?.phone || !user?.santri_name || !user?.santri_room || !user?.santri_class || !user?.santri_level) {
+      setShowProfileAlert(true);
       return;
     }
     if (!finalLocation) {
-      toast.error('Silakan pilih atau masukkan lokasi pengiriman.');
+      window.alert('Silakan pilih atau ketik lokasi pengiriman Anda terlebih dahulu sebelum Checkout.');
       return;
     }
 
-    // Check semua kantin masih buka
-    const closedCanteen = canteenSummaries.find(c => !c.canteen.is_open);
-    if (closedCanteen) {
-      toast.error(`${closedCanteen.canteen.name} sedang tutup. Hapus dulu dari keranjang.`);
-      return;
-    }
+
 
     setIsProcessing(true);
 
@@ -90,7 +85,7 @@ export default function Keranjang() {
     }
 
     if (failed.length > 0) {
-      toast.error(`${failed.length} pesanan gagal: ${failed.map(f => f.canteen.name).join(', ')}`);
+      toast.error(failed[0].error || `${failed.length} pesanan gagal: ${failed.map(f => f.canteen.name).join(', ')}`);
     } else {
       toast.success(`${succeeded.length} pesanan berhasil dibuat!`);
     }
@@ -172,11 +167,7 @@ export default function Keranjang() {
                 </div>
                 <div>
                   <p className="font-bold text-gray-900 dark:text-white text-sm">{canteen.name}</p>
-                  {!canteen.is_open && (
-                    <p className="text-[10px] text-red-500 font-semibold flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" /> Sedang Tutup
-                    </p>
-                  )}
+
                 </div>
               </div>
               <button
@@ -215,8 +206,8 @@ export default function Keranjang() {
                     <span className="w-6 text-center text-sm font-bold text-green-700 dark:text-green-400">{quantity}</span>
                     <button
                       onClick={() => addItem(canteen, product)}
-                      disabled={quantity >= product.stock}
-                      className={`w-8 h-8 flex items-center justify-center rounded-full ${quantity >= product.stock ? 'text-gray-300' : 'text-green-700 dark:text-green-400 active:bg-green-100'}`}
+                      disabled={quantity >= 99}
+                      className={`w-8 h-8 flex items-center justify-center rounded-full ${quantity >= 99 ? 'text-gray-300' : 'text-green-700 dark:text-green-400 active:bg-green-100'}`}
                     >
                       <Plus className="w-4 h-4" />
                     </button>
@@ -312,7 +303,7 @@ export default function Keranjang() {
         <div className="max-w-2xl mx-auto">
           <button
             onClick={handleCheckoutAll}
-            disabled={isProcessing || !finalLocation}
+            disabled={isProcessing}
             className="w-full py-4 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold rounded-2xl shadow-lg shadow-green-600/30 transition-colors flex items-center justify-center gap-2"
           >
             {isProcessing ? (
@@ -329,6 +320,38 @@ export default function Keranjang() {
           <p className="text-center text-[11px] text-gray-400 mt-2">WA konfirmasi akan dikirim ke setiap toko</p>
         </div>
       </div>
+      {/* Profil Belum Lengkap Modal */}
+      {showProfileAlert && (
+        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl p-6 text-center">
+            <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-amber-600 dark:text-amber-500" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Profil Belum Lengkap</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              Silakan isi identitas santri dan nomor telepon (WhatsApp) di halaman Profil terlebih dahulu sebelum melakukan Checkout.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowProfileAlert(false)}
+                className="flex-1 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 transition-colors"
+              >
+                Nanti Saja
+              </button>
+              <button 
+                onClick={() => {
+                  setShowProfileAlert(false);
+                  navigate({ to: '/dashboard/profile' });
+                }}
+                className="flex-1 py-2.5 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 transition-colors"
+              >
+                Ke Profil
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

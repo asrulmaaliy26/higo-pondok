@@ -16,14 +16,27 @@ export default function Pembayaran() {
   const [activeOrderForPaymentProof, setActiveOrderForPaymentProof] = useState(null);
   const [paymentProofFiles, setPaymentProofFiles] = useState([]);
 
-  // ⚙️ Konfigurasi Jam Layanan Pembayaran QRIS
-  // Ubah angka di bawah ini untuk mengatur jam buka/tutup pembayaran (format 24 jam)
-  const PAYMENT_START_HOUR = 0;  // Jam mulai (09:00)
-  const PAYMENT_END_HOUR   = 24; // Jam selesai (17:00)
-
-  const isPaymentTime = () => {
-    const hour = new Date().getHours();
-    return hour >= PAYMENT_START_HOUR && hour < PAYMENT_END_HOUR;
+  const isPaymentTime = (order) => {
+    if (!order?.canteen?.open_time || !order?.canteen?.close_time) {
+      // Default fallback jika data jam buka/tutup tidak tersedia
+      const hour = new Date().getHours();
+      return hour >= 9 && hour < 17;
+    }
+    
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTime = currentHour * 60 + currentMinute;
+    
+    // Parse open_time (e.g. "09:00:00" atau "09:00")
+    const openParts = order.canteen.open_time.split(':');
+    const openTime = parseInt(openParts[0]) * 60 + parseInt(openParts[1]);
+    
+    // Parse close_time (e.g. "17:00:00" atau "17:00")
+    const closeParts = order.canteen.close_time.split(':');
+    const closeTime = parseInt(closeParts[0]) * 60 + parseInt(closeParts[1]);
+    
+    return currentTime >= openTime && currentTime <= closeTime;
   };
 
   const queryClient = useQueryClient();
@@ -74,7 +87,7 @@ export default function Pembayaran() {
       const res = await api.get('/orders');
       return res.data;
     },
-    refetchInterval: 30000 // auto refresh every 30s
+    refetchInterval: 5000 // auto refresh every 5s for near real-time
   });
 
   if (isLoading) {
@@ -259,9 +272,9 @@ export default function Pembayaran() {
               )}
 
               {/* Section Upload Pertama Kali */}
-              {order.payment_status === 'unpaid' && !order.proof_of_payment && (
+              {order.status !== 'cancelled' && order.payment_status === 'unpaid' && !order.proof_of_payment && (
                 <div className="mb-4 pt-3 border-t border-gray-100 dark:border-gray-800">
-                  {isPaymentTime() ? (
+                  {isPaymentTime(order) ? (
                     <button 
                       onClick={() => {
                         setActiveOrderForPaymentProof(order);
@@ -274,8 +287,11 @@ export default function Pembayaran() {
                   ) : (
                     <div className="w-full flex flex-col items-center justify-center gap-1 py-3 px-3 text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400 rounded-lg border border-amber-100 dark:border-amber-900/50 text-center">
                       <Clock className="w-5 h-5 mb-1" />
-                      <span className="font-semibold">Waktu Pembayaran Tutup</span>
-                      <span className="text-xs">Pembayaran QRIS hanya dilayani pukul 09:00 - 17:00 WIB</span>
+                      <span className="font-semibold">Toko Sedang Tutup</span>
+                      <span className="text-xs">
+                        Pembayaran dilayani saat toko buka 
+                        {order.canteen?.open_time ? ` (${order.canteen.open_time.substring(0,5)} - ${order.canteen.close_time.substring(0,5)})` : ''}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -299,7 +315,7 @@ export default function Pembayaran() {
                     >
                       <ImageIcon className="w-4 h-4" /> Lihat Bukti Transfer
                     </button>
-                    {isPaymentTime() && order.status !== 'cancelled' && (
+                    {isPaymentTime(order) && order.status !== 'cancelled' && (
                       <button 
                         onClick={() => {
                           setActiveOrderForPaymentProof(order);
@@ -311,9 +327,9 @@ export default function Pembayaran() {
                       </button>
                     )}
                   </div>
-                  {!isPaymentTime() && order.status !== 'cancelled' && (
+                  {!isPaymentTime(order) && order.status !== 'cancelled' && (
                     <div className="w-full mt-1 text-center text-xs text-amber-600 dark:text-amber-400">
-                      Upload tambahan sedang tutup (layanan QRIS: 09:00 - 17:00)
+                      Upload tambahan tidak tersedia (toko sedang tutup)
                     </div>
                   )}
                 </div>

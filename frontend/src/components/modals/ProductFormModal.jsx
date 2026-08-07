@@ -109,30 +109,19 @@ export const ProductFormModal = ({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Kategori</label>
             <input type="text" placeholder="Cth: Makanan, Minuman, Snack" value={productData.category} onChange={e => setProductData({...productData, category: e.target.value})} className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Harga</label>
-              <input 
-                required 
-                type="text" 
-                placeholder="10000" 
-                value={formatRupiah(productData.price)} 
-                onChange={e => handleNumericInput(e, 'price')} 
-                className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
-              />
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Harga</label>
+                <input 
+                  required 
+                  type="text" 
+                  placeholder="10000" 
+                  value={formatRupiah(productData.price)} 
+                  onChange={e => handleNumericInput(e, 'price')} 
+                  className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Stok Awal</label>
-              <input 
-                required 
-                type="text" 
-                placeholder="50" 
-                value={productData.stock} 
-                onChange={e => handleNumericInput(e, 'stock')} 
-                className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
-              />
-            </div>
-          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status Ketersediaan</label>
             <div className="flex gap-4 mt-2">

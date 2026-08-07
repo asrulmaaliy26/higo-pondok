@@ -78,11 +78,19 @@ export default function Login() {
           {loading ? 'Memproses...' : 'Masuk'}
         </Button>
 
-        <div className="text-center text-sm text-gray-600 mt-6">
-           Belum punya akun?{' '}
-           <Link to="/register" className="font-semibold text-green-600 hover:text-green-500">
-             Daftar sekarang
-           </Link>
+        <div className="text-center text-sm text-gray-600 mt-6 space-y-2">
+           <p>
+             Belum punya akun?{' '}
+             <Link to="/register" className="font-semibold text-green-600 hover:text-green-500">
+               Daftar sekarang
+             </Link>
+           </p>
+           <p>
+             <Link to="/buku-panduan" className="font-medium text-gray-500 hover:text-green-600 flex items-center justify-center gap-1">
+               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-book-open"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+               Baca Dokumentasi Aplikasi
+             </Link>
+           </p>
         </div>
       </form>
     </AuthLayout>

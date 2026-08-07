@@ -70,6 +70,9 @@ export default function PesananToko() {
   const [showSetPriceModal, setShowSetPriceModal] = useState(false);
   const [activeOrderForSetPrice, setActiveOrderForSetPrice] = useState(null);
   const [newPriceInput, setNewPriceInput] = useState('');
+  
+  // Recap Modal State
+  const [showRecapModal, setShowRecapModal] = useState(false);
 
   // Fetch Santri List for Manual Order
   const { data: santriList = [] } = useQuery({
@@ -158,8 +161,10 @@ export default function PesananToko() {
       const res = await api.get(`/canteen/orders?canteen_id=${selectedCanteenFilter}&start_date=${currentParams.start_date}&end_date=${currentParams.end_date}`);
       return res.data;
     },
-    refetchInterval: 30000, // auto refresh every 30s
+    refetchInterval: 5000, // auto refresh every 5s for near real-time
   });
+
+
 
   const { data: couriersRes } = useQuery({
     queryKey: ['couriers'],
@@ -258,14 +263,46 @@ export default function PesananToko() {
     window.open(`https://wa.me/${formatted}`, '_blank');
   };
 
+  const orders = ordersRes?.data || ordersRes || [];
+  const couriers = couriersRes || [];
+
+  const productRecap = React.useMemo(() => {
+    const recap = {};
+    let customOrderTotal = 0;
+    let customOrderCount = 0;
+    
+    // Hanya hitung pesanan yang sedang aktif (pending / processing)
+    const validOrders = orders?.filter(o => o.status === 'pending' || o.status === 'processing') || [];
+    
+    validOrders.forEach(order => {
+      if (order.is_custom) {
+        customOrderCount++;
+        customOrderTotal += parseFloat(order.total_price || 0);
+      } else if (order.items && order.items.length > 0) {
+        order.items.forEach(item => {
+          const name = item.product?.name || item.product_name || 'Produk Tidak Diketahui';
+          if (!recap[name]) {
+            recap[name] = { quantity: 0, total: 0 };
+          }
+          recap[name].quantity += parseInt(item.quantity || 0);
+          recap[name].total += parseFloat(item.price || 0) * parseInt(item.quantity || 0);
+        });
+      }
+    });
+
+    // Convert to sorted array
+    const recapArray = Object.keys(recap).map(key => ({
+      name: key,
+      ...recap[key]
+    })).sort((a, b) => b.quantity - a.quantity);
+
+    return { items: recapArray, customCount: customOrderCount, customTotal: customOrderTotal };
+  }, [orders]);
+
   if (isLoading) {
     return <div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div></div>;
   }
 
-
-
-  const orders = ordersRes || [];
-  const couriers = couriersRes || [];
 
   return (
     <div className="bg-gray-50 h-full min-h-screen pb-24 dark:bg-gray-950 font-sans">
@@ -358,6 +395,13 @@ export default function PesananToko() {
               ))}
             </select>
           )}
+
+          <button
+            onClick={() => setShowRecapModal(true)}
+            className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1 shadow-sm shrink-0 sm:ml-auto"
+          >
+            <ShoppingBag className="w-4 h-4" /> Rekap per Produk
+          </button>
         </div>
       </div>
 
@@ -386,7 +430,14 @@ export default function PesananToko() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-gray-900 dark:text-white">{order.user?.name || 'User'}</h3>
+                    <div className="flex flex-col">
+                      <h3 className="font-bold text-gray-900 dark:text-white">{order.user?.name || 'User'}</h3>
+                      {order.user?.santri_name && (
+                        <span className="text-[10px] text-gray-500 font-medium bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded max-w-fit mt-0.5">
+                          Keluarga Santri: {order.user.santri_name}
+                        </span>
+                      )}
+                    </div>
                     <button onClick={() => handleContact(order.user?.phone, order.user?.name)} className="text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 p-1.5 rounded-full" title="Hubungi Pembeli">
                       <MessageCircle className="w-4 h-4" />
                     </button>
@@ -400,7 +451,13 @@ export default function PesananToko() {
                     </div>
                   )}
                 </div>
-                <div className={`px-2 py-1 rounded text-xs font-bold ${order.payment_status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                <div className={`px-2 py-1 rounded text-xs font-bold ${
+                  order.payment_status === 'paid' 
+                    ? 'bg-green-100 text-green-700' 
+                    : !order.proof_of_payment 
+                      ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border border-red-500 animate-pulse drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]' 
+                      : 'bg-yellow-100 text-yellow-700'
+                }`}>
                   {order.payment_status === 'paid' ? 'Lunas' : 'Belum Bayar'}
                 </div>
               </div>
@@ -549,6 +606,9 @@ export default function PesananToko() {
                     {order.status === 'pending' && (
                       <button 
                         onClick={() => {
+                          if (!order.proof_of_payment) {
+                            if (!window.confirm('Pembeli belum mengunggah Bukti Transfer. Yakin ingin memproses pesanan ini?')) return;
+                          }
                           setActiveOrderForCourier(order);
                           setShowCourierModal(true);
                         }}
@@ -560,6 +620,9 @@ export default function PesananToko() {
 
                     <button 
                       onClick={() => {
+                        if (!order.proof_of_payment) {
+                          if (!window.confirm('Pembeli belum mengunggah Bukti Transfer. Yakin ingin menyelesaikan pesanan ini?')) return;
+                        }
                         setActiveOrderForProof(order);
                         setShowProofModal(true);
                       }}
@@ -1019,6 +1082,81 @@ export default function PesananToko() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recap Modal */}
+      {showRecapModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-xl border border-gray-100 dark:border-gray-800 flex flex-col max-h-[80vh]">
+            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+              <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5 text-green-600" />
+                Rekap per Produk
+              </h3>
+              <button onClick={() => setShowRecapModal(false)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto">
+              {productRecap.items.length === 0 && productRecap.customCount === 0 ? (
+                <div className="text-center text-gray-500 py-10">
+                  Belum ada data penjualan.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {productRecap.items.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2">Produk Reguler</h4>
+                      <div className="space-y-2">
+                        {productRecap.items.map((item, idx) => (
+                          <div key={idx} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+                            <div className="font-semibold text-gray-800 dark:text-gray-200 text-sm">
+                              {item.name}
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-bold text-green-600">{item.quantity}x</div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">Rp {item.total.toLocaleString('id-ID')}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {productRecap.customCount > 0 && (
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2">Pesanan Titipan (Khusus)</h4>
+                      <div className="flex justify-between items-center bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-900/50">
+                        <div className="font-semibold text-purple-800 dark:text-purple-300 text-sm">
+                          Total Pesanan Khusus
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-bold text-purple-600">{productRecap.customCount}x pesanan</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">Rp {productRecap.customTotal.toLocaleString('id-ID')}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="pt-3 border-t border-gray-200 dark:border-gray-700 mt-4 flex justify-between items-center">
+                    <span className="font-bold text-gray-900 dark:text-white">Total Keseluruhan</span>
+                    <span className="font-bold text-green-600 text-lg">
+                      Rp {(productRecap.items.reduce((acc, curr) => acc + curr.total, 0) + productRecap.customTotal).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-gray-100 dark:border-gray-800">
+              <button 
+                onClick={() => setShowRecapModal(false)}
+                className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 rounded-xl font-bold transition-colors"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}

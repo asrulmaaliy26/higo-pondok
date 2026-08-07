@@ -1,7 +1,8 @@
 import React from 'react';
-import { Users, Wallet, TrendingUp, AlertCircle } from 'lucide-react';
+import { Users, Wallet, TrendingUp, AlertCircle, ArrowRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../lib/axios';
+import { Link } from '@tanstack/react-router';
 
 export default function AdminDashboard({ user }) {
   const { data: adminStats } = useQuery({
@@ -43,9 +44,14 @@ export default function AdminDashboard({ user }) {
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="glass-card rounded-2xl p-5 sm:p-6">
-          <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">Aktivitas Terbaru</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <div className="glass-card rounded-2xl p-5 sm:p-6 relative">
+          <div className="flex justify-between items-center mb-3 sm:mb-4">
+            <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Aktivitas Terbaru</h3>
+            <Link to="/dashboard/admin-logs" className="text-sm text-green-600 hover:text-green-700 flex items-center font-medium">
+              Lihat Semua Log <ArrowRight className="w-4 h-4 ml-1" />
+            </Link>
+          </div>
           <div className="space-y-3 sm:space-y-4">
             {adminStats?.recent_activities?.length > 0 ? (
               adminStats.recent_activities.map((activity) => (

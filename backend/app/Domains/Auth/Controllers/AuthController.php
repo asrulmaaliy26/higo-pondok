@@ -62,6 +62,9 @@ class AuthController extends Controller
         if ($request->has('email')) {
             $user->email = $request->email;
         }
+        if ($request->has('phone')) {
+            $user->phone = $request->phone;
+        }
         
         $santriFields = ['santri_name', 'santri_room', 'santri_class', 'santri_level'];
         foreach ($santriFields as $field) {

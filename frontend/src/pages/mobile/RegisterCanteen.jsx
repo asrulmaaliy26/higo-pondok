@@ -4,6 +4,7 @@ import { useNavigate, Link } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import AuthLayout from '../../components/layout/mobile/AuthLayout';
 
 export default function RegisterCanteen() {
   const [name, setName] = useState('');
@@ -38,56 +39,62 @@ export default function RegisterCanteen() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 py-12">
-      <div className="w-full max-w-md space-y-8 rounded-xl bg-white p-10 shadow-lg">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900">Daftar Kantin</h2>
-          <p className="mt-2 text-sm text-gray-600">Buka toko Anda di Higo Pondok</p>
+    <AuthLayout 
+      title="Daftar Kantin" 
+      subtitle="Buka toko Anda di Higo Pondok"
+    >
+      <form className="mt-8 space-y-6" onSubmit={handleRegister}>
+        {error && (
+          <div className="rounded-md bg-red-50 p-4 border border-red-100">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+        {success && (
+          <div className="rounded-md bg-green-50 p-4 border border-green-100">
+            <p className="text-sm text-green-700">{success}</p>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <h3 className="font-semibold text-gray-700 dark:text-gray-300">Data Pemilik</h3>
+          <div>
+            <Label htmlFor="name">Nama Lengkap</Label>
+            <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
+          </div>
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" />
+          </div>
+          <div>
+            <Label htmlFor="password">Password</Label>
+            <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1" />
+          </div>
+          <div>
+            <Label htmlFor="passwordConfirmation">Konfirmasi Password</Label>
+            <Input id="passwordConfirmation" type="password" required value={passwordConfirmation} onChange={(e) => setPasswordConfirmation(e.target.value)} className="mt-1" />
+          </div>
+
+          <h3 className="font-semibold text-gray-700 dark:text-gray-300 pt-4">Data Toko</h3>
+          <div>
+            <Label htmlFor="canteenName">Nama Kantin/Toko</Label>
+            <Input id="canteenName" required value={canteenName} onChange={(e) => setCanteenName(e.target.value)} className="mt-1" />
+          </div>
+          <div>
+            <Label htmlFor="canteenDesc">Deskripsi Singkat</Label>
+            <Input id="canteenDesc" value={canteenDesc} onChange={(e) => setCanteenDesc(e.target.value)} className="mt-1" />
+          </div>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleRegister}>
-          {error && <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-          {success && <div className="rounded-md bg-green-50 p-4 text-sm text-green-700">{success}</div>}
+        <Button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white py-6" disabled={loading || success}>
+          {loading ? 'Memproses...' : 'Daftar Kantin'}
+        </Button>
 
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-700">Data Pemilik</h3>
-            <div>
-              <Label>Nama Lengkap</Label>
-              <Input required value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
-            </div>
-            <div>
-              <Label>Email</Label>
-              <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" />
-            </div>
-            <div>
-              <Label>Password</Label>
-              <Input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1" />
-            </div>
-            <div>
-              <Label>Konfirmasi Password</Label>
-              <Input type="password" required value={passwordConfirmation} onChange={(e) => setPasswordConfirmation(e.target.value)} className="mt-1" />
-            </div>
-
-            <h3 className="font-semibold text-gray-700 pt-4">Data Toko</h3>
-            <div>
-              <Label>Nama Kantin/Toko</Label>
-              <Input required value={canteenName} onChange={(e) => setCanteenName(e.target.value)} className="mt-1" />
-            </div>
-            <div>
-              <Label>Deskripsi Singkat</Label>
-              <Input value={canteenDesc} onChange={(e) => setCanteenDesc(e.target.value)} className="mt-1" />
-            </div>
-          </div>
-
-          <Button type="submit" className="w-full" disabled={loading || success}>
-            {loading ? 'Memproses...' : 'Daftar Kantin'}
-          </Button>
-
-          <div className="text-center text-sm text-gray-600 mt-4">
-             Sudah punya akun? <Link to="/login" className="text-green-600 hover:underline">Masuk</Link>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="text-center text-sm text-gray-600 mt-6 space-y-2">
+           <div className="pt-4 border-t border-gray-200 mt-4">
+             Sudah punya akun? <Link to="/login" className="font-semibold text-green-600 hover:text-green-500">Masuk di sini</Link>
+           </div>
+        </div>
+      </form>
+    </AuthLayout>
   );
 }

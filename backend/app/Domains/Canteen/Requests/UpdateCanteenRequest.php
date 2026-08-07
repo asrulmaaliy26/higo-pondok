@@ -24,7 +24,8 @@ class UpdateCanteenRequest extends FormRequest
         return [
             'name' => 'required|string',
             'description' => 'nullable|string',
-            'is_open' => 'boolean',
+            'open_time' => 'nullable|date_format:H:i',
+            'close_time' => 'nullable|date_format:H:i',
             'image' => 'nullable|image|max:5120', // Maks 5MB
             'whatsapp_number' => 'nullable|string|max:20',
             'delivery_fee' => 'nullable|numeric|min:0',

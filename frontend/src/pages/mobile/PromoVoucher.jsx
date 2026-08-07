@@ -30,7 +30,7 @@ export default function PromoVoucher() {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries(['my_canteen']);
-      toast.success('Banner berhasil diunggah. Menunggu persetujuan admin.');
+      toast.success('Banner berhasil ditambahkan.');
       closeBannerModal();
     },
     onError: () => toast.error('Gagal mengunggah banner')
@@ -57,7 +57,21 @@ export default function PromoVoucher() {
     return <div className="p-4 flex justify-center"><div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div></div>;
   }
 
-  const pendingBanner = canteen?.banners?.find(b => b.status === 'pending');
+  const toggleBannerStatusMutation = useMutation({
+    mutationFn: (id) => api.put(`/canteen/banners/${id}/status?canteen_id=${activeCanteenId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['my_canteen']);
+      toast.success('Status banner diperbarui');
+    }
+  });
+
+  const deleteBannerMutation = useMutation({
+    mutationFn: (id) => api.delete(`/canteen/banners/${id}?canteen_id=${activeCanteenId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['my_canteen']);
+      toast.success('Banner dihapus');
+    }
+  });
 
   return (
     <div className="pb-24">
@@ -72,32 +86,59 @@ export default function PromoVoucher() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <ImageIcon className="w-5 h-5 text-green-600" />
-              Pengajuan Banner
+              Kelola Banner
             </h2>
-            {pendingBanner ? (
-              <span className="text-xs font-medium px-2 py-1 bg-amber-100 text-amber-700 rounded-full">Menunggu Persetujuan</span>
-            ) : (
-              <button 
-                onClick={() => setShowBannerModal(true)}
-                className="text-sm px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 rounded-lg font-medium transition-colors"
-              >
-                Ajukan Baru
-              </button>
-            )}
+            <button 
+              onClick={() => setShowBannerModal(true)}
+              className="text-sm px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 rounded-lg font-medium transition-colors"
+            >
+              Ajukan Baru
+            </button>
           </div>
           
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4">
-             {canteen?.image ? (
-               <div className="relative aspect-[21/9] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                 <img src={getStorageUrl(canteen.image)} alt="Current Banner" className="w-full h-full object-cover" />
-                 <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs px-2 py-1 rounded font-medium">Banner Aktif</div>
-               </div>
+          <div className="grid grid-cols-1 gap-4">
+             {canteen?.banners && canteen.banners.length > 0 ? (
+               canteen.banners.map((banner) => (
+                 <div key={banner.id} className={`relative aspect-[21/9] rounded-lg overflow-hidden border ${banner.status === 'active' ? 'border-green-500' : 'border-gray-200 dark:border-gray-700 opacity-70'}`}>
+                   <img src={getStorageUrl(banner.image_path)} alt={banner.title} className="w-full h-full object-cover" />
+                   
+                   <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white text-xs px-2 py-1 rounded font-medium max-w-[60%] truncate">
+                     {banner.title}
+                   </div>
+                   
+                   <div className="absolute top-2 right-2 flex items-center gap-2">
+                     <button 
+                       onClick={() => toggleBannerStatusMutation.mutate(banner.id)}
+                       disabled={toggleBannerStatusMutation.isPending}
+                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${banner.status === 'active' ? 'bg-green-500' : 'bg-gray-400 dark:bg-gray-600'}`}
+                     >
+                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${banner.status === 'active' ? 'translate-x-6' : 'translate-x-1'}`} />
+                     </button>
+                     <button 
+                       onClick={() => {
+                         if(window.confirm('Yakin ingin menghapus banner ini?')) {
+                           deleteBannerMutation.mutate(banner.id);
+                         }
+                       }}
+                       disabled={deleteBannerMutation.isPending}
+                       className="p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
+                     >
+                       <Trash2 className="w-4 h-4" />
+                     </button>
+                   </div>
+                   {banner.status !== 'active' && (
+                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                       <span className="bg-black/60 text-white px-3 py-1 rounded-full text-sm font-semibold backdrop-blur-sm">TIDAK AKTIF</span>
+                     </div>
+                   )}
+                 </div>
+               ))
              ) : (
-               <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">Belum ada banner aktif.</p>
+               <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">Belum ada banner yang diunggah.</p>
              )}
           </div>
         </div>
-        </div>
+      </div>
       {/* MODAL BANNER */}
       {showBannerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

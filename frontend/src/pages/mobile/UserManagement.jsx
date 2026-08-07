@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Plus, MoreVertical, Edit2, Trash2, Filter, Shield, User, Coffee, Bus, LogIn, X } from 'lucide-react';
+import { Search, Plus, MoreVertical, Edit2, Trash2, Filter, Shield, User, Coffee, Bus, LogIn, X, AlertTriangle } from 'lucide-react';
 import { ROLES } from '../../config/roles';
 import { useAuthStore } from '../../store/authStore';
 import { useNavigate } from '@tanstack/react-router';
@@ -15,6 +15,11 @@ export default function UserManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add'); // 'add' or 'edit'
   const [editingUserId, setEditingUserId] = useState(null);
+  
+  // SP (Surat Peringatan) states
+  const [isSPModalOpen, setIsSPModalOpen] = useState(false);
+  const [spFormData, setSpFormData] = useState({ id: null, penalty_points: 0 });
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -232,6 +237,11 @@ export default function UserManagement() {
                 <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
                    {getRoleBadge(user.role)}
                    {getStatusBadge(user.status || 'active')}
+                   {user.role === ROLES.KURIR && (
+                     <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border shadow-sm ${user.penalty_points > 0 ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800'}`}>
+                       SP {user.penalty_points || 0}
+                     </span>
+                   )}
                 </div>
               </div>
               
@@ -249,6 +259,18 @@ export default function UserManagement() {
                       title="Login Sebagai"
                     >
                       <LogIn className="w-4 h-4" />
+                    </button>
+                  )}
+                  {user.role === ROLES.KURIR && (
+                    <button 
+                      onClick={() => {
+                        setSpFormData({ id: user.id, penalty_points: user.penalty_points || 0 });
+                        setIsSPModalOpen(true);
+                      }}
+                      className="p-1.5 text-amber-500 hover:text-amber-600 transition-colors rounded-md hover:bg-amber-50 dark:hover:bg-amber-900/30" 
+                      title="Kelola SP"
+                    >
+                      <AlertTriangle className="w-4 h-4" />
                     </button>
                   )}
                   <button 
@@ -381,6 +403,76 @@ export default function UserManagement() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* SP (Penalty) Modal */}
+      {isSPModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm overflow-hidden shadow-xl animate-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-amber-50 dark:bg-amber-900/20">
+              <h3 className="font-bold text-lg text-amber-900 dark:text-amber-400 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5" /> Kelola SP Kurir
+              </h3>
+              <button onClick={() => setIsSPModalOpen(false)} className="p-1.5 text-amber-700 hover:text-amber-900 dark:text-amber-500 dark:hover:text-amber-300 rounded-full hover:bg-amber-100 dark:hover:bg-amber-800/50 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-5">
+              <div className="text-center">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Tingkat Surat Peringatan (SP) Saat Ini</p>
+                <div className="flex items-center justify-center gap-4">
+                  <button 
+                    type="button" 
+                    onClick={() => setSpFormData(prev => ({...prev, penalty_points: Math.max(0, prev.penalty_points - 1)}))}
+                    className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 flex items-center justify-center text-xl font-bold text-gray-700 dark:text-gray-300 transition-colors"
+                  >
+                    -
+                  </button>
+                  <span className="text-4xl font-extrabold text-amber-600 w-16 text-center">{spFormData.penalty_points}</span>
+                  <button 
+                    type="button" 
+                    onClick={() => setSpFormData(prev => ({...prev, penalty_points: Math.min(4, prev.penalty_points + 1)}))}
+                    className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 flex items-center justify-center text-xl font-bold text-gray-700 dark:text-gray-300 transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-3 text-left">
+                  Tingkat SP menentukan sanksi sesuai SOP (Maksimal SP 4).<br/>
+                  <strong className="text-amber-600">SP 1:</strong> Teguran<br/>
+                  <strong className="text-amber-600">SP 2:</strong> Peringatan Keras<br/>
+                  <strong className="text-amber-600">SP 3:</strong> Skorsing/Suspensi<br/>
+                  <strong className="text-amber-600">SP 4:</strong> Pemutusan Kemitraan
+                </p>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setIsSPModalOpen(false)}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-bold rounded-xl transition-colors"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    updateUserMutation.mutate({ 
+                      id: spFormData.id, 
+                      data: { penalty_points: spFormData.penalty_points } 
+                    });
+                    setIsSPModalOpen(false);
+                  }}
+                  disabled={updateUserMutation.isPending}
+                  className="flex-1 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl transition-colors flex justify-center items-center shadow-md shadow-amber-500/20"
+                >
+                  Simpan SP
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

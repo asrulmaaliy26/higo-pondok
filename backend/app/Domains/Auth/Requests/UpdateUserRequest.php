@@ -22,6 +22,7 @@ class UpdateUserRequest extends FormRequest
             'password' => 'nullable|string|min:8',
             'role' => 'sometimes|in:admin,user,kantin,kurir',
             'status' => 'sometimes|in:active,inactive,pending',
+            'penalty_points' => 'sometimes|integer|min:0',
         ];
     }
 }

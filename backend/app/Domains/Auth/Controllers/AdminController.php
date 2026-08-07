@@ -42,6 +42,23 @@ class AdminController extends Controller
         return response()->json(['message' => 'Biaya berhasil diperbarui', 'canteen' => $canteen]);
     }
 
+    public function updateHours(Request $request, $id)
+    {
+        $request->validate([
+            'open_time' => 'required|date_format:H:i',
+            'close_time' => 'required|date_format:H:i',
+        ]);
+        
+        $canteen = Canteen::findOrFail($id);
+        
+        $canteen->update([
+            'open_time' => $request->open_time,
+            'close_time' => $request->close_time,
+        ]);
+        
+        return response()->json(['message' => 'Jam operasional berhasil diperbarui', 'canteen' => $canteen]);
+    }
+
     public function dashboardStats()
     {
         $totalSantri = User::role('user')->count();
@@ -179,9 +196,28 @@ class AdminController extends Controller
             'notes' => $data['notes']
         ]);
 
+        \App\Domains\Admin\PaymentLog::create([
+            'user_id' => $canteen->user_id,
+            'amount' => $data['amount'],
+            'type' => 'withdraw',
+            'description' => "Pencairan dana kantin ({$canteen->name}) oleh admin: " . ($data['notes'] ?? '-'),
+        ]);
+
         return response()->json([
             'message' => 'Pencairan dana berhasil diproses.',
             'canteen' => $canteen->fresh()
         ]);
+    }
+
+    public function activityLogs(Request $request)
+    {
+        $logs = \App\Domains\Admin\ActivityLog::with('user:id,name,role')->orderBy('created_at', 'desc')->paginate(50);
+        return response()->json($logs);
+    }
+
+    public function paymentLogs(Request $request)
+    {
+        $logs = \App\Domains\Admin\PaymentLog::with(['user:id,name,role', 'order:id,total_price,status'])->orderBy('created_at', 'desc')->paginate(50);
+        return response()->json($logs);
     }
 }

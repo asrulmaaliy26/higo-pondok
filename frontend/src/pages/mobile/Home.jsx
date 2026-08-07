@@ -23,6 +23,9 @@ export default function Home() {
               <a href="#fitur" className="text-gray-600 hover:text-green-600 dark:text-gray-300 transition-colors">Fitur</a>
               <a href="#tentang" className="text-gray-600 hover:text-green-600 dark:text-gray-300 transition-colors">Tentang</a>
               <a href="#kontak" className="text-gray-600 hover:text-green-600 dark:text-gray-300 transition-colors">Kontak</a>
+              <Link to="/buku-panduan" className="text-gray-600 hover:text-green-600 dark:text-gray-300 transition-colors flex items-center gap-1">
+                <BookOpen className="w-4 h-4" /> Dokumentasi
+              </Link>
             </div>
             <div className="flex space-x-4 items-center">
               {token ? (

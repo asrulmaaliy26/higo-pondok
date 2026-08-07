@@ -55,10 +55,10 @@ class OrderController extends Controller
                     'status' => 'pending',
                     'payment_status' => 'unpaid',
                     'total_price' => 0, // Pending canteen setting price
+                    'admin_fee' => 0,
+                    'delivery_fee' => 0,
                     'delivery_location' => $request->delivery_location,
                 ]);
-
-                $canteen->increment('sold_count', 1);
 
                 DB::commit();
 
@@ -88,6 +88,8 @@ class OrderController extends Controller
                 'status' => 'pending',
                 'payment_status' => 'unpaid',
                 'total_price' => 0, // Will update below
+                'admin_fee' => 0,
+                'delivery_fee' => 0,
                 'delivery_location' => $request->delivery_location,
             ]);
 
@@ -105,9 +107,10 @@ class OrderController extends Controller
                     throw new \Exception("Maaf, produk {$product->name} sedang habis.");
                 }
 
-                if ($product->stock < $item['quantity']) {
-                    throw new \Exception("Maaf, sisa stok {$product->name} hanya {$product->stock}.");
-                }
+                // We are no longer checking for limit since stock is used as an active orders counter
+                // if ($product->stock < $item['quantity']) {
+                //     throw new \Exception("Maaf, sisa stok {$product->name} hanya {$product->stock}.");
+                // }
 
                 $price = $product->discount_price ?: $product->price;
                 $subtotal = $price * $item['quantity'];
@@ -122,20 +125,19 @@ class OrderController extends Controller
 
                 $subtotal_items += $subtotal;
                 
-                // Update sold_count and stock
+                // Update sold_count and stock (stock is active order counter)
                 $product->increment('sold_count', $item['quantity']);
-                $product->decrement('stock', $item['quantity']);
+                $product->increment('stock', $item['quantity']);
             }
 
             $admin_fee = $subtotal_items > 0 ? (floor($subtotal_items / 20000) + 1) * 500 : 0;
             $total_price = $subtotal_items + $delivery_fee + $admin_fee;
 
             $order->update([
-                'total_price' => $total_price
+                'total_price' => $total_price,
+                'admin_fee' => $admin_fee,
+                'delivery_fee' => $delivery_fee
             ]);
-            
-            // Update canteen sold_count
-            $canteen->increment('sold_count', 1);
 
             DB::commit();
 
@@ -257,26 +259,69 @@ class OrderController extends Controller
                 'proof_of_delivery' => $paths,
             ]);
 
+            // Decrement active order count
+            foreach ($order->items as $item) {
+                if ($item->product) {
+                    $item->product->decrement('stock', $item->quantity);
+                }
+            }
+
             $subtotal = $order->items->sum('subtotal');
-            $admin_fee = $subtotal > 0 ? (floor($subtotal / 20000) + 1) * 500 : 0;
-            $delivery_fee = max(0, $order->total_price - $subtotal - $admin_fee);
+            $admin_fee = $order->admin_fee;
+            $delivery_fee = $order->delivery_fee;
 
             if ($order->courier_id) {
                 if ($order->is_courier_paid_by_canteen) {
                     // Canteen paid courier in cash (80% driver share paid by canteen)
                     $driver_share = $delivery_fee * 0.8;
-                    $canteen->increment('balance', $subtotal - $canteen->admin_fee + $driver_share);
+                    $canteen->increment('balance', $subtotal - $admin_fee + $driver_share);
+                    
+                    \App\Domains\Admin\PaymentLog::create([
+                        'user_id' => $canteen->user_id,
+                        'order_id' => $order->id,
+                        'amount' => $subtotal - $admin_fee + $driver_share,
+                        'type' => 'order_payment',
+                        'description' => "Penerimaan hasil pesanan #" . $order->id . " (Kantin bayar kurir tunai)",
+                    ]);
                 } else {
                     // System holds all money.
-                    $canteen->increment('balance', $subtotal - $canteen->admin_fee);
+                    $canteen->increment('balance', $subtotal - $admin_fee);
+                    
+                    \App\Domains\Admin\PaymentLog::create([
+                        'user_id' => $canteen->user_id,
+                        'order_id' => $order->id,
+                        'amount' => $subtotal - $admin_fee,
+                        'type' => 'order_payment',
+                        'description' => "Penerimaan hasil pesanan #" . $order->id,
+                    ]);
+
                     $courier = User::find($order->courier_id);
                     if ($courier) {
                         $courier->increment('balance', $delivery_fee * 0.8);
+                        
+                        \App\Domains\Admin\PaymentLog::create([
+                            'user_id' => $courier->id,
+                            'order_id' => $order->id,
+                            'amount' => $delivery_fee * 0.8,
+                            'type' => 'courier_fee',
+                            'description' => "Penerimaan ongkir pesanan #" . $order->id,
+                        ]);
                     }
                 }
             } else {
-                $canteen->increment('balance', $subtotal - $canteen->admin_fee);
+                $canteen->increment('balance', $subtotal - $admin_fee + $delivery_fee);
+                
+                \App\Domains\Admin\PaymentLog::create([
+                    'user_id' => $canteen->user_id,
+                    'order_id' => $order->id,
+                    'amount' => $subtotal - $admin_fee + $delivery_fee,
+                    'type' => 'order_payment',
+                    'description' => "Penerimaan hasil pesanan #" . $order->id . " (Tanpa Kurir)",
+                ]);
             }
+
+            // Increment sold count on completion
+            $canteen->increment('sold_count', 1);
         });
 
         return response()->json(['message' => 'Pesanan berhasil diselesaikan', 'order' => $order]);
@@ -422,10 +467,10 @@ class OrderController extends Controller
             $order->status = 'cancelled';
             $order->save();
 
-            // Restore stock and sold_count
+            // Restore sold_count, and decrement active order counter
             foreach ($order->items as $item) {
                 if ($item->product) {
-                    $item->product->increment('stock', $item->quantity);
+                    $item->product->decrement('stock', $item->quantity);
                     $item->product->decrement('sold_count', $item->quantity);
                 }
             }
@@ -450,10 +495,10 @@ class OrderController extends Controller
             $order->status = 'cancelled';
             $order->save();
 
-            // Restore stock and sold_count
+            // Restore sold_count, and decrement active order counter
             foreach ($order->items as $item) {
                 if ($item->product) {
-                    $item->product->increment('stock', $item->quantity);
+                    $item->product->decrement('stock', $item->quantity);
                     $item->product->decrement('sold_count', $item->quantity);
                 }
             }
@@ -527,10 +572,10 @@ class OrderController extends Controller
             'status' => 'pending',
             'payment_status' => 'unpaid',
             'total_price' => $request->total_price,
+            'admin_fee' => 0,
+            'delivery_fee' => 0,
             'delivery_location' => $deliveryLocation,
         ]);
-
-        $canteen->increment('sold_count', 1);
 
         return response()->json(['message' => 'Pesanan manual berhasil dibuat untuk santri!', 'order' => $order], 201);
     }

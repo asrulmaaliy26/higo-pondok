@@ -27,6 +27,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/canteens', [AdminController::class, 'allCanteens']);
         Route::get('/admin/stats', [AdminController::class, 'dashboardStats']);
         Route::put('/admin/canteens/{id}/fees', [AdminController::class, 'updateFees']);
+        Route::put('/admin/canteens/{id}/hours', [AdminController::class, 'updateHours']);
         Route::post('/admin/canteens/{id}/pay-debt', [AdminController::class, 'payAdminDebt']);
         Route::post('/admin/canteens/{id}/withdraw', [AdminController::class, 'processWithdrawal']);
         
@@ -41,9 +42,8 @@ Route::middleware('auth:sanctum')->group(function () {
         // Impersonate Route
         Route::post('/admin/impersonate/{id}', [AdminController::class, 'impersonateUser']);
 
-        // Banner Management
-        Route::get('/admin/banners/pending', [\App\Domains\Canteen\Controllers\CanteenBannerController::class, 'pending']);
-        Route::post('/admin/banners/{id}/approve', [\App\Domains\Canteen\Controllers\CanteenBannerController::class, 'approve']);
-        Route::post('/admin/banners/{id}/reject', [\App\Domains\Canteen\Controllers\CanteenBannerController::class, 'reject']);
+        // Logs
+        Route::get('/admin/logs/activity', [AdminController::class, 'activityLogs']);
+        Route::get('/admin/logs/payment', [AdminController::class, 'paymentLogs']);
     });
 });

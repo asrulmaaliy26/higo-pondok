@@ -19,6 +19,7 @@ import DashboardLayout from './components/layout/mobile/DashboardLayout';
 import Dashboard from './pages/mobile/Dashboard';
 import UserManagement from './pages/mobile/UserManagement';
 import Pertokoan from './pages/mobile/Pertokoan';
+import AdminLogs from './pages/mobile/AdminLogs';
 import BukuPanduan from './pages/mobile/BukuPanduan';
 import TokoSaya from './pages/mobile/TokoSaya';
 import Profile from './pages/mobile/Profile';
@@ -74,6 +75,12 @@ const registerDriverRoute = createRoute({
   component: RegisterDriver,
 });
 
+const publicPanduanRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/buku-panduan',
+  component: BukuPanduan,
+});
+
 // Wrapper components to avoid inline arrow functions in createRoute
 function UserManagementPage() {
   return <RoleGuard allowedRoles={[ROLES.ADMIN]}><UserManagement /></RoleGuard>;
@@ -81,6 +88,10 @@ function UserManagementPage() {
 
 function PertokoanPage() {
   return <RoleGuard allowedRoles={[ROLES.ADMIN]}><Pertokoan /></RoleGuard>;
+}
+
+function AdminLogsPage() {
+  return <RoleGuard allowedRoles={[ROLES.ADMIN]}><AdminLogs /></RoleGuard>;
 }
 
 function BukuPanduanPage() {
@@ -215,16 +226,24 @@ const profileRoute = createRoute({
   component: Profile,
 });
 
+const adminLogsRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: '/admin-logs',
+  component: AdminLogsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
   registerRoute,
   registerCanteenRoute,
   registerDriverRoute,
+  publicPanduanRoute,
   dashboardRoute.addChildren([
     dashboardIndexRoute, 
     userManagementRoute,
     pertokoanRoute,
+    adminLogsRoute,
     panduanRoute,
     tokoSayaRoute,
     promoVoucherRoute,

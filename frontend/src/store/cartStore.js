@@ -28,7 +28,7 @@ export const useCartStore = create(
           const prevItem = prevCanteenCart.items[productId];
           const newQuantity = prevItem ? prevItem.quantity + 1 : 1;
 
-          if (newQuantity > product.stock) return state; // guard stock
+          if (newQuantity > 99) return state; // guard max qty
 
           return {
             cart: {

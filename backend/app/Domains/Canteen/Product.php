@@ -4,10 +4,11 @@ namespace App\Domains\Canteen;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Traits\LogsActivity;
 
 class Product extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, LogsActivity;
 
     protected $fillable = [
         'canteen_id',
@@ -37,5 +38,17 @@ class Product extends Model
     public function canteen()
     {
         return $this->belongsTo(Canteen::class);
+    }
+
+    protected static function booted()
+    {
+        $cleanup = function (Product $product) {
+            if ($product->image) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($product->image);
+            }
+        };
+
+        static::deleting($cleanup);
+        static::forceDeleting($cleanup);
     }
 }

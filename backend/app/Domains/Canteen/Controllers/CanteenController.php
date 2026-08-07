@@ -19,7 +19,6 @@ class CanteenController extends Controller
         $userLng = $request->query('lng', 112.768845);
 
         $canteens = Canteen::approved()
-            ->open()
             ->selectRaw("*, ( 6371 * acos( cos( radians(?) ) * cos( radians( latitude ) ) * cos( radians( longitude ) - radians(?) ) + sin( radians(?) ) * sin( radians( latitude ) ) ) ) AS distance", [$userLat, $userLng, $userLat])
             ->orderBy('distance')
             ->get();
@@ -61,7 +60,6 @@ class CanteenController extends Controller
         
         $data['user_id'] = $request->user()->id;
         $data['status'] = 'pending';
-        $data['is_open'] = false;
         
         $canteen = Canteen::create($data);
         return response()->json([
@@ -137,21 +135,6 @@ class CanteenController extends Controller
         
         return response()->json([
             'message' => 'Kantin berhasil diupdate', 
-            'canteen' => new CanteenResource($canteen)
-        ]);
-    }
-    public function toggleOpenStatus(Request $request)
-    {
-        $canteen = $this->getActiveCanteen($request);
-        if (!$canteen) {
-            return response()->json(['message' => 'Kantin tidak ditemukan'], 404);
-        }
-        $canteen->is_open = !$canteen->is_open;
-        $canteen->save();
-
-        return response()->json([
-            'message' => 'Status Kantin berhasil diubah',
-            'is_open' => $canteen->is_open,
             'canteen' => new CanteenResource($canteen)
         ]);
     }

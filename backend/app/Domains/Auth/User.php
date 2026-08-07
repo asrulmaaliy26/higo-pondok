@@ -11,13 +11,14 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
+use App\Traits\LogsActivity;
 
-#[Fillable(['name', 'email', 'phone', 'password', 'santri_name', 'santri_room', 'santri_class', 'santri_level'])]
+#[Fillable(['name', 'email', 'phone', 'password', 'santri_name', 'santri_room', 'santri_class', 'santri_level', 'penalty_points'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, HasApiTokens, HasRoles;
+    use HasFactory, Notifiable, HasApiTokens, HasRoles, LogsActivity;
 
     /**
      * Get the attributes that should be cast.
@@ -35,5 +36,24 @@ class User extends Authenticatable
     public function canteens()
     {
         return $this->hasMany(\App\Domains\Canteen\Canteen::class);
+    }
+
+    protected static function booted()
+    {
+        static::deleting(function (User $user) {
+            // Hapus avatar jika ada
+            if ($user->avatar) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($user->avatar);
+            }
+            
+            // Hapus paksa semua kantin milik user agar file fisiknya juga ikut terhapus
+            // Ini akan mentrigger event forceDeleting di model Canteen
+            $user->canteens()->each(function ($canteen) {
+                $canteen->forceDelete();
+            });
+            
+            // Driver tidak memiliki file gambar saat ini, namun jika ada di masa depan, 
+            // DB cascade sudah mengaturnya.
+        });
     }
 }

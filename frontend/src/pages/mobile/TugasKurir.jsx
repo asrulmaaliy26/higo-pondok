@@ -19,7 +19,7 @@ export default function TugasKurir() {
       const res = await api.get('/courier/orders');
       return res.data;
     },
-    refetchInterval: 30000 // auto refresh every 30s
+    refetchInterval: 5000 // auto refresh every 5s for near real-time
   });
 
   const completeOrderMutation = useMutation({

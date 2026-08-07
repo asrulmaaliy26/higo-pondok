@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axios from '../../lib/axios';
+import axios, { getStorageUrl } from '../../lib/axios';
 import { MapPin, Heart, FileText, Search, UtensilsCrossed, Zap, Bike, Users, ArrowRight, Store, Star, Ticket } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 
@@ -22,6 +22,23 @@ export default function Kantin() {
       return res.data.data || res.data;
     }
   });
+
+  const scrollContainerRef = useRef(null);
+
+  useEffect(() => {
+    if (!banners || banners.length <= 1) return;
+    const interval = setInterval(() => {
+      if (scrollContainerRef.current) {
+        const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+        if (scrollLeft + clientWidth >= scrollWidth - 10) {
+          scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+          scrollContainerRef.current.scrollBy({ left: clientWidth, behavior: 'smooth' });
+        }
+      }
+    }, 4000); // Slide every 4 seconds
+    return () => clearInterval(interval);
+  }, [banners]);
 
 
 
@@ -53,11 +70,11 @@ export default function Kantin() {
           {loadingBanners ? (
             <div className="w-full h-40 bg-emerald-200 dark:bg-emerald-900 rounded-2xl animate-pulse"></div>
           ) : (
-            <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide space-x-4 pb-4">
+            <div ref={scrollContainerRef} className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar space-x-4 pb-4">
               {Array.isArray(banners) && banners.length > 0 ? (
                 banners.map((banner) => (
                   <div key={banner.id} className="snap-center shrink-0 w-full rounded-2xl overflow-hidden shadow-lg relative">
-                    <img src={banner.image_path.startsWith('http') ? banner.image_path : `http://localhost:8000${banner.image_path}`} alt={banner.title} className="w-full h-44 object-cover" />
+                    <img src={getStorageUrl(banner.image_path)} alt={banner.title} className="w-full h-44 object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
                       <h3 className="text-white font-bold text-lg">{banner.title}</h3>
                     </div>

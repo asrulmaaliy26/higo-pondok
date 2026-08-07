@@ -18,12 +18,13 @@ Route::middleware(['auth:sanctum', 'impersonate'])->group(function () {
         Route::get('/my-canteen', [CanteenController::class, 'myCanteen']);
         Route::get('/my-canteen/stats', [CanteenController::class, 'dashboardStats']);
         Route::put('/my-canteen', [CanteenController::class, 'updateMyCanteen']);
-        Route::put('/my-canteen/status', [CanteenController::class, 'toggleOpenStatus']);
         
         Route::apiResource('my-products', ProductController::class)->except(['show']);
         
         Route::post('/canteen/banners', [\App\Domains\Canteen\Controllers\CanteenBannerController::class, 'store']);
-        
+        Route::put('/canteen/banners/{id}', [\App\Domains\Canteen\Controllers\CanteenBannerController::class, 'update']);
+        Route::put('/canteen/banners/{id}/status', [\App\Domains\Canteen\Controllers\CanteenBannerController::class, 'toggleStatus']);
+        Route::delete('/canteen/banners/{id}', [\App\Domains\Canteen\Controllers\CanteenBannerController::class, 'destroy']);
 
         
         Route::get('/canteen/orders', [\App\Domains\Canteen\Controllers\OrderController::class, 'canteenOrders']);

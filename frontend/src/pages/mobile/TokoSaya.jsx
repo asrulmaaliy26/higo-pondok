@@ -35,20 +35,38 @@ export default function TokoSaya() {
   const { data: canteen, isLoading: isLoadingCanteen } = useQuery({
     queryKey: ['canteen', activeCanteenId],
     queryFn: async () => {
-      const res = await api.get(`/my-canteen?canteen_id=${activeCanteenId}`);
-      return res.data.data || res.data;
+      try {
+        const res = await api.get(`/my-canteen?canteen_id=${activeCanteenId}`);
+        return res.data.data || res.data;
+      } catch (error) {
+        if (error.response?.status === 404) {
+          setIsStoreSelected(false);
+          setActiveCanteenId(null);
+        }
+        throw error;
+      }
     },
-    enabled: !!activeCanteenId
+    enabled: !!activeCanteenId,
+    retry: (failureCount, error) => error.response?.status !== 404 && failureCount < 3
   });
 
   const { data: productsRes, isLoading: isLoadingProducts } = useQuery({
     queryKey: ['products', page, activeCanteenId],
     queryFn: async () => {
-      const res = await api.get(`/my-products?page=${page}&canteen_id=${activeCanteenId}`);
-      return res.data;
+      try {
+        const res = await api.get(`/my-products?page=${page}&canteen_id=${activeCanteenId}`);
+        return res.data;
+      } catch (error) {
+        if (error.response?.status === 404) {
+          setIsStoreSelected(false);
+          setActiveCanteenId(null);
+        }
+        throw error;
+      }
     },
     keepPreviousData: true,
-    enabled: !!activeCanteenId
+    enabled: !!activeCanteenId,
+    retry: (failureCount, error) => error.response?.status !== 404 && failureCount < 3
   });
 
   const products = productsRes?.data || [];
@@ -73,24 +91,6 @@ export default function TokoSaya() {
     setShowProductModal(true);
   };
 
-  const toggleOpenMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.put(`/my-canteen/status?canteen_id=${activeCanteenId}`);
-      return res.data;
-    },
-    onSuccess: (data) => {
-      // Optimistically update the cache
-      queryClient.setQueryData(['canteen'], data.canteen);
-      
-      queryClient.invalidateQueries({ queryKey: ['canteen'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-canteens'] });
-      queryClient.invalidateQueries({ queryKey: ['canteen_stats'] });
-      toast.success('Status Kantin berhasil diubah');
-    },
-    onError: () => {
-      toast.error('Gagal mengubah status kantin');
-    }
-  });
 
   const saveProductMutation = useMutation({
     mutationFn: (formDataPayload) => {
@@ -190,9 +190,19 @@ export default function TokoSaya() {
         
         <div className="p-4 max-w-lg mx-auto space-y-3">
           {!canteensList || canteensList.length === 0 ? (
-             <div className="text-center py-8">
-               <Store className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-               <p className="text-gray-500 dark:text-gray-400">Anda belum memiliki toko.</p>
+             <div className="text-center py-10 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm mt-4">
+               <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                 <Store className="w-8 h-8 text-gray-400" />
+               </div>
+               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Belum Ada Toko</h3>
+               <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 px-4">Anda belum memiliki toko. Silakan buat toko baru melalui halaman Profil Anda.</p>
+               <button 
+                 onClick={() => navigate({ to: '/dashboard/profil' })}
+                 className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-full shadow-sm hover:shadow transition-all inline-flex items-center gap-2"
+               >
+                 <Plus className="w-5 h-5" />
+                 Buat Toko Baru
+               </button>
              </div>
           ) : (
             canteensList.map(c => (
@@ -223,27 +233,13 @@ export default function TokoSaya() {
                   <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-green-500 transition-colors" />
                 </div>
 
-                {/* Quick Actions / Toggle Status */}
-                <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
                   <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${c.is_open ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                    <span className={`text-xs font-medium ${c.is_open ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
-                      {c.is_open ? 'Toko Buka' : 'Toko Tutup'}
+                    <div className={`w-2 h-2 rounded-full ${c.is_open ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    <span className={`text-xs font-medium ${c.is_open ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                      {c.is_open ? 'Buka' : 'Tutup'} • {c.open_time?.substring(0,5) || '09:00'} - {c.close_time?.substring(0,5) || '17:00'}
                     </span>
                   </div>
-                  
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      api.put(`/my-canteen/status?canteen_id=${c.id}`).then(() => {
-                        queryClient.invalidateQueries(['my_canteens_list']);
-                        toast.success(`Status ${c.name} diubah`);
-                      }).catch(() => toast.error('Gagal mengubah status'));
-                    }}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${c.is_open ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${c.is_open ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
                 </div>
 
               </div>
@@ -287,22 +283,14 @@ export default function TokoSaya() {
                 {canteen?.description || 'Belum ada deskripsi.'}
               </p>
 
-              <div className="flex items-center gap-3 mt-3">
+              <div className="flex flex-wrap items-center gap-2 mt-3">
                 <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${canteen?.is_open ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
                   {canteen?.is_open ? <CheckCircle2 className="w-3 h-3" /> : <X className="w-3 h-3" />}
-                  {canteen?.is_open ? 'Toko Buka' : 'Toko Tutup'}
+                  {canteen?.is_open ? 'Buka' : 'Tutup'}
                 </span>
-                <button 
-                  onClick={() => toggleOpenMutation.mutate()}
-                  disabled={toggleOpenMutation.isPending}
-                  className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                    canteen?.is_open 
-                    ? 'text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400' 
-                    : 'text-green-600 bg-green-50 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400'
-                  }`}
-                >
-                  {toggleOpenMutation.isPending ? '...' : canteen?.is_open ? 'Tutup Toko' : 'Buka Toko'}
-                </button>
+                <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full flex items-center gap-1 dark:bg-gray-800 dark:text-gray-300">
+                  <Clock className="w-3 h-3" /> {canteen?.open_time?.substring(0,5) || '09:00'} - {canteen?.close_time?.substring(0,5) || '17:00'}
+                </span>
                 <button 
                   onClick={() => window.location.href = '/dashboard/toko-saya/pesanan'}
                   className="text-xs font-medium text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400"
@@ -385,6 +373,17 @@ export default function TokoSaya() {
                   <h3 className={`text-base font-semibold truncate ${!product.is_available ? 'text-gray-400' : 'text-gray-900 dark:text-white'}`}>
                     {product.name}
                   </h3>
+                  
+                  {/* Stock & Availability */}
+                  <div className="flex items-center gap-4 text-xs">
+                    <div className="flex flex-col">
+                      <span className="text-gray-500 dark:text-gray-400">Pesanan Aktif</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {product.stock || 0}
+                      </span>
+                    </div>
+                  </div>
+
                   <div className="flex items-center gap-2 mt-1">
                     <p className="text-xs text-gray-500 line-clamp-1">{product.category || 'Kategori Umum'}</p>
                     <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-400">

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, Edit2, ShieldCheck, PlusCircle, CreditCard, Users, Bookmark, Activity, Ticket, Shield, LogOut, ChevronRight, Store, Camera, Save, X, Plus } from 'lucide-react';
+import { ArrowLeft, Edit2, ShieldCheck, PlusCircle, CreditCard, Users, Bookmark, Activity, Ticket, Shield, LogOut, ChevronRight, Store, Camera, Save, X, Plus, BookOpen } from 'lucide-react';
 import { ROLES, getUserRole } from '../../config/roles';
 import { useAuthStore } from '../../store/authStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -28,6 +28,7 @@ export default function Profile() {
   const [userData, setUserData] = useState({
     name: user?.name || '',
     email: user?.email || '',
+    phone: user?.phone || '',
     password: '',
     santri_name: user?.santri_name || '',
     santri_room: user?.santri_room || '',
@@ -39,6 +40,7 @@ export default function Profile() {
   const [showStoreListModal, setShowStoreListModal] = useState(false);
   const [showEditStoreModal, setShowEditStoreModal] = useState(false);
   const [showAddStoreModal, setShowAddStoreModal] = useState(false);
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [selectedCanteenId, setSelectedCanteenId] = useState(null);
   const [imageFile, setImageFile] = useState(null);
@@ -48,7 +50,8 @@ export default function Profile() {
   const [profileData, setProfileData] = useState({
     name: '',
     description: '',
-    is_open: true,
+    open_time: '09:00',
+    close_time: '17:00',
     image: null,
     whatsapp_number: '',
     delivery_fee: 0
@@ -116,6 +119,11 @@ export default function Profile() {
     const formData = new FormData();
     if (userData.name && userData.name !== user?.name) formData.append('name', userData.name);
     if (userData.email && userData.email !== user?.email) formData.append('email', userData.email);
+    if (userData.phone !== user?.phone) {
+      let p = userData.phone.replace(/\D/g, '');
+      if (p.startsWith('0')) p = '62' + p.substring(1);
+      formData.append('phone', p);
+    }
     if (userData.password) formData.append('password', userData.password);
     if (userData.santri_name !== user?.santri_name) formData.append('santri_name', userData.santri_name);
     if (userData.santri_room !== user?.santri_room) formData.append('santri_room', userData.santri_room);
@@ -169,7 +177,8 @@ export default function Profile() {
     const formData = new FormData();
     formData.append('name', profileData.name);
     formData.append('description', profileData.description || '');
-    formData.append('is_open', profileData.is_open ? 1 : 0);
+    formData.append('open_time', profileData.open_time);
+    formData.append('close_time', profileData.close_time);
     formData.append('delivery_fee', profileData.delivery_fee);
     if (profileData.whatsapp_number) {
       let phone = profileData.whatsapp_number.replace(/\D/g, '');
@@ -189,7 +198,8 @@ export default function Profile() {
     setProfileData({
       name: canteen.name || '',
       description: canteen.description || '',
-      is_open: canteen.is_open === 1 || canteen.is_open === true,
+      open_time: canteen.open_time?.substring(0,5) || '09:00',
+      close_time: canteen.close_time?.substring(0,5) || '17:00',
       image: canteen.image || null,
       whatsapp_number: canteen.whatsapp_number || '',
       delivery_fee: canteen.delivery_fee || 0
@@ -269,7 +279,7 @@ export default function Profile() {
             <div className="flex flex-col overflow-hidden">
               <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate">{user?.name || 'Pengguna Pondok'}</h2>
               <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">{user?.email || 'email@pondok.com'}</p>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{user?.phone || '+62 812-3456-7890'}</p>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{user?.phone ? `+${user.phone}` : 'Belum ada No. WhatsApp'}</p>
             </div>
           </div>
           <button onClick={() => setShowEditUserModal(true)} className="p-2 sm:p-2.5 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-full transition-colors group border border-gray-200 dark:border-gray-700">
@@ -298,6 +308,16 @@ export default function Profile() {
                 />
               </>
             )}
+            {userRole === ROLES.USER && (
+              <MenuItem 
+                icon={Users} 
+                title="Keluarga Santri" 
+                badge={user?.santri_name ? 'Terisi' : 'Belum Lengkap'}
+                badgeColor={user?.santri_name ? 'bg-green-500' : 'bg-amber-500'}
+                onClick={() => setShowKeluargaModal(true)} 
+                isLast={true}
+              />
+            )}
           </div>
         </div>
 
@@ -305,7 +325,9 @@ export default function Profile() {
         <div className="mb-5 sm:mb-6 animate-fade-in-up delay-75">
           <h3 className="px-1 text-xs sm:text-sm font-bold text-gray-600 dark:text-gray-400 mb-2 sm:mb-3">Aktivitas di Higo Pondok</h3>
           <div className="bg-white dark:bg-gray-900 rounded-[20px] sm:rounded-[24px] overflow-hidden shadow-[0_2px_10px_rgb(0,0,0,0.02)] border border-gray-100 dark:border-gray-800">
-            <MenuItem icon={Activity} title="Aktivitas" onClick={() => navigate({ to: '/dashboard/pembayaran' })} />
+            <MenuItem icon={Activity} title="Alur Kerja Saya" onClick={() => setShowWorkflowModal(true)} />
+            <MenuItem icon={CreditCard} title="Aktivitas Pembayaran" onClick={() => navigate({ to: '/dashboard/pembayaran' })} />
+            <MenuItem icon={BookOpen} title="Buku Panduan & SOP" onClick={() => navigate({ to: '/dashboard/panduan' })} />
             <MenuItem icon={LogOut} title="Keluar / Logout" isLast={true} isRed={true} onClick={handleLogout} />
           </div>
         </div>
@@ -462,12 +484,15 @@ export default function Profile() {
                     <label htmlFor="description" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Deskripsi Singkat</label>
                     <textarea id="description" rows="2" value={profileData.description} onChange={e => setProfileData({...profileData, description: e.target.value})} className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 py-2 px-3 text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors" />
                   </div>
-                  <div>
-                    <label htmlFor="is_open" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Status Operasional</label>
-                    <select id="is_open" value={profileData.is_open} onChange={e => setProfileData({...profileData, is_open: e.target.value === 'true'})} className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 py-2 px-3 text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors">
-                      <option value="true">Buka (Menerima Pesanan)</option>
-                      <option value="false">Tutup / Istirahat</option>
-                    </select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="open_time" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Jam Buka</label>
+                      <input type="time" id="open_time" required value={profileData.open_time} onChange={e => setProfileData({...profileData, open_time: e.target.value})} className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 py-2 px-3 text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors" />
+                    </div>
+                    <div>
+                      <label htmlFor="close_time" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Jam Tutup</label>
+                      <input type="time" id="close_time" required value={profileData.close_time} onChange={e => setProfileData({...profileData, close_time: e.target.value})} className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 py-2 px-3 text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors" />
+                    </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
@@ -556,6 +581,10 @@ export default function Profile() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
                 <input required type="email" value={userData.email} onChange={e => setUserData({...userData, email: e.target.value})} className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nomor WhatsApp</label>
+                <input required type="tel" placeholder="Contoh: 08123456789" value={userData.phone} onChange={e => setUserData({...userData, phone: e.target.value})} className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" />
               </div>
               
               <div className="pt-4 border-t border-gray-100 dark:border-gray-800 mt-2">
@@ -696,6 +725,149 @@ export default function Profile() {
           </div>
         </div>
       )}
+      {/* Modal Alur Kerja */}
+      {showWorkflowModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col">
+            <div className="flex justify-between items-center px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Alur Kerja Saya</h3>
+              <button onClick={() => setShowWorkflowModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              {userRole === ROLES.KURIR && (
+                <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-blue-300 before:to-transparent">
+                  <h4 className="text-center font-bold text-blue-600 mb-6">Kurir (Driver)</h4>
+                  
+                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-blue-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                      1
+                    </div>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                      <h4 className="font-bold text-gray-900 text-sm">Aktifkan Status Bekerja</h4>
+                      <p className="text-[10px] font-semibold text-blue-600 mb-1 mt-1">📍 Navigasi: Beranda → Switch "Status Bekerja"</p>
+                      <p className="text-xs text-gray-500">Anda wajib menyalakan toggle "Status Bekerja" menjadi ON agar penyedia menu dapat melihat dan memilih Anda.</p>
+                    </div>
+                  </div>
+
+                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-blue-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                      2
+                    </div>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                      <h4 className="font-bold text-gray-900 text-sm">Ambil Pesanan di Toko Luar</h4>
+                      <p className="text-[10px] font-semibold text-blue-600 mb-1 mt-1">📍 Navigasi: Menu Bawah → Ikon Motor (Tugas)</p>
+                      <p className="text-xs text-gray-500">Lihat detail pesanan di tab "Tugas". Pergilah ke toko/warung luar untuk mengambil makanan (Kantin di aplikasi hanya menyediakan menu). Jika ditalangi tunai, klik tombol "Upload Struk".</p>
+                    </div>
+                  </div>
+
+                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-blue-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                      3
+                    </div>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                      <h4 className="font-bold text-gray-900 text-sm">Antar ke Lokasi & Foto</h4>
+                      <p className="text-[10px] font-semibold text-blue-600 mb-1 mt-1">📍 Navigasi: Halaman Tugas → Upload Bukti Pengantaran</p>
+                      <p className="text-xs text-gray-500">Antar makanan ke kamar/kelas santri. Lalu ambil foto serah terima sebagai bukti bahwa tugas selesai diantar.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {userRole === ROLES.KANTIN && (
+                <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-green-300 before:to-transparent">
+                  <h4 className="text-center font-bold text-green-600 mb-6">Toko / Kantin</h4>
+                  
+                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-green-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                      1
+                    </div>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                      <h4 className="font-bold text-gray-900 text-sm">Buat & Kelola Toko</h4>
+                      <p className="text-[10px] font-semibold text-green-600 mb-1 mt-1">📍 Navigasi: Profil → Kelola Toko Saya</p>
+                      <p className="text-xs text-gray-500">Buat toko baru (klik Tambah Toko). Setelah selesai, pilih toko tersebut untuk mulai mengelola jam buka, menu makanan, dan melihat analitik harian Anda.</p>
+                    </div>
+                  </div>
+
+                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-green-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                      2
+                    </div>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                      <h4 className="font-bold text-gray-900 text-sm">Terima Pesanan</h4>
+                      <p className="text-[10px] font-semibold text-green-600 mb-1 mt-1">📍 Navigasi: Menu Bawah → Ikon Pesanan</p>
+                      <p className="text-xs text-gray-500">Pantau daftar pesanan baru. Jika stok habis, klik tombol merah "Tolak". Jika pesanan disetujui, siapkan makanannya.</p>
+                    </div>
+                  </div>
+
+                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-green-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                      3
+                    </div>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                      <h4 className="font-bold text-gray-900 text-sm">Pilih Kurir</h4>
+                      <p className="text-[10px] font-semibold text-green-600 mb-1 mt-1">📍 Navigasi: Halaman Pesanan → Tombol Biru "Pilih Kurir"</p>
+                      <p className="text-xs text-gray-500">Klik tombol "Pilih Kurir", lalu pilih kurir yang berstatus aktif/bekerja untuk menugaskannya mengantar pesanan ke santri.</p>
+                    </div>
+                  </div>
+
+                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-green-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                      4
+                    </div>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                      <h4 className="font-bold text-gray-900 text-sm">Tandai Lunas & Selesai</h4>
+                      <p className="text-[10px] font-semibold text-green-600 mb-1 mt-1">📍 Navigasi: Halaman Pesanan → Tombol Hijau "Lunas & Selesai"</p>
+                      <p className="text-xs text-gray-500">Setelah foto bukti kurir terupload di pesanan, verifikasi, lalu klik "Lunas & Selesai". Saldo Anda akan otomatis bertambah!</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {userRole === ROLES.USER && (
+                <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-orange-300 before:to-transparent">
+                  <h4 className="text-center font-bold text-orange-600 mb-6">Wali Santri (Pembeli)</h4>
+                  
+                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-orange-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                      1
+                    </div>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                      <h4 className="font-bold text-gray-900 text-sm">Pilih Makanan</h4>
+                      <p className="text-[10px] font-semibold text-orange-600 mb-1 mt-1">📍 Navigasi: Beranda → Pilih Kantin/Toko → Klik '+' pada Menu</p>
+                      <p className="text-xs text-gray-500">Pilih menu dari toko yang berstatus Buka (Hijau). Cek juga menu "Pesanan Khusus" jika ada titipan khusus di luar menu.</p>
+                    </div>
+                  </div>
+
+                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-orange-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                      2
+                    </div>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                      <h4 className="font-bold text-gray-900 text-sm">Checkout & Transfer</h4>
+                      <p className="text-[10px] font-semibold text-orange-600 mb-1 mt-1">📍 Navigasi: Ikon Keranjang (Kanan Atas) → Checkout</p>
+                      <p className="text-xs text-gray-500">Selesaikan pesanan Anda, lalu unggah bukti transfer pembayaran di halaman Profil → Aktivitas Pembayaran.</p>
+                    </div>
+                  </div>
+
+                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-orange-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                      3
+                    </div>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                      <h4 className="font-bold text-gray-900 text-sm">Tunggu Pengantaran</h4>
+                      <p className="text-[10px] font-semibold text-orange-600 mb-1 mt-1">📍 Navigasi: Halaman Pembayaran → Status Order</p>
+                      <p className="text-xs text-gray-500">Pantau status pesanan. Kurir akan mengantarkan pesanan ke santri. Anda bisa melihat foto bukti serah terima jika pesanan sudah selesai.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { useCanteenStore } from '../../store/canteenStore';
 
 export default function TokoSaya() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { activeCanteenId, setActiveCanteenId, isStoreSelected, setIsStoreSelected } = useCanteenStore();
   const [page, setPage] = useState(1);
 
@@ -197,7 +198,7 @@ export default function TokoSaya() {
                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Belum Ada Toko</h3>
                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 px-4">Anda belum memiliki toko. Silakan buat toko baru melalui halaman Profil Anda.</p>
                <button 
-                 onClick={() => navigate({ to: '/dashboard/profil' })}
+                 onClick={() => navigate({ to: '/dashboard/profile' })}
                  className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-full shadow-sm hover:shadow transition-all inline-flex items-center gap-2"
                >
                  <Plus className="w-5 h-5" />

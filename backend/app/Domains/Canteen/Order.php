@@ -24,13 +24,17 @@ class Order extends Model
         'courier_id',
         'delivery_location',
         'proof_of_delivery',
+        'proof_of_purchase',
         'proof_of_payment',
         'is_courier_paid_by_canteen',
         'proof_courier_paid',
+        'custom_notes',
+        'is_custom',
     ];
 
     protected $casts = [
         'proof_of_delivery' => 'array',
+        'proof_of_purchase' => 'array',
         'proof_of_payment' => 'array',
     ];
 

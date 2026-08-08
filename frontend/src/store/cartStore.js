@@ -37,7 +37,30 @@ export const useCartStore = create(
                 canteen,
                 items: {
                   ...prevCanteenCart.items,
-                  [productId]: { product, quantity: newQuantity }
+                  [productId]: { product, quantity: newQuantity, notes: prevItem?.notes || '' }
+                }
+              }
+            }
+          };
+        });
+      },
+
+      // Update item note (e.g. pedas level 2, es sedikit)
+      updateItemNote: (canteenId, productId, notes) => {
+        set((state) => {
+          const cid = String(canteenId);
+          const pid = String(productId);
+          const prevCanteenCart = state.cart[cid];
+          if (!prevCanteenCart || !prevCanteenCart.items[pid]) return state;
+
+          return {
+            cart: {
+              ...state.cart,
+              [cid]: {
+                ...prevCanteenCart,
+                items: {
+                  ...prevCanteenCart.items,
+                  [pid]: { ...prevCanteenCart.items[pid], notes }
                 }
               }
             }

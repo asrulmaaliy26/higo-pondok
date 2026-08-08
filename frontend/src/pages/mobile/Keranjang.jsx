@@ -12,36 +12,41 @@ export default function Keranjang() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const user = useAuthStore(state => state.user);
-  const { cart, addItem, removeItem, clearCanteen, clearAll } = useCartStore();
+  const { cart, addItem, removeItem, clearCanteen, clearAll, updateItemNote } = useCartStore();
 
   const [deliveryLocation, setDeliveryLocation] = useState(user?.santri_room || '');
-  const [customLocation, setCustomLocation] = useState('');
+  const [canteenNotes, setCanteenNotes] = useState({}); // canteenId -> general note
   const [isProcessing, setIsProcessing] = useState(false);
   const [showProfileAlert, setShowProfileAlert] = useState(false);
 
-  const predefinedLocations = user?.santri_room ? [user.santri_room] : [];
   const canteenEntries = Object.entries(cart); // [[canteenId, { canteen, items }], ...]
 
   const totalItems = canteenEntries.reduce(
     (sum, [, c]) => sum + Object.values(c.items).reduce((s, i) => s + i.quantity, 0), 0
   );
 
-  // Calculate per-canteen totals
+  // Calculate per-canteen totals based on category
   const canteenSummaries = canteenEntries.map(([canteenId, { canteen, items }]) => {
     const itemList = Object.values(items);
     const subtotal = itemList.reduce((s, i) => s + parseFloat(i.product.price) * i.quantity, 0);
     const qty = itemList.reduce((s, i) => s + i.quantity, 0);
-    const baseDeliveryFee = parseFloat(canteen.delivery_fee || 0);
-    const deliveryFee = qty > 5 ? baseDeliveryFee * 2 : baseDeliveryFee;
-    // Tiered Admin Fee: < 20k -> 500, 20k-39.9k -> 1000, 40k-59.9k -> 1500, etc. (kelipatan 20rb + 500 perak)
-    const adminFee = subtotal > 0 ? (Math.floor(subtotal / 25000) + 1) * 500 : 0;
+    
+    // Category pricing (Kauman vs Kota)
+    const category = canteen.category || 'kauman';
+    const baseDeliveryFee = category === 'kota' ? 3500 : 2000;
+    const adminFee = category === 'kota' ? 1500 : 1000;
+
+    // Quantity multiplier (+ Rp 3.000 for every 5 extra items after first 5)
+    const extraBlocks = Math.max(0, Math.floor((qty - 1) / 5));
+    const deliveryFee = baseDeliveryFee + (extraBlocks * 3000);
+
     const total = subtotal + deliveryFee + adminFee;
     return { canteenId, canteen, itemList, subtotal, deliveryFee, adminFee, total, qty };
   });
 
   const grandTotal = canteenSummaries.reduce((s, c) => s + c.total, 0);
 
-  const finalLocation = deliveryLocation === 'custom' ? customLocation.trim() : deliveryLocation;
+  const finalLocation = deliveryLocation.trim();
 
   const handleCheckoutAll = async () => {
     // Validasi
@@ -65,7 +70,12 @@ export default function Keranjang() {
         const payload = {
           canteen_id: canteen.id,
           delivery_location: finalLocation,
-          items: itemList.map(i => ({ product_id: i.product.id, quantity: i.quantity }))
+          custom_notes: canteenNotes[canteenId] || '',
+          items: itemList.map(i => ({
+            product_id: i.product.id,
+            quantity: i.quantity,
+            notes: i.notes || ''
+          }))
         };
         const res = await api.post('/orders', payload);
         results.push({ ok: true, canteen, order: res.data?.order, itemList, subtotal, deliveryFee, total });
@@ -181,36 +191,50 @@ export default function Keranjang() {
 
             {/* Items */}
             <div className="divide-y divide-gray-50 dark:divide-gray-800">
-              {itemList.map(({ product, quantity }) => (
-                <div key={product.id} className="flex items-center gap-3 px-4 py-3">
-                  <div className="w-14 h-14 rounded-lg bg-gray-100 dark:bg-gray-800 shrink-0 overflow-hidden">
-                    {product.image
-                      ? <img src={getStorageUrl(product.image)} alt={product.name} className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center"><Store className="w-5 h-5 text-gray-300" /></div>
-                    }
+              {itemList.map(({ product, quantity, notes }) => (
+                <div key={product.id} className="p-4 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-14 h-14 rounded-lg bg-gray-100 dark:bg-gray-800 shrink-0 overflow-hidden">
+                      {product.image
+                        ? <img src={getStorageUrl(product.image)} alt={product.name} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full flex items-center justify-center"><Store className="w-5 h-5 text-gray-300" /></div>
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-gray-900 dark:text-white truncate">{product.name}</p>
+                      <p className="text-xs text-green-600 dark:text-green-400 font-bold mt-0.5">
+                        Rp {parseFloat(product.price).toLocaleString('id-ID')}
+                      </p>
+                    </div>
+                    {/* Qty control */}
+                    <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/30 rounded-full border border-green-200 dark:border-green-800">
+                      <button
+                        onClick={() => removeItem(canteenId, product.id)}
+                        className="w-8 h-8 flex items-center justify-center text-green-700 dark:text-green-400 rounded-full active:bg-green-100"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <span className="w-6 text-center text-sm font-bold text-green-700 dark:text-green-400">{quantity}</span>
+                      <button
+                        onClick={() => addItem(canteen, product)}
+                        disabled={quantity >= 99}
+                        className={`w-8 h-8 flex items-center justify-center rounded-full ${quantity >= 99 ? 'text-gray-300' : 'text-green-700 dark:text-green-400 active:bg-green-100'}`}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-gray-900 dark:text-white truncate">{product.name}</p>
-                    <p className="text-xs text-green-600 dark:text-green-400 font-bold mt-0.5">
-                      Rp {parseFloat(product.price).toLocaleString('id-ID')}
-                    </p>
-                  </div>
-                  {/* Qty control */}
-                  <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/30 rounded-full border border-green-200 dark:border-green-800">
-                    <button
-                      onClick={() => removeItem(canteenId, product.id)}
-                      className="w-8 h-8 flex items-center justify-center text-green-700 dark:text-green-400 rounded-full active:bg-green-100"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
-                    <span className="w-6 text-center text-sm font-bold text-green-700 dark:text-green-400">{quantity}</span>
-                    <button
-                      onClick={() => addItem(canteen, product)}
-                      disabled={quantity >= 99}
-                      className={`w-8 h-8 flex items-center justify-center rounded-full ${quantity >= 99 ? 'text-gray-300' : 'text-green-700 dark:text-green-400 active:bg-green-100'}`}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
+
+                  {/* Input Catatan Detail Produk */}
+                  <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800/60 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700/60">
+                    <span className="text-xs text-gray-400">📝</span>
+                    <input
+                      type="text"
+                      placeholder="Catatan produk (misal: pedas level 2, es sedikit)..."
+                      value={notes || ''}
+                      onChange={e => updateItemNote(canteenId, product.id, e.target.value)}
+                      className="w-full text-xs bg-transparent text-gray-800 dark:text-gray-200 focus:outline-none placeholder-gray-400"
+                    />
                   </div>
                 </div>
               ))}
@@ -240,46 +264,21 @@ export default function Keranjang() {
 
         {/* Delivery Location */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-4">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-2">
             <MapPin className="w-5 h-5 text-green-600" />
             <h3 className="font-bold text-gray-900 dark:text-white">Lokasi Pengiriman</h3>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-            Satu lokasi akan digunakan untuk semua toko dalam pesanan ini.
+            Otomatis terisi dari data kamar Santri dan dapat Anda edit bebas di sini.
           </p>
           <div className="space-y-2">
-            {predefinedLocations.map(loc => (
-              <label key={loc} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${deliveryLocation === loc ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
-                <input
-                  type="radio" name="loc" value={loc}
-                  checked={deliveryLocation === loc}
-                  onChange={e => setDeliveryLocation(e.target.value)}
-                  className="w-4 h-4 text-green-600"
-                />
-                <span className="font-medium text-gray-800 dark:text-white text-sm capitalize">{loc}</span>
-              </label>
-            ))}
-            <label className={`flex flex-col gap-2 p-3 rounded-xl border cursor-pointer transition-colors ${deliveryLocation === 'custom' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
-              <div className="flex items-center gap-3">
-                <input
-                  type="radio" name="loc" value="custom"
-                  checked={deliveryLocation === 'custom'}
-                  onChange={e => setDeliveryLocation(e.target.value)}
-                  className="w-4 h-4 text-green-600"
-                />
-                <span className="font-medium text-gray-800 dark:text-white text-sm">Tulis Sendiri</span>
-              </div>
-              {deliveryLocation === 'custom' && (
-                <input
-                  type="text"
-                  placeholder="Contoh: Gedung B Kamar 4"
-                  value={customLocation}
-                  onChange={e => setCustomLocation(e.target.value)}
-                  autoFocus
-                  className="ml-7 p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-              )}
-            </label>
+            <input
+              type="text"
+              placeholder="Masukkan lokasi pengiriman (misal: Al Majid 1 / Asrama B)"
+              value={deliveryLocation}
+              onChange={e => setDeliveryLocation(e.target.value)}
+              className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500 font-medium"
+            />
           </div>
         </div>
 

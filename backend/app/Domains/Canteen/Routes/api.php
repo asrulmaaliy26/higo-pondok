@@ -28,9 +28,11 @@ Route::middleware(['auth:sanctum', 'impersonate'])->group(function () {
 
         
         Route::get('/canteen/orders', [\App\Domains\Canteen\Controllers\OrderController::class, 'canteenOrders']);
+        Route::get('/canteen/orders/recap', [\App\Domains\Canteen\Controllers\OrderController::class, 'recap']);
         Route::put('/canteen/orders/{id}/payment', [\App\Domains\Canteen\Controllers\OrderController::class, 'updatePaymentStatus']);
+        Route::put('/canteen/orders/{id}/status', [\App\Domains\Canteen\Controllers\OrderController::class, 'updateOrderStatus']);
         Route::put('/canteen/orders/{id}/complete', [\App\Domains\Canteen\Controllers\OrderController::class, 'completeByCanteen']);
-        Route::post('/canteen/orders/{id}/pay-courier', [\App\Domains\Canteen\Controllers\OrderController::class, 'payCourierByCanteen']);
+        Route::post('/canteen/orders/{id}/upload-receipt', [\App\Domains\Canteen\Controllers\OrderController::class, 'uploadPurchaseProof']);
         Route::put('/canteen/orders/{id}/courier', [\App\Domains\Canteen\Controllers\OrderController::class, 'assignCourier']);
         Route::put('/canteen/orders/{id}/cancel', [\App\Domains\Canteen\Controllers\OrderController::class, 'cancelOrder']);
         
@@ -46,6 +48,8 @@ Route::middleware(['auth:sanctum', 'impersonate'])->group(function () {
         Route::get('/courier/orders', [\App\Domains\Canteen\Controllers\OrderController::class, 'courierOrders']);
         Route::post('/courier/orders/{id}/complete', [\App\Domains\Canteen\Controllers\OrderController::class, 'completeOrder']);
         Route::post('/courier/orders/{id}/upload-receipt', [\App\Domains\Canteen\Controllers\OrderController::class, 'uploadPurchaseProof']);
+        Route::post('/courier/orders/{id}/upload-delivery', [\App\Domains\Canteen\Controllers\OrderController::class, 'uploadDeliveryProof']);
+        Route::delete('/courier/orders/{id}/proof', [\App\Domains\Canteen\Controllers\OrderController::class, 'deleteProofPhoto']);
     });
 
     // User routes

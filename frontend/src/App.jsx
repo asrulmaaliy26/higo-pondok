@@ -226,6 +226,12 @@ const profileRoute = createRoute({
   component: Profile,
 });
 
+const profilAliasRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: '/profil',
+  component: Profile,
+});
+
 const adminLogsRoute = createRoute({
   getParentRoute: () => dashboardRoute,
   path: '/admin-logs',
@@ -253,7 +259,8 @@ const routeTree = rootRoute.addChildren([
     pembayaranRoute,
     tugasKurirRoute,
     keranjangRoute,
-    profileRoute
+    profileRoute,
+    profilAliasRoute
   ]),
 ]);
 

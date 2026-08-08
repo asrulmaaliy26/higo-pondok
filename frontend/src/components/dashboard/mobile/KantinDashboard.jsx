@@ -65,6 +65,28 @@ export default function KantinDashboard({ user }) {
         </div>
       </div>
 
+      {/* Banner Jika Belum Memiliki Toko */}
+      {(!analytics?.store_performance || analytics.store_performance.length === 0) && (
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:bg-gray-900 rounded-3xl p-6 border-2 border-dashed border-green-300 dark:border-green-800 text-center space-y-4 shadow-sm">
+          <div className="w-16 h-16 bg-green-100 dark:bg-green-900/50 text-green-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+            <Store className="w-8 h-8" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Anda Belum Memiliki Toko / Kantin</h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-sm mx-auto">
+              Daftarkan toko/kantin Anda sekarang di halaman Profil untuk mulai mengunggah produk dan menerima pesanan santri.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate({ to: '/dashboard/profile' })}
+            className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold text-sm rounded-xl shadow-lg hover:shadow-green-600/30 transition-all transform active:scale-95 inline-flex items-center gap-2"
+          >
+            <Store className="w-4 h-4" />
+            Buat Toko di Profil
+          </button>
+        </div>
+      )}
+
       {/* Ringkasan Pendapatan (Harian, Mingguan, Bulanan) */}
       <div>
         <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">

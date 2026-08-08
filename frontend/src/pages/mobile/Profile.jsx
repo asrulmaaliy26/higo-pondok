@@ -177,9 +177,13 @@ export default function Profile() {
     const formData = new FormData();
     formData.append('name', profileData.name);
     formData.append('description', profileData.description || '');
+    const category = profileData.category || 'kauman';
+    const autoDeliveryFee = category === 'kota' ? 3500 : 2000;
+    
     formData.append('open_time', profileData.open_time);
     formData.append('close_time', profileData.close_time);
-    formData.append('delivery_fee', profileData.delivery_fee);
+    formData.append('delivery_fee', autoDeliveryFee);
+    formData.append('category', category);
     if (profileData.whatsapp_number) {
       let phone = profileData.whatsapp_number.replace(/\D/g, '');
       if (phone.startsWith('0')) phone = '62' + phone.substring(1);
@@ -197,6 +201,7 @@ export default function Profile() {
     setSelectedCanteenId(canteen.id);
     setProfileData({
       name: canteen.name || '',
+      category: canteen.category || 'kauman',
       description: canteen.description || '',
       open_time: canteen.open_time?.substring(0,5) || '09:00',
       close_time: canteen.close_time?.substring(0,5) || '17:00',
@@ -286,6 +291,27 @@ export default function Profile() {
             <Edit2 className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-[#55C564] transition-colors" />
           </button>
         </div>
+
+        {/* Banner Jika Kantin Belum Memiliki Toko */}
+        {userRole === ROLES.KANTIN && !isLoadingCanteens && canteens.length === 0 && (
+          <div className="mb-5 sm:mb-6 bg-gradient-to-br from-green-50 to-emerald-50 dark:bg-gray-900 border-2 border-dashed border-green-300 dark:border-green-800 rounded-[20px] p-5 text-center space-y-3 shadow-sm animate-in fade-in duration-200">
+            <div className="w-12 h-12 bg-green-100 dark:bg-green-900/40 text-green-600 rounded-full flex items-center justify-center mx-auto">
+              <Store className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-900 dark:text-white text-base">Anda Belum Memiliki Toko / Kantin</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Daftarkan toko/kantin Anda sekarang untuk mulai mengunggah produk dan menerima pesanan dari santri.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowAddStoreModal(true)}
+              className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 inline-flex items-center gap-1.5"
+            >
+              ＋ Buat Toko Baru Sekarang
+            </button>
+          </div>
+        )}
 
         {/* Preferensi Section */}
         <div className="mb-5 sm:mb-6 animate-fade-in-up">
@@ -512,20 +538,36 @@ export default function Profile() {
                     </div>
                   </div>
                   <div>
-                    <label htmlFor="delivery_fee" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Ongkos Kirim Default</label>
-                    <p className="text-[10px] text-gray-400 mb-1">Biaya pengiriman standar untuk setiap pesanan.</p>
-                    <div className="mt-1 flex items-center border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800 focus-within:ring-2 focus-within:ring-green-500">
-                      <span className="px-3 py-2 text-sm font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-700 shrink-0">Rp</span>
-                      <input 
-                        type="number" 
-                        id="delivery_fee" 
-                        placeholder="5000"
-                        min="0"
-                        value={profileData.delivery_fee} 
-                        onChange={e => setProfileData({...profileData, delivery_fee: e.target.value})} 
-                        className="flex-1 py-2 px-3 text-sm text-gray-900 dark:text-white bg-transparent focus:outline-none" 
-                      />
+                    <label htmlFor="category" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Kategori Toko / Zona Lokasi</label>
+                    <p className="text-[10px] text-gray-400 mb-1">Menentukan tarif dasar ongkir & admin otomatis.</p>
+                    <select
+                      id="category"
+                      value={profileData.category || 'kauman'}
+                      onChange={e => setProfileData({
+                        ...profileData, 
+                        category: e.target.value,
+                        delivery_fee: e.target.value === 'kota' ? 3500 : 2000
+                      })}
+                      className="w-full mt-1 p-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 font-medium"
+                    >
+                      <option value="kauman">Kauman (Ongkir Rp 2.000, Admin Rp 1.000)</option>
+                      <option value="kota">Kota (Ongkir Rp 3.500, Admin Rp 1.500)</option>
+                    </select>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-800/60 p-3 rounded-lg border border-gray-200 dark:border-gray-700/60 space-y-1">
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Rincian Tarif Kirim Standar</label>
+                    <div className="flex items-center gap-2 text-xs font-bold pt-1">
+                      <span className="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 px-2.5 py-1 rounded-md">
+                        🛵 Ongkir Dasar: Rp {(profileData.category === 'kota' ? 3500 : 2000).toLocaleString('id-ID')}
+                      </span>
+                      <span className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-2.5 py-1 rounded-md">
+                        🛡️ Biaya Admin: Rp {(profileData.category === 'kota' ? 1500 : 1000).toLocaleString('id-ID')}
+                      </span>
                     </div>
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      *Tarif di atas berlaku otomatis sesuai kategori lokasi toko yang Anda pilih.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -687,6 +729,8 @@ export default function Profile() {
                        setUserData({
                          ...userData, 
                          santri_name: selectedName,
+                         santri_level: row && row[4] ? row[4] : userData.santri_level,
+                         santri_class: row && row[5] ? row[5] : userData.santri_class,
                          santri_room: row && row[10] ? row[10] : userData.santri_room
                        });
                     }} 
@@ -695,21 +739,36 @@ export default function Profile() {
                     {filteredSantris.map((row, i) => {
                        const rawName = row[1] || '';
                        const cleanName = rawName.replace(' Laki-laki', '').replace(' Perempuan', '');
-                       return <option key={i} value={cleanName}>{cleanName}</option>;
+                       const jenjang = row[4] || '';
+                       const kelas = row[5] || '';
+                       const info = [jenjang, kelas].filter(Boolean).join(' - ');
+                       const label = info ? `${cleanName} (${info})` : cleanName;
+                       return <option key={i} value={cleanName}>{label}</option>;
                     })}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Asrama / Kamar</label>
-                  <select 
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Asrama / Kamar (Isian Bebas)</label>
+                  <input 
+                    type="text"
+                    placeholder="Ketik lokasi asrama / kamar santri..."
                     value={userData.santri_room} 
                     onChange={e => setUserData({...userData, santri_room: e.target.value})} 
-                    className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow"
-                  >
-                    <option value="">-- Pilih Asrama / Kamar --</option>
-                    {uniqueAsrama.map(a => <option key={a} value={a}>{a}</option>)}
-                    <option value="Lainnya">Lainnya</option>
-                  </select>
+                    className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white p-2.5 text-sm focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">No. WhatsApp / HP Pembeli (Wali Santri)</label>
+                  <div className="flex items-center border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800 focus-within:ring-2 focus-within:ring-green-500">
+                    <input 
+                      type="text"
+                      placeholder="812-3456-7890"
+                      value={userData.phone} 
+                      onChange={e => setUserData({...userData, phone: e.target.value})} 
+                      className="flex-1 py-2.5 px-3 text-sm text-gray-900 dark:text-white bg-transparent focus:outline-none"
+                    />
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1">Nomor ini digunakan toko & kurir untuk mengonfirmasi pesanan Anda.</p>
                 </div>
               </div>
 

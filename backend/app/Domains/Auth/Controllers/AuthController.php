@@ -45,6 +45,68 @@ class AuthController extends Controller
         ]);
     }
 
+    public function loginWithGoogle(Request $request)
+    {
+        $request->validate([
+            'id_token' => 'required|string',
+        ]);
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::get('https://oauth2.googleapis.com/tokeninfo', [
+                'id_token' => $request->id_token
+            ]);
+
+            if ($response->failed()) {
+                return response()->json(['message' => 'Token Google tidak valid'], 401);
+            }
+
+            $googleUser = $response->json();
+            
+            if (!isset($googleUser['email'])) {
+                return response()->json(['message' => 'Email tidak ditemukan dari akun Google'], 401);
+            }
+
+            // Find existing user by email or google_id
+            $user = User::where('email', $googleUser['email'])
+                        ->orWhere('google_id', $googleUser['sub'])
+                        ->first();
+
+            if (!$user) {
+                // Create new user if not exists
+                $user = User::create([
+                    'name' => $googleUser['name'] ?? 'User Google',
+                    'email' => $googleUser['email'],
+                    'google_id' => $googleUser['sub'],
+                    'password' => Hash::make(\Illuminate\Support\Str::random(24)), // Random password for google users
+                    'avatar' => $googleUser['picture'] ?? null,
+                ]);
+
+                // Assign default role 'user'
+                $user->assignRole('user');
+            } else {
+                // Update google_id and avatar if missing
+                if (!$user->google_id) {
+                    $user->google_id = $googleUser['sub'];
+                }
+                if (!$user->avatar && isset($googleUser['picture'])) {
+                    $user->avatar = $googleUser['picture'];
+                }
+                $user->save();
+            }
+
+            $token = $user->createToken('auth_token')->plainTextToken;
+
+            return response()->json([
+                'access_token' => $token,
+                'token_type' => 'Bearer',
+                'user' => $user->load('roles'),
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Terjadi kesalahan saat memproses login Google: ' . $e->getMessage()], 500);
+        }
+    }
+
     public function me(Request $request)
     {
         return response()->json([

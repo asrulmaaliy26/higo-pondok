@@ -434,46 +434,67 @@ export default function TugasKurir() {
                 );
               })()}
               
-              {/* UPLOAD NEW PHOTOS FILE INPUT */}
-              <div 
-                className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors ${photoPreviews.length > 0 ? 'border-green-500 bg-green-50/50 dark:bg-green-900/10' : 'border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-                onClick={() => fileInputRef.current?.click()}
-              >
+              {/* UPLOAD NEW PHOTOS FILE INPUTS */}
+              <div className="space-y-3">
                 {photoPreviews.length > 0 ? (
-                  <div className="w-full space-y-3">
-                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
-                      {photoPreviews.map((preview, idx) => (
-                        <div key={idx} className="relative w-full aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 group">
-                          <img src={preview} alt={`New Preview ${idx + 1}`} className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={(e) => handleRemoveNewPhoto(idx, e)}
-                            className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-transform active:scale-95 z-10"
-                            title="Batal upload foto ini"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="text-center">
-                      <span className="text-xs text-green-700 dark:text-green-400 font-semibold flex items-center justify-center gap-1">
-                        <Upload className="w-3.5 h-3.5" /> Klik untuk menambah foto baru lagi
-                      </span>
+                  <div className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center transition-colors border-green-500 bg-green-50/50 dark:bg-green-900/10`}>
+                    <div className="w-full space-y-3">
+                      <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                        {photoPreviews.map((preview, idx) => (
+                          <div key={idx} className="relative w-full aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 group">
+                            <img src={preview} alt={`New Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={(e) => handleRemoveNewPhoto(idx, e)}
+                              className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-transform active:scale-95 z-10"
+                              title="Batal upload foto ini"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="py-6 flex flex-col items-center text-gray-500">
-                    <Upload className="w-8 h-8 mb-2 opacity-50" />
-                    <span className="font-medium text-xs text-center">Pilih / Ambil Foto {uploadType === 'delivery' ? 'Bukti Antar' : 'Struk Kantin'} Baru</span>
-                    <span className="text-[10px] opacity-70 mt-1">Dapat memilih multiple foto sekaligus</span>
-                  </div>
-                )}
+                ) : null}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('cameraInput').click()}
+                    className="flex flex-col items-center justify-center gap-2 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center rounded-full">
+                      <Camera className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Kamera Langsung</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('galleryInput').click()}
+                    className="flex flex-col items-center justify-center gap-2 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center rounded-full">
+                      <ImageIcon className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Pilih dari Galeri</span>
+                  </button>
+                </div>
+
                 <input 
+                  id="cameraInput"
+                  type="file" 
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange} 
+                  className="hidden"
+                />
+                <input 
+                  id="galleryInput"
                   type="file" 
                   accept="image/*"
                   multiple
-                  ref={fileInputRef} 
                   onChange={handleFileChange} 
                   className="hidden"
                 />

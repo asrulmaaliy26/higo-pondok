@@ -5,6 +5,7 @@ use App\Domains\Auth\Controllers\AuthController;
 use App\Domains\Auth\Controllers\RegisterController;
 
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/auth/google', [AuthController::class, 'loginWithGoogle']);
 Route::post('/register', [RegisterController::class, 'registerUser']);
 Route::post('/register/canteen', [RegisterController::class, 'registerCanteen']);
 Route::post('/register/driver', [RegisterController::class, 'registerDriver']);

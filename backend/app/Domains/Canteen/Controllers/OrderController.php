@@ -236,15 +236,15 @@ class OrderController extends Controller
             return response()->json(['message' => 'Anda belum memiliki kantin'], 404);
         }
 
-        $order = Order::where('canteen_id', $canteen->id)->findOrFail($id);
-
         $request->validate([
             'status' => 'required|in:pending,processing,completed,cancelled',
         ]);
 
-        $order->update(['status' => $request->status]);
-
-        return response()->json(['message' => 'Status pesanan berhasil diperbarui', 'order' => $order]);
+        return DB::transaction(function () use ($id, $canteen, $request) {
+            $order = Order::where('canteen_id', $canteen->id)->lockForUpdate()->findOrFail($id);
+            $order->update(['status' => $request->status]);
+            return response()->json(['message' => 'Status pesanan berhasil diperbarui', 'order' => $order]);
+        });
     }
 
     // For Canteen: Complete order
@@ -255,6 +255,7 @@ class OrderController extends Controller
             return response()->json(['message' => 'Anda belum memiliki kantin'], 404);
         }
 
+        // We check the un-locked order first just to validate request easily
         $order = Order::where('canteen_id', $canteen->id)->findOrFail($id);
 
         if (!in_array($order->status, ['pending', 'processing'])) {
@@ -281,7 +282,13 @@ class OrderController extends Controller
             }
         }
 
-        DB::transaction(function () use ($order, $canteen, $paths) {
+        return DB::transaction(function () use ($id, $canteen, $paths) {
+            $order = Order::with('items.product')->where('canteen_id', $canteen->id)->lockForUpdate()->findOrFail($id);
+            
+            if (!in_array($order->status, ['pending', 'processing'])) {
+                return response()->json(['message' => 'Pesanan tidak bisa diselesaikan. Status saat ini: ' . $order->status], 400);
+            }
+
             $order->update([
                 'status' => 'completed',
                 'payment_status' => 'paid',
@@ -337,9 +344,9 @@ class OrderController extends Controller
 
             // Increment sold count on completion
             $canteen->increment('sold_count', 1);
-        });
 
-        return response()->json(['message' => 'Pesanan berhasil diselesaikan', 'order' => $order]);
+            return response()->json(['message' => 'Pesanan berhasil diselesaikan', 'order' => $order]);
+        });
     }
 
     // For Canteen: Get list of couriers
@@ -357,20 +364,26 @@ class OrderController extends Controller
             return response()->json(['message' => 'Anda belum memiliki kantin'], 404);
         }
 
-        $order = Order::where('canteen_id', $canteen->id)->findOrFail($id);
-        
         $request->validate([
             'courier_id' => 'nullable',
         ]);
 
-        $courierId = ($request->courier_id === 'self' || $request->courier_id === '' || $request->courier_id === 'null') ? null : $request->courier_id;
+        return DB::transaction(function () use ($id, $canteen, $request) {
+            $order = Order::where('canteen_id', $canteen->id)->lockForUpdate()->findOrFail($id);
+            
+            if ($order->status !== 'pending') {
+                return response()->json(['message' => 'Pesanan tidak bisa diproses karena status saat ini: ' . $order->status], 400);
+            }
 
-        $order->update([
-            'courier_id' => $courierId,
-            'status' => 'processing'
-        ]);
+            $courierId = ($request->courier_id === 'self' || $request->courier_id === '' || $request->courier_id === 'null') ? null : $request->courier_id;
 
-        return response()->json(['message' => 'Pesanan berhasil diproses', 'order' => $order]);
+            $order->update([
+                'courier_id' => $courierId,
+                'status' => 'processing'
+            ]);
+
+            return response()->json(['message' => 'Pesanan berhasil diproses', 'order' => $order]);
+        });
     }
 
     // For User: View their own orders
@@ -491,11 +504,18 @@ class OrderController extends Controller
     public function completeOrder(Request $request, $id)
     {
         $user = $request->user();
-        $order = Order::where('courier_id', $user->id)->findOrFail($id);
         
-        $order->update(['status' => 'completed']);
-        
-        return response()->json(['message' => 'Pesanan berhasil diselesaikan', 'order' => $order]);
+        return DB::transaction(function () use ($id, $user) {
+            $order = Order::where('courier_id', $user->id)->lockForUpdate()->findOrFail($id);
+            
+            if ($order->status === 'completed' || $order->status === 'cancelled') {
+                return response()->json(['message' => 'Pesanan sudah selesai atau dibatalkan.'], 400);
+            }
+
+            $order->update(['status' => 'completed']);
+            
+            return response()->json(['message' => 'Pesanan berhasil diselesaikan', 'order' => $order]);
+        });
     }
 
     // For Canteen: Cancel order
@@ -506,13 +526,13 @@ class OrderController extends Controller
             return response()->json(['message' => 'Kantin tidak ditemukan'], 404);
         }
 
-        $order = Order::with('items.product')->where('id', $id)->where('canteen_id', $canteen->id)->firstOrFail();
-        
-        if ($order->status !== 'pending') {
-            return response()->json(['message' => 'Pesanan tidak bisa dibatalkan karena sudah diproses'], 400);
-        }
+        return DB::transaction(function () use ($id, $canteen) {
+            $order = Order::with('items.product')->where('id', $id)->where('canteen_id', $canteen->id)->lockForUpdate()->firstOrFail();
+            
+            if ($order->status !== 'pending') {
+                return response()->json(['message' => 'Pesanan tidak bisa dibatalkan karena sudah diproses'], 400);
+            }
 
-        DB::transaction(function () use ($order) {
             $order->status = 'cancelled';
             $order->save();
 
@@ -523,24 +543,24 @@ class OrderController extends Controller
                     $item->product->decrement('sold_count', $item->quantity);
                 }
             }
-        });
 
-        return response()->json([
-            'message' => 'Pesanan berhasil dibatalkan',
-            'order' => $order
-        ]);
+            return response()->json([
+                'message' => 'Pesanan berhasil dibatalkan',
+                'order' => $order
+            ]);
+        });
     }
 
     // For User: Cancel their own order
     public function userCancelOrder(Request $request, $id)
     {
-        $order = Order::with('items.product')->where('id', $id)->where('user_id', $request->user()->id)->firstOrFail();
-        
-        if ($order->status !== 'pending') {
-            return response()->json(['message' => 'Pesanan tidak bisa dibatalkan karena sudah diproses'], 400);
-        }
+        return DB::transaction(function () use ($id, $request) {
+            $order = Order::with('items.product')->where('id', $id)->where('user_id', $request->user()->id)->lockForUpdate()->firstOrFail();
+            
+            if ($order->status !== 'pending') {
+                return response()->json(['message' => 'Pesanan tidak bisa dibatalkan karena sudah diproses'], 400);
+            }
 
-        DB::transaction(function () use ($order) {
             $order->status = 'cancelled';
             $order->save();
 
@@ -551,12 +571,12 @@ class OrderController extends Controller
                     $item->product->decrement('sold_count', $item->quantity);
                 }
             }
-        });
 
-        return response()->json([
-            'message' => 'Pesanan berhasil dibatalkan',
-            'order' => $order
-        ]);
+            return response()->json([
+                'message' => 'Pesanan berhasil dibatalkan',
+                'order' => $order
+            ]);
+        });
     }
 
     // For User: Upload Payment Proof

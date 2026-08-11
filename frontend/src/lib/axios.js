@@ -1,9 +1,11 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 
-const baseApiUrl = window.location.hostname === 'localhost' 
-  ? 'http://localhost:8000' 
-  : ''; // Jika production, gunakan relative path agar sesuai dengan domain saat ini
+// Gunakan hostname yang sama dengan frontend tapi arahkan ke port 8000 (backend Laravel)
+// Jika diakses dari HP via IP lokal (misal: 192.168.x.x), ini akan otomatis mengarah ke 192.168.x.x:8000
+const baseApiUrl = window.location.hostname === 'localhost' || window.location.hostname.match(/^[0-9.]+$/)
+  ? `http://${window.location.hostname}:8000` 
+  : ''; // Jika production di hosting, gunakan relative path
 
 const baseURL = `${baseApiUrl}/api`;
 

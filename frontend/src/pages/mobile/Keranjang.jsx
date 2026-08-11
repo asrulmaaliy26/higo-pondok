@@ -80,7 +80,13 @@ export default function Keranjang() {
         const res = await api.post('/orders', payload);
         results.push({ ok: true, canteen, order: res.data?.order, itemList, subtotal, deliveryFee, total });
       } catch (err) {
-        results.push({ ok: false, canteen, error: err.response?.data?.message || 'Gagal' });
+        const errorDetail = err.response?.data?.error;
+        const errorMessage = err.response?.data?.message;
+        results.push({ 
+          ok: false, 
+          canteen, 
+          error: errorDetail || errorMessage || 'Gagal' 
+        });
       }
     }
 
@@ -90,7 +96,13 @@ export default function Keranjang() {
     const failed = results.filter(r => !r.ok);
 
     if (succeeded.length === 0) {
-      toast.error('Semua pesanan gagal dibuat. Coba lagi.');
+      // Jika semua gagal (termasuk kalau cuma checkout 1 toko dan gagal),
+      // tampilkan alasan error dari API agar user tahu penyebabnya.
+      const errorMessage = failed.length > 0 && failed[0].error && failed[0].error !== 'Gagal'
+        ? failed[0].error
+        : 'Semua pesanan gagal dibuat. Coba lagi.';
+        
+      toast.error(errorMessage);
       return;
     }
 

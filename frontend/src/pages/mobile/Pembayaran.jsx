@@ -184,8 +184,18 @@ export default function Pembayaran() {
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <div className={`px-2 py-1 rounded text-[10px] font-bold ${order.payment_status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                    {order.payment_status === 'paid' ? 'Sudah Dibayar' : 'Belum Bayar'}
+                  <div className={`px-2 py-1 rounded text-[10px] font-bold ${
+                    order.payment_status === 'paid' 
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' 
+                      : order.payment_status === 'waiting_confirmation'
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 ring-1 ring-amber-400 animate-pulse'
+                        : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+                  }`}>
+                    {order.payment_status === 'paid' 
+                      ? 'Sudah Dibayar' 
+                      : order.payment_status === 'waiting_confirmation' 
+                        ? 'Menunggu Validasi Toko' 
+                        : 'Belum Bayar'}
                   </div>
                   <div className={`px-2 py-1 rounded text-[10px] font-bold ${
                     order.status === 'completed' ? 'bg-blue-100 text-blue-700' :
@@ -303,6 +313,18 @@ export default function Pembayaran() {
               {/* Section Lihat Bukti & Tambah Bukti */}
               {order.proof_of_payment && (
                 <div className="mb-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-2">
+                  {order.payment_status === 'waiting_confirmation' && (
+                    <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300 font-medium">
+                      <span className="text-base">⏳</span>
+                      <span>Bukti transfer telah dikirim. Menunggu pihak kantin memvalidasi pembayaran Anda.</span>
+                    </div>
+                  )}
+                  {order.payment_status === 'paid' && (
+                    <div className="p-2.5 bg-green-50 dark:bg-green-950/40 rounded-xl border border-green-200 dark:border-green-800 flex items-center gap-2 text-xs text-green-800 dark:text-green-300 font-medium">
+                      <span className="text-base">✅</span>
+                      <span>Pembayaran telah divalidasi Lunas oleh kantin.</span>
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <button 
                       onClick={() => {
@@ -318,7 +340,7 @@ export default function Pembayaran() {
                     >
                       <ImageIcon className="w-4 h-4" /> Lihat Bukti Transfer
                     </button>
-                    {isPaymentTime(order) && order.status !== 'cancelled' && (
+                    {isPaymentTime(order) && order.status !== 'cancelled' && order.payment_status !== 'paid' && (
                       <button 
                         onClick={() => {
                           setActiveOrderForPaymentProof(order);

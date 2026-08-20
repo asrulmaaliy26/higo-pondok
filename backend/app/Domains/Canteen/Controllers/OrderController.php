@@ -220,12 +220,21 @@ class OrderController extends Controller
         $order = Order::where('canteen_id', $canteen->id)->findOrFail($id);
         
         $request->validate([
-            'payment_status' => 'required|in:unpaid,paid',
+            'payment_status' => 'required|in:unpaid,waiting_confirmation,paid',
         ]);
 
         $order->update(['payment_status' => $request->payment_status]);
 
-        return response()->json(['message' => 'Status pembayaran berhasil diperbarui', 'order' => $order]);
+        $msg = $request->payment_status === 'paid' 
+            ? 'Pembayaran berhasil divalidasi dan ditandai Lunas!' 
+            : ($request->payment_status === 'waiting_confirmation' 
+                ? 'Status pembayaran diubah ke Menunggu Validasi' 
+                : 'Status pembayaran diubah ke Belum Bayar');
+
+        return response()->json([
+            'message' => $msg, 
+            'order' => $order->load(['canteen', 'user', 'items.product', 'courier'])
+        ]);
     }
 
     // For Canteen: Update order status (Lanjutkan / Process / Cancel)
@@ -399,27 +408,106 @@ class OrderController extends Controller
         return response()->json($orders);
     }
 
-    // For Courier: View assigned orders
+    // For Courier: View all orders or filtered by scope/status/canteen/date/search
     public function courierOrders(Request $request)
     {
-        $orders = Order::where('courier_id', $request->user()->id)
-            ->with(['canteen', 'user', 'items.product'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $courierId = $request->user()->id;
+        $scope = $request->query('scope', 'all'); // 'all', 'assigned', 'pending', 'processing', 'completed', 'cancelled'
+        $search = $request->query('search');
+        $canteenId = $request->query('canteen_id');
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+
+        $query = Order::with(['canteen', 'user', 'items.product', 'courier'])
+            ->orderBy('created_at', 'desc');
+
+        if ($scope === 'assigned') {
+            $query->where('courier_id', $courierId);
+        } elseif ($scope === 'pending') {
+            $query->where('status', 'pending');
+        } elseif ($scope === 'processing') {
+            $query->where('status', 'processing');
+        } elseif ($scope === 'completed') {
+            $query->where('status', 'completed');
+        } elseif ($scope === 'cancelled') {
+            $query->where('status', 'cancelled');
+        }
+
+        if ($canteenId && $canteenId !== 'all') {
+            $query->where('canteen_id', $canteenId);
+        }
+
+        if ($startDate && $endDate) {
+            $start = \Illuminate\Support\Carbon::parse($startDate, 'Asia/Jakarta')->startOfDay();
+            $end = \Illuminate\Support\Carbon::parse($endDate, 'Asia/Jakarta')->endOfDay();
+            $query->whereBetween('created_at', [$start, $end]);
+        }
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('id', 'like', "%{$search}%")
+                  ->orWhere('custom_notes', 'like', "%{$search}%")
+                  ->orWhere('delivery_location', 'like', "%{$search}%")
+                  ->orWhereHas('user', function ($uq) use ($search) {
+                      $uq->where('name', 'like', "%{$search}%")
+                         ->orWhere('santri_name', 'like', "%{$search}%")
+                         ->orWhere('santri_room', 'like', "%{$search}%")
+                         ->orWhere('phone', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('canteen', function ($cq) use ($search) {
+                      $cq->where('name', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('items.product', function ($pq) use ($search) {
+                      $pq->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $orders = $query->get();
             
         return response()->json($orders);
+    }
+
+    // For Courier: Take / Claim an order to deliver
+    public function takeOrder(Request $request, $id)
+    {
+        $user = $request->user();
+        if (!$user->hasRole('kurir') && !$user->hasRole('admin')) {
+            return response()->json(['message' => 'Hanya kurir yang dapat mengambil pesanan'], 403);
+        }
+
+        return DB::transaction(function () use ($id, $user) {
+            $order = Order::with(['canteen', 'user', 'items.product', 'courier'])->lockForUpdate()->findOrFail($id);
+
+            if ($order->status === 'completed' || $order->status === 'cancelled') {
+                return response()->json(['message' => 'Pesanan sudah selesai atau dibatalkan'], 400);
+            }
+
+            $order->update([
+                'courier_id' => $user->id,
+                'status' => 'processing'
+            ]);
+
+            return response()->json([
+                'message' => 'Pesanan berhasil diambil! Silakan beli/ambil makanan di kantin dan antarkan ke santri.',
+                'order' => $order
+            ]);
+        });
     }
 
     // For Courier / Canteen: Upload purchase receipt (Struk Pembelian / Bukti Pesanan)
     public function uploadPurchaseProof(Request $request, $id)
     {
         $user = $request->user();
-        $order = Order::where(function ($query) use ($user) {
-            $query->where('courier_id', $user->id)
-                  ->orWhereHas('canteen', function ($q) use ($user) {
-                      $q->where('user_id', $user->id);
-                  });
-        })->findOrFail($id);
+        $order = Order::findOrFail($id);
+
+        $isCourier = $user->hasRole('kurir');
+        $isOrderCourier = $order->courier_id === $user->id;
+        $isCanteenOwner = $order->canteen && $order->canteen->user_id === $user->id;
+
+        if (!$isCourier && !$isOrderCourier && !$isCanteenOwner && !$user->hasRole('admin')) {
+            return response()->json(['message' => 'Anda tidak memiliki akses untuk mengunggah struk pesanan ini'], 403);
+        }
 
         $request->validate([
             'proof_of_purchase' => 'required|array|min:1',
@@ -434,18 +522,32 @@ class OrderController extends Controller
         $existing = is_array($order->proof_of_purchase) ? $order->proof_of_purchase : ($order->proof_of_purchase ? [$order->proof_of_purchase] : []);
         $merged = array_merge($existing, $newPaths);
 
-        $order->update([
-            'proof_of_purchase' => $merged,
-        ]);
+        $updateData = ['proof_of_purchase' => $merged];
+        if ($isCourier && !$order->courier_id) {
+            $updateData['courier_id'] = $user->id;
+            if ($order->status === 'pending') {
+                $updateData['status'] = 'processing';
+            }
+        }
 
-        return response()->json(['message' => 'Bukti pesanan/struk berhasil ditambahkan', 'order' => $order]);
+        $order->update($updateData);
+
+        return response()->json(['message' => 'Bukti pesanan/struk berhasil ditambahkan', 'order' => $order->load(['canteen', 'user', 'items.product', 'courier'])]);
     }
 
-    // For Courier: Upload delivery proof (Bukti Serah Terima / Pengiriman)
+    // For Courier / Canteen: Upload delivery proof (Bukti Serah Terima / Pengiriman)
     public function uploadDeliveryProof(Request $request, $id)
     {
         $user = $request->user();
-        $order = Order::where('courier_id', $user->id)->findOrFail($id);
+        $order = Order::findOrFail($id);
+
+        $isCourier = $user->hasRole('kurir');
+        $isOrderCourier = $order->courier_id === $user->id;
+        $isCanteenOwner = $order->canteen && $order->canteen->user_id === $user->id;
+
+        if (!$isCourier && !$isOrderCourier && !$isCanteenOwner && !$user->hasRole('admin')) {
+            return response()->json(['message' => 'Anda tidak memiliki akses untuk mengunggah bukti serah terima'], 403);
+        }
 
         $request->validate([
             'proof_of_delivery' => 'required|array|min:1',
@@ -460,23 +562,32 @@ class OrderController extends Controller
         $existing = is_array($order->proof_of_delivery) ? $order->proof_of_delivery : ($order->proof_of_delivery ? [$order->proof_of_delivery] : []);
         $merged = array_merge($existing, $newPaths);
 
-        $order->update([
-            'proof_of_delivery' => $merged,
-        ]);
+        $updateData = ['proof_of_delivery' => $merged];
+        if ($isCourier && !$order->courier_id) {
+            $updateData['courier_id'] = $user->id;
+            if ($order->status === 'pending') {
+                $updateData['status'] = 'processing';
+            }
+        }
 
-        return response()->json(['message' => 'Bukti serah terima berhasil ditambahkan', 'order' => $order]);
+        $order->update($updateData);
+
+        return response()->json(['message' => 'Bukti serah terima berhasil ditambahkan', 'order' => $order->load(['canteen', 'user', 'items.product', 'courier'])]);
     }
 
     // For Courier / Canteen: Delete a specific uploaded photo
     public function deleteProofPhoto(Request $request, $id)
     {
         $user = $request->user();
-        $order = Order::where(function ($query) use ($user) {
-            $query->where('courier_id', $user->id)
-                  ->orWhereHas('canteen', function ($q) use ($user) {
-                      $q->where('user_id', $user->id);
-                  });
-        })->findOrFail($id);
+        $order = Order::findOrFail($id);
+
+        $isCourier = $user->hasRole('kurir');
+        $isOrderCourier = $order->courier_id === $user->id;
+        $isCanteenOwner = $order->canteen && $order->canteen->user_id === $user->id;
+
+        if (!$isCourier && !$isOrderCourier && !$isCanteenOwner && !$user->hasRole('admin')) {
+            return response()->json(['message' => 'Anda tidak memiliki akses untuk menghapus foto ini'], 403);
+        }
 
         $request->validate([
             'type' => 'required|in:proof_of_purchase,proof_of_delivery,proof_of_payment',
@@ -497,7 +608,7 @@ class OrderController extends Controller
 
         \Illuminate\Support\Facades\Storage::disk('public')->delete($targetPath);
 
-        return response()->json(['message' => 'Foto berhasil dihapus', 'order' => $order]);
+        return response()->json(['message' => 'Foto berhasil dihapus', 'order' => $order->load(['canteen', 'user', 'items.product', 'courier'])]);
     }
 
     // For Courier: Mark order as completed
@@ -506,15 +617,67 @@ class OrderController extends Controller
         $user = $request->user();
         
         return DB::transaction(function () use ($id, $user) {
-            $order = Order::where('courier_id', $user->id)->lockForUpdate()->findOrFail($id);
+            $order = Order::with(['items.product', 'canteen'])->lockForUpdate()->findOrFail($id);
             
+            $isCourier = $user->hasRole('kurir');
+            $isOrderCourier = $order->courier_id === $user->id;
+
+            if (!$isCourier && !$isOrderCourier && !$user->hasRole('admin')) {
+                return response()->json(['message' => 'Anda tidak memiliki akses untuk menyelesaikan pesanan ini.'], 403);
+            }
+
             if ($order->status === 'completed' || $order->status === 'cancelled') {
                 return response()->json(['message' => 'Pesanan sudah selesai atau dibatalkan.'], 400);
             }
 
-            $order->update(['status' => 'completed']);
+            $courierId = $order->courier_id ?: $user->id;
+
+            $order->update([
+                'courier_id' => $courierId,
+                'status' => 'completed',
+                'payment_status' => 'paid',
+            ]);
+
+            // Decrement active order stock
+            foreach ($order->items as $item) {
+                if ($item->product) {
+                    $item->product->decrement('stock', $item->quantity);
+                }
+            }
+
+            $subtotal = $order->items->sum('subtotal');
+            $admin_fee = $order->admin_fee;
+            $delivery_fee = $order->delivery_fee;
+
+            if ($order->canteen) {
+                $canteen = $order->canteen;
+                $canteen->increment('balance', $subtotal - $admin_fee);
+                
+                \App\Domains\Admin\PaymentLog::create([
+                    'user_id' => $canteen->user_id,
+                    'order_id' => $order->id,
+                    'amount' => $subtotal - $admin_fee,
+                    'type' => 'order_payment',
+                    'description' => "Penerimaan hasil pesanan #" . $order->id,
+                ]);
+
+                $canteen->increment('sold_count', 1);
+            }
+
+            $courier = User::find($courierId);
+            if ($courier) {
+                $courier->increment('balance', $delivery_fee * 0.8);
+                
+                \App\Domains\Admin\PaymentLog::create([
+                    'user_id' => $courier->id,
+                    'order_id' => $order->id,
+                    'amount' => $delivery_fee * 0.8,
+                    'type' => 'courier_fee',
+                    'description' => "Penerimaan ongkir pesanan #" . $order->id,
+                ]);
+            }
             
-            return response()->json(['message' => 'Pesanan berhasil diselesaikan', 'order' => $order]);
+            return response()->json(['message' => 'Pesanan berhasil diselesaikan', 'order' => $order->load(['canteen', 'user', 'items.product', 'courier'])]);
         });
     }
 
@@ -599,9 +762,13 @@ class OrderController extends Controller
 
         $order->update([
             'proof_of_payment' => $mergedPaths,
+            'payment_status' => 'waiting_confirmation',
         ]);
 
-        return response()->json(['message' => 'Bukti transfer berhasil diunggah', 'order' => $order]);
+        return response()->json([
+            'message' => 'Bukti transfer berhasil diunggah! Menunggu konfirmasi & validasi pembayaran dari kantin.',
+            'order' => $order->load(['canteen', 'user', 'items.product', 'courier'])
+        ]);
     }
 
     // For Canteen: Get list of all santri users for manual order creation

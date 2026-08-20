@@ -189,6 +189,7 @@ export default function PesananToko() {
   const rawOrders = ordersRes || [];
   const orders = rawOrders.filter(order => {
     if (selectedStatusFilter === 'all') return true;
+    if (selectedStatusFilter === 'waiting_confirmation') return order.payment_status === 'waiting_confirmation';
     if (selectedStatusFilter === 'paid') return order.payment_status === 'paid';
     if (selectedStatusFilter === 'unpaid') return order.payment_status === 'unpaid';
     return order.status === selectedStatusFilter;
@@ -612,9 +613,10 @@ export default function PesananToko() {
                 className="px-3 py-2 border rounded-lg text-sm bg-purple-50 text-purple-800 border-purple-200 font-semibold dark:bg-gray-800 dark:text-purple-400 dark:border-gray-700 shrink-0"
               >
                 <option value="all">📋 Semua Status</option>
-                <option value="pending">⏳ Belum Dikonfirmasi (Pending)</option>
+                <option value="waiting_confirmation">⏳ Menunggu Validasi Bayar</option>
                 <option value="paid">💳 Sudah Bayar (Lunas)</option>
                 <option value="unpaid">⚠️ Belum Bayar</option>
+                <option value="pending">⏳ Belum Dikonfirmasi (Pending)</option>
                 <option value="processing">🚚 Sedang Diproses</option>
                 <option value="completed">✅ Selesai</option>
                 <option value="cancelled">❌ Ditolak / Dibatalkan</option>
@@ -738,14 +740,16 @@ export default function PesananToko() {
                     )}
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <div className={`px-2 py-1 rounded text-xs font-bold ${
+                    <div className={`px-2.5 py-1 rounded-full text-xs font-bold ${
                       order.payment_status === 'paid' 
-                        ? 'bg-green-100 text-green-700' 
-                        : !order.proof_of_payment 
-                          ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border border-red-500 animate-pulse drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]' 
-                          : 'bg-yellow-100 text-yellow-700'
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' 
+                        : order.payment_status === 'waiting_confirmation'
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 ring-2 ring-amber-400 animate-pulse'
+                          : !order.proof_of_payment 
+                            ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border border-red-500' 
+                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
                     }`}>
-                  {order.payment_status === 'paid' ? 'Lunas' : 'Belum Bayar'}
+                  {order.payment_status === 'paid' ? '✅ Lunas' : order.payment_status === 'waiting_confirmation' ? '⏳ Perlu Validasi' : '⚠️ Belum Bayar'}
                 </div>
                 
                 {isCompleted && (
@@ -862,7 +866,80 @@ export default function PesananToko() {
                 </div>
               )}
 
+              {/* PAYMENT VALIDATION PANEL FOR CANTEEN */}
+              <div className={`p-3 rounded-xl border mb-3 space-y-2 ${
+                order.payment_status === 'paid'
+                  ? 'bg-green-50/70 border-green-200 dark:bg-green-950/30 dark:border-green-900'
+                  : order.payment_status === 'waiting_confirmation'
+                    ? 'bg-amber-50 border-amber-300 dark:bg-amber-950/40 dark:border-amber-700 ring-1 ring-amber-300'
+                    : 'bg-gray-50 border-gray-200 dark:bg-gray-800/60 dark:border-gray-700'
+              }`}>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-gray-800 dark:text-gray-200">
+                    <span>💳 Validasi Pembayaran:</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                      order.payment_status === 'paid'
+                        ? 'bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-200'
+                        : order.payment_status === 'waiting_confirmation'
+                          ? 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-200 animate-pulse'
+                          : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
+                    }`}>
+                      {order.payment_status === 'paid' 
+                        ? 'Lunas (Terverifikasi)' 
+                        : order.payment_status === 'waiting_confirmation' 
+                          ? 'Menunggu Validasi Toko' 
+                          : 'Belum Bayar'}
+                    </span>
+                  </div>
 
+                  {order.payment_status === 'waiting_confirmation' && (
+                    <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                      🔔 Pembeli sudah upload bukti transfer!
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  {order.proof_of_payment && order.proof_of_payment.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        let proofs = Array.isArray(order.proof_of_payment)
+                          ? order.proof_of_payment.map(path => getStorageUrl(path))
+                          : [getStorageUrl(order.proof_of_payment)];
+                        setSelectedProofs(proofs);
+                      }}
+                      className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" /> 👁️ Cek Bukti Transfer ({Array.isArray(order.proof_of_payment) ? order.proof_of_payment.length : 1})
+                    </button>
+                  )}
+
+                  {order.payment_status !== 'paid' ? (
+                    <button
+                      type="button"
+                      disabled={updatePaymentMutation.isPending}
+                      onClick={() => updatePaymentMutation.mutate({ id: order.id, status: 'paid', canteen_id: order.canteen_id })}
+                      className="py-1.5 px-3.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" /> Konfirmasi Lunas
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={updatePaymentMutation.isPending}
+                      onClick={() => {
+                        if (window.confirm('Batalkan status lunas dan kembalikan ke Belum Bayar?')) {
+                          updatePaymentMutation.mutate({ id: order.id, status: 'unpaid', canteen_id: order.canteen_id });
+                        }
+                      }}
+                      className="py-1.5 px-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
+                    >
+                      <X className="w-3.5 h-3.5" /> Batalkan Lunas
+                    </button>
+                  )}
+                </div>
+              </div>
 
               <div className="flex justify-between items-center pt-3 border-t border-gray-100 dark:border-gray-800">
                 <p className="font-bold text-gray-900 dark:text-white flex flex-col">

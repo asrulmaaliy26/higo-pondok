@@ -46,6 +46,7 @@ Route::middleware(['auth:sanctum', 'impersonate'])->group(function () {
     // Courier routes
     Route::middleware('role:kurir')->group(function () {
         Route::get('/courier/orders', [\App\Domains\Canteen\Controllers\OrderController::class, 'courierOrders']);
+        Route::post('/courier/orders/{id}/take', [\App\Domains\Canteen\Controllers\OrderController::class, 'takeOrder']);
         Route::post('/courier/orders/{id}/complete', [\App\Domains\Canteen\Controllers\OrderController::class, 'completeOrder']);
         Route::post('/courier/orders/{id}/upload-receipt', [\App\Domains\Canteen\Controllers\OrderController::class, 'uploadPurchaseProof']);
         Route::post('/courier/orders/{id}/upload-delivery', [\App\Domains\Canteen\Controllers\OrderController::class, 'uploadDeliveryProof']);

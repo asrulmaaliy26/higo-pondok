@@ -3,8 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import axios, { getStorageUrl } from '../../lib/axios';
 import { MapPin, Heart, FileText, Search, UtensilsCrossed, Zap, Bike, Users, ArrowRight, Store, Star, Ticket } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
+import { useAuthStore } from '../../store/authStore';
 
 export default function Kantin() {
+  const user = useAuthStore(state => state.user);
+
   // Fetch Banners (Approved)
   const { data: banners, isLoading: loadingBanners } = useQuery({
     queryKey: ['canteen-banners'],
@@ -40,20 +43,18 @@ export default function Kantin() {
     return () => clearInterval(interval);
   }, [banners]);
 
-
-
-
-
   return (
     <div className="pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen">
       {/* HEADER SECTION */}
       <div className="bg-emerald-50 dark:bg-emerald-950/30 pt-6 pb-28 px-4 relative rounded-b-[2.5rem]">
         {/* Top Bar */}
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 rounded-full px-3 py-1.5 shadow-sm">
-            <MapPin size={16} className="text-emerald-600" />
-            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">Asrama Putra</span>
-          </div>
+          <Link to="/dashboard/profile" className="flex items-center space-x-2 bg-white dark:bg-gray-800 rounded-full px-3 py-1.5 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors max-w-[200px]">
+            <MapPin size={16} className="text-emerald-600 shrink-0" />
+            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
+              {user?.santri_room || 'Asrama / Kamar'}
+            </span>
+          </Link>
           <div className="flex space-x-3">
             <button className="bg-white dark:bg-gray-800 p-2 rounded-full shadow-sm text-gray-600 dark:text-gray-300">
               <Heart size={20} />
@@ -130,7 +131,7 @@ export default function Kantin() {
               <Link key={canteen.id} to={`/dashboard/kantin/${canteen.id}`} className="flex bg-white dark:bg-gray-800 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="w-24 h-24 rounded-xl bg-gray-100 dark:bg-gray-700 overflow-hidden shrink-0 flex items-center justify-center">
                    {canteen.image ? (
-                     <img src={`http://localhost:8000/storage/${canteen.image}`} alt={canteen.name} className="w-full h-full object-cover" />
+                     <img src={getStorageUrl(canteen.image)} alt={canteen.name} className="w-full h-full object-cover" />
                    ) : (
                      <Store size={32} className="text-gray-400" />
                    )}

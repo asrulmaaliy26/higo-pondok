@@ -101,7 +101,9 @@ export default function Profile() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: (data) => api.post('/me?_method=PUT', data),
+    mutationFn: (data) => api.post('/me', data, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
     onSuccess: (res) => {
       setUser(res.data.user);
       setShowEditUserModal(false);
@@ -117,6 +119,7 @@ export default function Profile() {
   const handleSaveUser = async (e) => {
     e.preventDefault();
     const formData = new FormData();
+    formData.append('_method', 'PUT');
     if (userData.name && userData.name !== user?.name) formData.append('name', userData.name);
     if (userData.email && userData.email !== user?.email) formData.append('email', userData.email);
     if (userData.phone !== user?.phone) {
@@ -138,6 +141,7 @@ export default function Profile() {
     mutationFn: (data) => api.post('/my-canteens', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['canteens'] });
+      queryClient.invalidateQueries({ queryKey: ['my_canteens_list'] });
       toast.success('Toko baru berhasil dibuat!');
       setShowAddStoreModal(false);
       setNewStoreData({ name: '', description: '' });
@@ -150,9 +154,13 @@ export default function Profile() {
 
   // Update Store Mutation
   const updateProfileMutation = useMutation({
-    mutationFn: ({ id, formData }) => api.post(`/my-canteen?_method=PUT&canteen_id=${id}`, formData),
+    mutationFn: ({ id, formData }) => api.post(`/my-canteen?canteen_id=${id}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['canteens'] });
+      queryClient.invalidateQueries({ queryKey: ['my_canteens_list'] });
+      queryClient.invalidateQueries({ queryKey: ['canteen'] });
       toast.success('Profil toko berhasil disimpan!');
       setShowEditStoreModal(false);
       setImageFile(null);
@@ -175,6 +183,7 @@ export default function Profile() {
     setIsSavingProfile(true);
     
     const formData = new FormData();
+    formData.append('_method', 'PUT');
     formData.append('name', profileData.name);
     formData.append('description', profileData.description || '');
     const category = profileData.category || 'kauman';
@@ -218,6 +227,11 @@ export default function Profile() {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Ukuran foto toko maksimal 2 MB');
+        e.target.value = '';
+        return;
+      }
       setImageFile(file);
       setPreviewUrl(URL.createObjectURL(file));
     }
@@ -608,9 +622,15 @@ export default function Profile() {
                   <label className="absolute bottom-0 right-0 p-2 bg-green-600 text-white rounded-full cursor-pointer hover:bg-green-700 shadow-md transition-colors">
                     <Camera className="w-4 h-4" />
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                      if (e.target.files[0]) {
-                        setUserAvatarFile(e.target.files[0]);
-                        setUserAvatarPreview(URL.createObjectURL(e.target.files[0]));
+                      const file = e.target.files[0];
+                      if (file) {
+                        if (file.size > 2 * 1024 * 1024) {
+                          toast.error('Ukuran foto profil maksimal 2 MB');
+                          e.target.value = '';
+                          return;
+                        }
+                        setUserAvatarFile(file);
+                        setUserAvatarPreview(URL.createObjectURL(file));
                       }
                     }} />
                   </label>

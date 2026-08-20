@@ -15,7 +15,7 @@ use App\Domains\Auth\Controllers\AdminController;
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
-    Route::put('/me', [AuthController::class, 'updateProfile']);
+    Route::match(['put', 'post'], '/me', [AuthController::class, 'updateProfile']);
     Route::put('/me/working-status', [AuthController::class, 'toggleWorkingStatus']);
     
     // Admin routes

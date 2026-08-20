@@ -22,11 +22,12 @@ class UpdateCanteenRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'required|string',
+            'name' => 'required|string|max:255',
+            'category' => 'nullable|string|in:kauman,kota',
             'description' => 'nullable|string',
-            'open_time' => 'nullable|date_format:H:i',
-            'close_time' => 'nullable|date_format:H:i',
-            'image' => 'nullable|image|max:5120', // Maks 5MB
+            'open_time' => 'nullable|string',
+            'close_time' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048', // Maks 2MB
             'whatsapp_number' => 'nullable|string|max:20',
             'delivery_fee' => 'nullable|numeric|min:0',
             'delivery_rates' => 'nullable|array',

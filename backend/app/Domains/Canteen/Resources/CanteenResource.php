@@ -38,10 +38,13 @@ class CanteenResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'category' => $this->category,
             'description' => $this->description,
             'image' => $this->image,
             'status' => $this->status,
             'is_open' => $this->is_open,
+            'open_time' => $this->open_time,
+            'close_time' => $this->close_time,
             'rating' => $this->rating,
             'rating_count' => $this->rating_count,
             'delivery_fee' => $this->delivery_fee,
@@ -56,6 +59,7 @@ class CanteenResource extends JsonResource
             'product_income' => $product_income,
             'delivery_income' => $delivery_income,
             'products' => $this->whenLoaded('products'),
+            'banners' => $this->whenLoaded('banners'),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

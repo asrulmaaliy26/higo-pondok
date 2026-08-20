@@ -1150,9 +1150,9 @@ export default function PesananToko() {
                     multiple
                     onChange={(e) => {
                       const files = Array.from(e.target.files);
-                      const validFiles = files.filter(f => f.size <= 5 * 1024 * 1024);
+                      const validFiles = files.filter(f => f.size <= 2 * 1024 * 1024);
                       if (validFiles.length < files.length) {
-                        toast.error('Ukuran foto terlalu besar! Maksimal 5MB per foto.');
+                        toast.error('Ukuran foto terlalu besar! Maksimal 2MB per foto.');
                       }
                       setProofFiles(validFiles);
                     }}
@@ -1256,9 +1256,9 @@ export default function PesananToko() {
                     multiple
                     onChange={(e) => {
                       const files = Array.from(e.target.files);
-                      const validFiles = files.filter(f => f.size <= 5 * 1024 * 1024);
+                      const validFiles = files.filter(f => f.size <= 2 * 1024 * 1024);
                       if (validFiles.length < files.length) {
-                        toast.error('Ukuran foto terlalu besar! Maksimal 5MB per foto.');
+                        toast.error('Ukuran foto terlalu besar! Maksimal 2MB per foto.');
                       }
                       setReceiptFiles(validFiles);
                     }}

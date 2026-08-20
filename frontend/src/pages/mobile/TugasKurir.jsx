@@ -89,8 +89,8 @@ export default function TugasKurir() {
     const files = Array.from(e.target.files);
     if (files.length > 0) {
       const validFiles = files.filter(file => {
-        if (file.size > 5 * 1024 * 1024) {
-          toast.error(`Ukuran foto ${file.name} melebihi 5MB`);
+        if (file.size > 2 * 1024 * 1024) {
+          toast.error(`Ukuran foto ${file.name} melebihi 2MB`);
           return false;
         }
         return true;

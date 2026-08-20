@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Store } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { getStorageUrl } from '../../lib/axios';
 
 export const ProductFormModal = ({
   isOpen,
@@ -30,20 +32,12 @@ export const ProductFormModal = ({
           stock: editingProduct.stock.toString(),
           is_available: editingProduct.is_available
         });
-        setImagePreview(editingProduct.image ? `http://localhost:8000/storage/${editingProduct.image}` : null); // We should use getStorageUrl here, but since it's hard to pass, we'll pass it or import it.
+        setImagePreview(editingProduct.image ? getStorageUrl(editingProduct.image) : null);
       } else {
         setProductData({ name: '', category: '', price: '', stock: '', is_available: true });
         setImagePreview(null);
         setImageFile(null);
       }
-    }
-  }, [isOpen, editingProduct]);
-
-  // Use a helper function for the image URL formatting if editingProduct has an image
-  useEffect(() => {
-    if (isOpen && editingProduct?.image) {
-      // Basic formatting, but passing a helper from parent is better or using import
-      setImagePreview(`http://localhost:8000/storage/${editingProduct.image}`);
     }
   }, [isOpen, editingProduct]);
 
@@ -93,6 +87,11 @@ export const ProductFormModal = ({
                 onChange={(e) => {
                   const file = e.target.files[0];
                   if (file) {
+                    if (file.size > 2 * 1024 * 1024) {
+                      toast.error('Ukuran foto produk maksimal 2 MB');
+                      e.target.value = '';
+                      return;
+                    }
                     setImageFile(file);
                     setImagePreview(URL.createObjectURL(file));
                   }

@@ -12,7 +12,14 @@ const baseURL = `${baseApiUrl}/api`;
 export const getStorageUrl = (path) => {
   if (!path) return null;
   if (path.startsWith('http')) return path;
-  return `${baseApiUrl}/storage/${path}`;
+  const cleanPath = path.startsWith('/storage/')
+    ? path.substring(9)
+    : path.startsWith('storage/')
+    ? path.substring(8)
+    : path.startsWith('/')
+    ? path.substring(1)
+    : path;
+  return `${baseApiUrl}/storage/${cleanPath}`;
 };
 
 export const getPublicUrl = (path) => {

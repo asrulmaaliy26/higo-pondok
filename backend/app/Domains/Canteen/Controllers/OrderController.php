@@ -265,12 +265,12 @@ class OrderController extends Controller
         if (!$order->courier_id) {
             $request->validate([
                 'proof_of_delivery' => 'required|array|min:1',
-                'proof_of_delivery.*' => 'image|max:5120',
+                'proof_of_delivery.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
             ]);
         } else {
             $request->validate([
                 'proof_of_delivery' => 'nullable|array',
-                'proof_of_delivery.*' => 'image|max:5120',
+                'proof_of_delivery.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
             ]);
         }
 
@@ -423,7 +423,7 @@ class OrderController extends Controller
 
         $request->validate([
             'proof_of_purchase' => 'required|array|min:1',
-            'proof_of_purchase.*' => 'image|max:5120',
+            'proof_of_purchase.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
         $newPaths = [];
@@ -449,7 +449,7 @@ class OrderController extends Controller
 
         $request->validate([
             'proof_of_delivery' => 'required|array|min:1',
-            'proof_of_delivery.*' => 'image|max:5120',
+            'proof_of_delivery.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
         $newPaths = [];
@@ -586,7 +586,7 @@ class OrderController extends Controller
 
         $request->validate([
             'proof_of_payment' => 'required|array|min:1',
-            'proof_of_payment.*' => 'image|max:5120',
+            'proof_of_payment.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
         $paths = [];

@@ -26,7 +26,7 @@ class UpdateProfileRequest extends FormRequest
             'email' => 'sometimes|required|string|email|max:255|unique:users,email,' . $this->user()->id,
             'phone' => 'nullable|string|max:20',
             'password' => 'nullable|string|min:6',
-            'avatar' => 'nullable|image|max:5120',
+            'avatar' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
             'santri_name' => 'nullable|string|max:255',
             'santri_room' => 'nullable|string|max:255',
             'santri_class' => 'nullable|string|max:255',

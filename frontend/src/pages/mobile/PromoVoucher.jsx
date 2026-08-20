@@ -18,7 +18,7 @@ export default function PromoVoucher() {
     queryKey: ['my_canteen', activeCanteenId],
     queryFn: async () => {
       const res = await api.get(`/my-canteen?canteen_id=${activeCanteenId}`);
-      return res.data;
+      return res.data.data || res.data;
     },
     enabled: !!activeCanteenId
   });
@@ -173,6 +173,11 @@ export default function PromoVoucher() {
                     onChange={(e) => {
                       const file = e.target.files[0];
                       if (file) {
+                        if (file.size > 2 * 1024 * 1024) {
+                          toast.error('Ukuran gambar banner maksimal 2 MB');
+                          e.target.value = '';
+                          return;
+                        }
                         setBannerFile(file);
                         setBannerPreview(URL.createObjectURL(file));
                       }

@@ -577,7 +577,18 @@ export default function Pembayaran() {
                     type="file"
                     accept="image/*"
                     multiple
-                    onChange={(e) => setPaymentProofFiles(Array.from(e.target.files))}
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files);
+                      const validFiles = [];
+                      for (const file of files) {
+                        if (file.size > 2 * 1024 * 1024) {
+                          toast.error(`File "${file.name}" melebihi ukuran maksimal 2 MB`);
+                        } else {
+                          validFiles.push(file);
+                        }
+                      }
+                      setPaymentProofFiles(validFiles);
+                    }}
                     className="w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-green-900/30 dark:file:text-green-400 dark:text-gray-400"
                   />
                 </div>

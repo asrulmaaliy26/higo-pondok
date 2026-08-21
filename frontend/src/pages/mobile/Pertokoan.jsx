@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios, { getStorageUrl } from '../../lib/axios';
-import { Store, CheckCircle, XCircle, ChevronLeft, Save } from 'lucide-react';
+import { Store, CheckCircle, XCircle, ChevronLeft, Save, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Pertokoan() {
@@ -13,6 +13,9 @@ export default function Pertokoan() {
   // Jam Operasional states
   const [openTime, setOpenTime] = useState('');
   const [closeTime, setCloseTime] = useState('');
+
+  // Zona / Category state
+  const [canteenCategory, setCanteenCategory] = useState('kauman');
 
   const { data: canteens, isLoading } = useQuery({
     queryKey: ['admin-canteens'],
@@ -76,10 +79,26 @@ export default function Pertokoan() {
     }
   });
 
+  const updateCategoryMutation = useMutation({
+    mutationFn: async ({ id, category }) => {
+      const res = await axios.put(`/admin/canteens/${id}/fees`, { category });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Zona lokasi & tarif berhasil diperbarui');
+      queryClient.invalidateQueries(['admin-canteens']);
+      setSelectedCanteen(prev => prev ? { ...prev, category: data.canteen.category, delivery_fee: data.canteen.delivery_fee, admin_fee: data.canteen.admin_fee } : prev);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal memperbarui zona toko');
+    }
+  });
+
   const handleOpenDetail = (canteen) => {
     setSelectedCanteen(canteen);
     setOpenTime(canteen.open_time?.substring(0, 5) || '09:00');
     setCloseTime(canteen.close_time?.substring(0, 5) || '17:00');
+    setCanteenCategory(canteen.category || 'kauman');
   };
 
   return (
@@ -89,7 +108,7 @@ export default function Pertokoan() {
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Manajemen Toko</h2>
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Kelola daftar kantin, atur biaya ongkir, dan setujui promo/banner.
+            Kelola daftar kantin, atur zona lokasi (Kauman vs Kota), dan biaya ongkir/admin.
           </p>
         </div>
       </div>
@@ -103,6 +122,8 @@ export default function Pertokoan() {
           </div>
         ) : Array.isArray(canteens) && canteens.length > 0 ? (
           canteens.map((canteen) => {
+            const isKota = canteen.category === 'kota';
+
             return (
               <div 
                 key={canteen.id} 
@@ -114,8 +135,11 @@ export default function Pertokoan() {
                     <Store size={24} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                    <h3 className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2 flex-wrap">
                       {canteen.name}
+                      <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${isKota ? 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300' : 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300'}`}>
+                        {isKota ? 'Zona Kota (3.5k + 1.5k)' : 'Zona Kauman (2k + 1k)'}
+                      </span>
                       {canteen.status === 'pending' && (
                         <span className="px-2 py-0.5 bg-yellow-500 text-white text-[10px] rounded animate-pulse">PENDING REVIEW</span>
                       )}
@@ -193,6 +217,56 @@ export default function Pertokoan() {
                     {selectedCanteen.user?.santri_class ? `${selectedCanteen.user.santri_class} - ${selectedCanteen.user.santri_level}` : <span className="text-red-500 text-xs">Belum diisi</span>}
                   </span>
                 </div>
+              </div>
+            </div>
+
+            {/* Zona Lokasi & Tarif Section */}
+            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-2xl border border-green-100 dark:border-green-800/50">
+              <h3 className="font-bold text-green-900 dark:text-green-400 mb-1 flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-green-600" />
+                Zona Lokasi & Tarif Layanan
+              </h3>
+              <p className="text-xs text-green-700 dark:text-green-300 mb-3">
+                Atur zona toko untuk menentukan tarif ongkir dan biaya admin otomatis.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-green-800 dark:text-green-300 mb-1">
+                    Pilih Zona Toko:
+                  </label>
+                  <select
+                    value={canteenCategory}
+                    onChange={(e) => setCanteenCategory(e.target.value)}
+                    className="w-full rounded-xl border-green-200 dark:border-green-800/50 dark:bg-green-900/30 shadow-sm focus:border-green-500 focus:ring-green-500 text-gray-900 dark:text-white text-xs sm:text-sm font-semibold p-2.5"
+                  >
+                    <option value="kauman">Zona Kauman (Ongkir Rp 2.000 + Admin Rp 1.000 = Rp 3.000)</option>
+                    <option value="kota">Zona Kota (Ongkir Rp 3.500 + Admin Rp 1.500 = Rp 5.000)</option>
+                  </select>
+                </div>
+
+                <div className="bg-white/80 dark:bg-gray-800/80 p-3 rounded-xl border border-green-100 dark:border-green-800 text-xs font-semibold flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-gray-600 dark:text-gray-300">
+                    Tarif Dasar: 🛵 Ongkir Rp {canteenCategory === 'kota' ? '3.500' : '2.000'} | 🛡️ Admin Rp {canteenCategory === 'kota' ? '1.500' : '1.000'}
+                  </span>
+                  <span className="text-green-700 dark:text-green-300 font-bold">
+                    Total Rp {canteenCategory === 'kota' ? '5.000' : '3.000'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateCategoryMutation.mutate({
+                      id: selectedCanteen.id,
+                      category: canteenCategory
+                    });
+                  }}
+                  disabled={updateCategoryMutation.isPending}
+                  className="w-full mt-1 bg-green-600 hover:bg-green-700 text-white p-3 rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <Save size={18} />
+                  <span>{updateCategoryMutation.isPending ? 'Menyimpan...' : 'Simpan Zona & Tarif'}</span>
+                </button>
               </div>
             </div>
 

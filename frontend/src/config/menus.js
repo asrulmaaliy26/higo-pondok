@@ -18,6 +18,7 @@ export const allMenus = [
   { name: 'Beranda', href: '/dashboard', icon: LayoutDashboard, roles: [ROLES.ADMIN, ROLES.USER, ROLES.KANTIN, ROLES.KURIR] },
   { name: 'User', href: '/dashboard/users', icon: Users, roles: [ROLES.ADMIN] },
   { name: 'Pertokoan', href: '/dashboard/pertokoan', icon: Store, roles: [ROLES.ADMIN] },
+  { name: 'Pesanan', href: '/dashboard/admin/pesanan', icon: ClipboardList, roles: [ROLES.ADMIN] },
   
   // Non-Admin specific menus
   { name: 'Riwayat', href: '/dashboard/pembayaran', icon: ClipboardList, roles: [ROLES.USER] },

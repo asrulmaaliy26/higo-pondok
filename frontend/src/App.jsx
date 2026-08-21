@@ -19,6 +19,7 @@ import DashboardLayout from './components/layout/mobile/DashboardLayout';
 import Dashboard from './pages/mobile/Dashboard';
 import UserManagement from './pages/mobile/UserManagement';
 import Pertokoan from './pages/mobile/Pertokoan';
+import AdminPesanan from './pages/mobile/AdminPesanan';
 import AdminLogs from './pages/mobile/AdminLogs';
 import BukuPanduan from './pages/mobile/BukuPanduan';
 import TokoSaya from './pages/mobile/TokoSaya';
@@ -92,6 +93,10 @@ function PertokoanPage() {
 
 function AdminLogsPage() {
   return <RoleGuard allowedRoles={[ROLES.ADMIN]}><AdminLogs /></RoleGuard>;
+}
+
+function AdminPesananPage() {
+  return <RoleGuard allowedRoles={[ROLES.ADMIN]}><AdminPesanan /></RoleGuard>;
 }
 
 function BukuPanduanPage() {
@@ -238,6 +243,12 @@ const adminLogsRoute = createRoute({
   component: AdminLogsPage,
 });
 
+const adminPesananRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: '/admin/pesanan',
+  component: AdminPesananPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -249,6 +260,7 @@ const routeTree = rootRoute.addChildren([
     dashboardIndexRoute, 
     userManagementRoute,
     pertokoanRoute,
+    adminPesananRoute,
     adminLogsRoute,
     panduanRoute,
     tokoSayaRoute,

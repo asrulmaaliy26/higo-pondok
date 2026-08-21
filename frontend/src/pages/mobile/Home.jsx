@@ -66,7 +66,7 @@ export default function Home() {
             Platform terpadu untuk digitalisasi sistem pondok pesantren. Kelola santri, administrasi keuangan, kantin, dan transportasi dalam satu aplikasi cerdas.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
-            <Link to={token ? "/dashboard" : "/register"} className="inline-flex items-center justify-center px-8 py-3.5 border border-transparent text-base font-medium rounded-full text-white bg-green-600 hover:bg-green-700 shadow-lg shadow-green-500/30 transition-all hover:-translate-y-1">
+            <Link to={token ? "/dashboard" : "/login"} className="inline-flex items-center justify-center px-8 py-3.5 border border-transparent text-base font-medium rounded-full text-white bg-green-600 hover:bg-green-700 shadow-lg shadow-green-500/30 transition-all hover:-translate-y-1">
               {token ? "Ke Dashboard" : "Mulai Sekarang"}
               <ChevronRight className="ml-2 -mr-1 w-5 h-5" />
             </Link>

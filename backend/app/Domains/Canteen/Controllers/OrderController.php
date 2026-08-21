@@ -849,7 +849,7 @@ class OrderController extends Controller
 
         $period = $request->get('period', 'day'); // day, week, month
         
-        $query = Order::where('status', '!=', 'cancelled')
+        $query = Order::whereIn('status', ['processing', 'completed'])
             ->with(['user', 'items.product', 'canteen']);
 
         if ($canteenId && $canteenId !== 'all') {

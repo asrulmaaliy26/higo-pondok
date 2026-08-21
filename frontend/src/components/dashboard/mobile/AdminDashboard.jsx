@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Wallet, TrendingUp, AlertCircle, ArrowRight } from 'lucide-react';
+import { Users, Wallet, TrendingUp, AlertCircle, ArrowRight, ClipboardList, Store, Shield } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../lib/axios';
 import { Link } from '@tanstack/react-router';
@@ -14,10 +14,10 @@ export default function AdminDashboard({ user }) {
   });
 
   const stats = [
-    { title: 'Total Santri Aktif', value: adminStats?.total_santri || 0, change: '', icon: Users, color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-900/50' },
-    { title: 'Tagihan Belum Dibayar', value: `Rp ${(adminStats?.total_admin_debt || 0).toLocaleString('id-ID')}`, change: '', icon: Wallet, color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-900/50' },
-    { title: 'Transaksi Kantin', value: adminStats?.total_transactions || 0, change: '', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-900/50' },
-    { title: 'Menunggu Persetujuan', value: adminStats?.pending_approvals || 0, change: '', icon: AlertCircle, color: 'text-amber-600', bg: 'bg-amber-100 dark:bg-amber-900/50' },
+    { title: 'Total Santri Aktif', value: adminStats?.total_santri || 0, href: '/dashboard/users', icon: Users, color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-900/50' },
+    { title: 'Tagihan Belum Dibayar', value: `Rp ${(adminStats?.total_admin_debt || 0).toLocaleString('id-ID')}`, href: '/dashboard/pertokoan', icon: Wallet, color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-900/50' },
+    { title: 'Transaksi Kantin', value: adminStats?.total_transactions || 0, href: '/dashboard/admin/pesanan', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-900/50' },
+    { title: 'Menunggu Persetujuan', value: adminStats?.pending_approvals || 0, href: '/dashboard/pertokoan', icon: AlertCircle, color: 'text-amber-600', bg: 'bg-amber-100 dark:bg-amber-900/50' },
   ];
 
   return (
@@ -31,9 +31,58 @@ export default function AdminDashboard({ user }) {
           <p className="text-green-100 max-w-xl text-sm sm:text-base">Ringkasan aktivitas pondok pesantren hari ini. Anda memiliki beberapa laporan baru yang perlu ditinjau.</p>
         </div>
       </div>
+
+      {/* Akses Cepat Admin */}
+      <div className="glass-card rounded-2xl p-5 sm:p-6">
+        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">
+          Akses Cepat Menu Admin
+        </h3>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <Link
+            to="/dashboard/admin/pesanan"
+            className="flex flex-col items-center text-center justify-center p-4 rounded-xl bg-green-50 hover:bg-green-100 dark:bg-green-950/40 dark:hover:bg-green-900/50 transition-all border border-green-200/60 dark:border-green-800/40 shadow-xs hover:-translate-y-0.5"
+          >
+            <ClipboardList className="w-7 h-7 text-green-600 dark:text-green-400 mb-1.5" />
+            <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">Rekap & Pesanan</span>
+            <span className="text-[10px] text-gray-500 dark:text-gray-400 hidden sm:block mt-0.5">Semua Transaksi Toko</span>
+          </Link>
+
+          <Link
+            to="/dashboard/pertokoan"
+            className="flex flex-col items-center text-center justify-center p-4 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 transition-all border border-blue-200/60 dark:border-blue-800/40 shadow-xs hover:-translate-y-0.5"
+          >
+            <Store className="w-7 h-7 text-blue-600 dark:text-blue-400 mb-1.5" />
+            <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">Manajemen Toko</span>
+            <span className="text-[10px] text-gray-500 dark:text-gray-400 hidden sm:block mt-0.5">Kantin & Biaya Ongkir</span>
+          </Link>
+
+          <Link
+            to="/dashboard/users"
+            className="flex flex-col items-center text-center justify-center p-4 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 transition-all border border-purple-200/60 dark:border-purple-800/40 shadow-xs hover:-translate-y-0.5"
+          >
+            <Users className="w-7 h-7 text-purple-600 dark:text-purple-400 mb-1.5" />
+            <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">Manajemen User</span>
+            <span className="text-[10px] text-gray-500 dark:text-gray-400 hidden sm:block mt-0.5">Santri, Kantin & Kurir</span>
+          </Link>
+
+          <Link
+            to="/dashboard/admin-logs"
+            className="flex flex-col items-center text-center justify-center p-4 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 transition-all border border-amber-200/60 dark:border-amber-800/40 shadow-xs hover:-translate-y-0.5"
+          >
+            <Shield className="w-7 h-7 text-amber-600 dark:text-amber-400 mb-1.5" />
+            <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">Log Aktivitas</span>
+            <span className="text-[10px] text-gray-500 dark:text-gray-400 hidden sm:block mt-0.5">Riwayat Audit Sistem</span>
+          </Link>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat, idx) => (
-          <div key={idx} className="glass-card rounded-2xl p-4 sm:p-6 transition-transform hover:-translate-y-1">
+          <Link
+            key={idx}
+            to={stat.href}
+            className="glass-card rounded-2xl p-4 sm:p-6 transition-all hover:-translate-y-1 hover:shadow-md block"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">{stat.title}</p>
@@ -41,7 +90,7 @@ export default function AdminDashboard({ user }) {
               </div>
               <div className={`p-2 sm:p-3 rounded-xl ${stat.bg}`}><stat.icon className={`w-5 h-5 sm:w-6 sm:h-6 ${stat.color}`} /></div>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">

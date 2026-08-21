@@ -23,23 +23,20 @@ class AdminController extends Controller
 
     public function updateFees(Request $request, $id)
     {
-        $request->validate([
-            'delivery_rates' => 'required|array',
-            'admin_fee' => 'required|numeric|min:0',
-        ]);
-        
         $canteen = Canteen::findOrFail($id);
         
-        // Fallback for old clients
-        $fallback_fee = isset($request->delivery_rates['Lainnya']) ? $request->delivery_rates['Lainnya'] : 0;
-        
+        $category = $request->input('category', $canteen->category ?? 'kauman');
+        $defaultDelivery = ($category === 'kota') ? 3500 : 2000;
+        $defaultAdmin = ($category === 'kota') ? 1500 : 1000;
+
         $canteen->update([
-            'delivery_fee' => $fallback_fee,
-            'delivery_rates' => $request->delivery_rates,
-            'admin_fee' => $request->admin_fee,
+            'category' => $category,
+            'delivery_fee' => $request->input('delivery_fee', $defaultDelivery),
+            'admin_fee' => $request->input('admin_fee', $defaultAdmin),
+            'delivery_rates' => $request->input('delivery_rates', $canteen->delivery_rates),
         ]);
         
-        return response()->json(['message' => 'Biaya berhasil diperbarui', 'canteen' => $canteen]);
+        return response()->json(['message' => 'Zona lokasi & tarif toko berhasil diperbarui', 'canteen' => $canteen]);
     }
 
     public function updateHours(Request $request, $id)

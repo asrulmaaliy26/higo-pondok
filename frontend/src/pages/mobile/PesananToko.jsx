@@ -305,8 +305,8 @@ export default function PesananToko() {
     let customOrderTotal = 0;
     let customOrderCount = 0;
     
-    // Hanya hitung pesanan yang sedang aktif (pending / processing)
-    const validOrders = orders?.filter(o => o.status === 'pending' || o.status === 'processing') || [];
+    // Hanya hitung pesanan yang sudah dilanjutkan (processing / completed)
+    const validOrders = orders?.filter(o => o.status === 'processing' || o.status === 'completed') || [];
     
     validOrders.forEach(order => {
       if (order.is_custom) {

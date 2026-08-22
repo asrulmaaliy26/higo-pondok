@@ -4,17 +4,113 @@ import {
   Package, Camera, CheckCircle, Upload, X, MessageCircle, Trash2, 
   FileText, Image as ImageIcon, Search, Store, User, MapPin, 
   ChevronDown, ChevronRight, Layers, Clock, Truck, RefreshCw, 
-  Phone, CheckSquare, AlertCircle, ShoppingBag
+  Phone, CheckSquare, AlertCircle, ShoppingBag, Filter, Calendar
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
 import { useAuthStore } from '../../store/authStore';
+
+function getWeeksInMonth(year, month) {
+  const weeks = [];
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  
+  let currentWeek = [];
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const date = new Date(year, month, d);
+    currentWeek.push(date);
+    
+    if (date.getDay() === 0 || d === lastDay.getDate()) {
+      weeks.push([...currentWeek]);
+      currentWeek = [];
+    }
+  }
+  
+  return weeks.map((week, index) => {
+    return {
+      name: `Minggu ${index + 1} (${week[0].getDate()}-${week[week.length - 1].getDate()})`,
+      startDate: week[0],
+      endDate: week[week.length - 1]
+    };
+  });
+}
+
+const formatRupiah = (val) => {
+  const num = Math.round(Number(val) || 0);
+  return num.toLocaleString('id-ID');
+};
 
 export default function TugasKurir() {
   const queryClient = useQueryClient();
   const currentUser = useAuthStore(state => state.user);
   const fileInputRef = useRef(null);
   
+  // Period & Filter States
+  const today = new Date();
+  const [filterMode, setFilterMode] = useState('day'); // 'day', 'week', 'month', 'year', 'all'
+  const [filterDate, setFilterDate] = useState(
+    `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`
+  );
+  const [filterMonth, setFilterMonth] = useState(today.getMonth());
+  const [filterYear, setFilterYear] = useState(today.getFullYear());
+  const [filterWeekIndex, setFilterWeekIndex] = useState(() => {
+    const weeks = getWeeksInMonth(today.getFullYear(), today.getMonth());
+    const idx = weeks.findIndex(w => today >= w.startDate && today <= w.endDate);
+    return idx >= 0 ? idx : 0;
+  });
+
+  const getFilterParams = () => {
+    if (filterMode === 'all') {
+      return { start_date: '', end_date: '', period: 'all' };
+    }
+    const pad = n => n.toString().padStart(2, '0');
+    const format = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  
+    if (filterMode === 'day') {
+      return { start_date: filterDate, end_date: filterDate, period: 'day' };
+    } 
+    else if (filterMode === 'week') {
+      const weeks = getWeeksInMonth(filterYear, filterMonth);
+      const week = weeks[filterWeekIndex] || weeks[0];
+      return { start_date: format(week.startDate), end_date: format(week.endDate), period: 'week' };
+    }
+    else if (filterMode === 'month') {
+      const start = new Date(filterYear, filterMonth, 1);
+      const end = new Date(filterYear, filterMonth + 1, 0);
+      return { start_date: format(start), end_date: format(end), period: 'month' };
+    }
+    else if (filterMode === 'year') {
+      const start = new Date(filterYear, 0, 1);
+      const end = new Date(filterYear, 11, 31);
+      return { start_date: format(start), end_date: format(end), period: 'year' };
+    }
+    return { start_date: '', end_date: '', period: 'all' };
+  };
+
+  const getFilterLabel = () => {
+    if (filterMode === 'all') return 'Semua Waktu';
+    if (filterMode === 'day') {
+      const d = new Date(filterDate);
+      return isNaN(d) ? filterDate : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+    if (filterMode === 'week') {
+      const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      const weeks = getWeeksInMonth(filterYear, filterMonth);
+      const weekName = weeks[filterWeekIndex]?.name || `Minggu ${filterWeekIndex + 1}`;
+      return `${weekName} - ${months[filterMonth]} ${filterYear}`;
+    }
+    if (filterMode === 'month') {
+      const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      return `${months[filterMonth]} ${filterYear}`;
+    }
+    if (filterMode === 'year') {
+      return `Tahun ${filterYear}`;
+    }
+    return '';
+  };
+
+  const currentParams = getFilterParams();
+
   // View & Filter States
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'grouped'
   const [statusTab, setStatusTab] = useState('all'); // 'all' | 'my_tasks' | 'pending' | 'processing' | 'completed'
@@ -32,9 +128,11 @@ export default function TugasKurir() {
 
   // Fetch all orders for courier
   const { data: rawOrders, isLoading, isRefetching, refetch } = useQuery({
-    queryKey: ['courier_orders'],
+    queryKey: ['courier_orders', currentParams.start_date, currentParams.end_date, currentParams.period],
     queryFn: async () => {
-      const res = await api.get('/courier/orders');
+      const dateParams = currentParams.start_date ? `start_date=${currentParams.start_date}&end_date=${currentParams.end_date}&` : '';
+      const periodParam = currentParams.period ? `period=${currentParams.period}` : '';
+      const res = await api.get(`/courier/orders?${dateParams}${periodParam}`);
       return res.data?.data || res.data || [];
     },
     refetchInterval: 6000 // auto refresh every 6s
@@ -271,8 +369,9 @@ export default function TugasKurir() {
         };
       }
 
+      const courierOrderTotal = Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.admin_fee || 0));
       map[key].orders.push(order);
-      map[key].totalCost += parseFloat(order.total_price || 0);
+      map[key].totalCost += courierOrderTotal;
       map[key].totalDeliveryFee += parseFloat(order.delivery_fee || 0);
 
       if (order.status === 'pending') {
@@ -297,6 +396,7 @@ export default function TugasKurir() {
           });
         });
       } else if (order.is_custom || order.custom_notes) {
+        const customProductPrice = Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0));
         map[key].totalItemCount += 1;
         map[key].allItems.push({
           id: `custom_${order.id}`,
@@ -304,8 +404,8 @@ export default function TugasKurir() {
           orderStatus: order.status,
           quantity: 1,
           product: { name: order.custom_notes || 'Pesanan Khusus' },
-          price: order.total_price,
-          subtotal: order.total_price,
+          price: customProductPrice,
+          subtotal: customProductPrice,
           notes: 'Pesanan Khusus',
           canteenName: order.canteen?.name || 'Kantin',
           canteenWhatsapp: order.canteen?.whatsapp_number
@@ -326,6 +426,35 @@ export default function TugasKurir() {
       completed: orders.filter(o => o.status === 'completed').length,
     };
   }, [orders, currentUser?.id]);
+
+  // Financial summary for filtered orders (without admin fee)
+  const filteredSummary = useMemo(() => {
+    let totalProducts = 0;
+    let totalDeliveryFee = 0;
+
+    filteredOrders.forEach(order => {
+      const deliveryFee = parseFloat(order.delivery_fee || 0);
+      const adminFee = parseFloat(order.admin_fee || 0);
+      totalDeliveryFee += deliveryFee;
+
+      if (order.items && order.items.length > 0) {
+        const itemSubtotal = order.items.reduce((s, i) => s + parseFloat(i.subtotal || (parseFloat(i.price || 0) * (i.quantity || 1))), 0);
+        totalProducts += itemSubtotal;
+      } else if (order.is_custom || order.custom_notes) {
+        const customProduct = Math.max(0, parseFloat(order.total_price || 0) - deliveryFee - adminFee);
+        totalProducts += customProduct;
+      }
+    });
+
+    const grandTotal = totalProducts + totalDeliveryFee;
+
+    return {
+      totalProducts,
+      totalDeliveryFee,
+      grandTotal,
+      totalOrders: filteredOrders.length
+    };
+  }, [filteredOrders]);
 
   if (isLoading) {
     return (
@@ -373,39 +502,184 @@ export default function TugasKurir() {
       </div>
 
       <div className="p-3 sm:p-5 max-w-7xl mx-auto space-y-4">
-        {/* SEARCH & CANTEEN FILTER */}
-        <div className="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-2.5">
-          <div className="relative">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input 
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari santri, wali, kamar, kantin, atau makanan..."
-              className="w-full pl-9 pr-8 py-2 bg-gray-50 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 rounded-xl text-xs sm:text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-600 transition-all"
-            />
-            {searchQuery && (
-              <button 
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
+        {/* UNIFIED FILTER CARD: PERIOD, CANTEEN, SEARCH */}
+        <div className="bg-white dark:bg-gray-900 p-3.5 sm:p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-3">
+          {/* Header & Active Period Badge */}
+          <div className="flex items-center justify-between flex-wrap gap-2 border-b border-gray-100 dark:border-gray-800 pb-2.5">
+            <h3 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+              <Filter className="w-4 h-4 text-green-600" />
+              Filter Periode & Toko
+            </h3>
+            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>📅 Periode: <strong>{getFilterLabel()}</strong></span>
+            </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Store className="w-4 h-4 text-gray-400 shrink-0" />
-            <select
-              value={selectedCanteenFilter}
-              onChange={(e) => setSelectedCanteenFilter(e.target.value)}
-              className="flex-1 py-1.5 px-2.5 bg-gray-50 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500/20"
-            >
-              <option value="all">Semua Kantin / Toko ({canteens.length} Toko)</option>
-              {canteens.map(c => (
-                <option key={c.id} value={c.id}>{c.name} ({c.category === 'kota' ? 'Kantin Luar/Kota' : 'Kantin Kauman'})</option>
-              ))}
-            </select>
+          {/* Mode Selector Buttons */}
+          <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+            {[
+              { id: 'day', label: 'Harian (Per Tanggal)' },
+              { id: 'week', label: 'Mingguan' },
+              { id: 'month', label: 'Bulanan' },
+              { id: 'year', label: 'Tahunan' },
+              { id: 'all', label: 'Semua Waktu' }
+            ].map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setFilterMode(m.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all shadow-xs ${
+                  filterMode === m.id
+                    ? 'bg-green-600 text-white shadow-xs ring-2 ring-green-600/20'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Dynamic Grid Inputs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-0.5">
+            {/* 1. Date Inputs depending on filterMode */}
+            {filterMode === 'day' && (
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  PILIH TANGGAL:
+                </label>
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                />
+              </div>
+            )}
+
+            {filterMode === 'week' && (
+              <>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                    PILIH BULAN:
+                  </label>
+                  <select
+                    value={filterMonth}
+                    onChange={(e) => {
+                      setFilterMonth(parseInt(e.target.value));
+                      setFilterWeekIndex(0);
+                    }}
+                    className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  >
+                    {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
+                      (m, i) => (
+                        <option key={i} value={i}>
+                          {m}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                    PILIH RENTANG MINGGU:
+                  </label>
+                  <select
+                    value={filterWeekIndex}
+                    onChange={(e) => setFilterWeekIndex(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  >
+                    {getWeeksInMonth(filterYear, filterMonth).map((w, i) => (
+                      <option key={i} value={i}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
+            {filterMode === 'month' && (
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  PILIH BULAN:
+                </label>
+                <select
+                  value={filterMonth}
+                  onChange={(e) => setFilterMonth(parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                >
+                  {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
+                    (m, i) => (
+                      <option key={i} value={i}>
+                        {m}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+            )}
+
+            {(filterMode === 'week' || filterMode === 'month' || filterMode === 'year') && (
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  PILIH TAHUN:
+                </label>
+                <select
+                  value={filterYear}
+                  onChange={(e) => setFilterYear(parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                >
+                  {[2024, 2025, 2026, 2027].map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* 2. Canteen Filter */}
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                PILIH KANTIN / TOKO:
+              </label>
+              <select
+                value={selectedCanteenFilter}
+                onChange={(e) => setSelectedCanteenFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 dark:border-gray-700 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+              >
+                <option value="all">🏪 Semua Kantin ({canteens.length} Toko)</option>
+                {canteens.map(c => (
+                  <option key={c.id} value={c.id}>🏪 {c.name} ({c.category === 'kota' ? 'Luar/Kota' : 'Kauman'})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 3. Search Bar */}
+            <div className={(filterMode === 'week' || filterMode === 'month' || filterMode === 'year' || filterMode === 'day') ? 'sm:col-span-2 lg:col-span-2' : 'sm:col-span-2 lg:col-span-3'}>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                PENCARIAN CEPAT:
+              </label>
+              <div className="relative">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input 
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cari santri, wali, kamar, kantin, atau makanan..."
+                  className="w-full pl-9 pr-8 py-2 bg-gray-50 dark:bg-gray-800 dark:border-gray-700 border border-gray-200 rounded-xl text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-600 transition-all font-medium"
+                />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -437,30 +711,57 @@ export default function TugasKurir() {
             </button>
           </div>
 
-          {/* Status Filter Horizontal Tabs */}
-          <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar pt-1">
-            {[
-              { id: 'all', label: 'Semua', count: tabCounts.all },
-              { id: 'my_tasks', label: 'Tugas Saya', count: tabCounts.my_tasks },
-              { id: 'pending', label: 'Menunggu', count: tabCounts.pending },
-              { id: 'processing', label: 'Sedang Diantar', count: tabCounts.processing },
-              { id: 'completed', label: 'Selesai', count: tabCounts.completed },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setStatusTab(tab.id)}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                  statusTab === tab.id
-                    ? 'bg-green-600 text-white shadow-xs'
-                    : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-100 dark:border-gray-800'
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${statusTab === tab.id ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}>
-                  {tab.count}
+          {/* Status Filter Horizontal Tabs + Totals in Line */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 pt-1">
+            {/* Horizontal Filter Tabs */}
+            <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar shrink-0">
+              {[
+                { id: 'all', label: 'Semua', count: tabCounts.all },
+                { id: 'my_tasks', label: 'Tugas Saya', count: tabCounts.my_tasks },
+                { id: 'pending', label: 'Menunggu', count: tabCounts.pending },
+                { id: 'processing', label: 'Sedang Diantar', count: tabCounts.processing },
+                { id: 'completed', label: 'Selesai', count: tabCounts.completed },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setStatusTab(tab.id)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                    statusTab === tab.id
+                      ? 'bg-green-600 text-white shadow-xs'
+                      : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-100 dark:border-gray-800'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${statusTab === tab.id ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Total Uang Produk & Total Ongkir (Dipaling Kanan Sejajar Filter) */}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs shadow-xs">
+                <span className="text-gray-500 dark:text-gray-400 font-medium">Uang Produk:</span>
+                <span className="font-extrabold text-gray-900 dark:text-white">
+                  Rp {formatRupiah(filteredSummary.totalProducts)}
                 </span>
-              </button>
-            ))}
+              </div>
+
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-xl text-xs shadow-xs">
+                <span className="text-blue-700 dark:text-blue-300 font-medium">Total Ongkir:</span>
+                <span className="font-extrabold text-blue-700 dark:text-blue-300">
+                  Rp {formatRupiah(filteredSummary.totalDeliveryFee)}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50/80 dark:bg-green-950/40 border border-green-200 dark:border-green-800/60 rounded-xl text-xs shadow-xs">
+                <span className="text-green-700 dark:text-green-300 font-medium">Total:</span>
+                <span className="font-extrabold text-green-700 dark:text-green-400">
+                  Rp {formatRupiah(filteredSummary.grandTotal)}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -624,7 +925,7 @@ export default function TugasKurir() {
                                     {item.product?.name || 'Produk'}
                                   </p>
                                   <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                                    @ Rp {parseFloat(item.price || 0).toLocaleString('id-ID')}
+                                    @ Rp {formatRupiah(item.price || 0)}
                                   </p>
                                   {item.notes && (
                                     <p className="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md mt-1 font-medium inline-block border border-amber-200/60 dark:border-amber-800/40">
@@ -634,7 +935,7 @@ export default function TugasKurir() {
                                 </div>
                               </div>
                               <span className="text-xs font-bold text-gray-900 dark:text-white shrink-0">
-                                Rp {parseFloat(item.subtotal || 0).toLocaleString('id-ID')}
+                                Rp {formatRupiah(item.subtotal || 0)}
                               </span>
                             </div>
                           ))}
@@ -646,18 +947,26 @@ export default function TugasKurir() {
                         <div className="p-2.5 bg-amber-50/80 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-800 text-xs">
                           <p className="font-bold text-amber-900 dark:text-amber-300 mb-0.5">📝 Rincian Pesanan Khusus:</p>
                           <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{order.custom_notes}</p>
+                          {order.is_custom && parseFloat(order.total_price) > 0 && (
+                            <div className="mt-2 pt-1.5 border-t border-amber-200/60 dark:border-amber-800/60 flex justify-between font-semibold">
+                              <span>Harga Produk Titipan:</span>
+                              <span className="font-bold text-gray-900 dark:text-white">
+                                Rp {formatRupiah(Math.max(0, parseFloat(order.total_price) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
 
                       {/* Financial Breakdown */}
                       <div className="pt-2 border-t border-green-100/80 dark:border-gray-700/80 flex items-center justify-between text-xs flex-wrap gap-2">
                         <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400 text-[11px]">
-                          <span>Ongkir: <strong className="text-gray-700 dark:text-gray-200">Rp {parseFloat(order.delivery_fee || 0).toLocaleString('id-ID')}</strong></span>
+                          <span>Ongkir: <strong className="text-gray-700 dark:text-gray-200">Rp {formatRupiah(order.delivery_fee || 0)}</strong></span>
                         </div>
                         <div className="text-right ml-auto">
                           <span className="text-[11px] text-gray-500 mr-1">Total Tagihan:</span>
                           <span className="text-sm font-extrabold text-green-700 dark:text-green-400">
-                            Rp {parseFloat(order.total_price || 0).toLocaleString('id-ID')}
+                            Rp {formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.admin_fee || 0)))}
                           </span>
                         </div>
                       </div>
@@ -888,7 +1197,7 @@ export default function TugasKurir() {
                                   </div>
                                 </div>
                                 <span className="text-xs font-bold text-gray-900 dark:text-white">
-                                  Rp {parseFloat(item.subtotal || item.price || 0).toLocaleString('id-ID')}
+                                  Rp {formatRupiah(item.subtotal || item.price || 0)}
                                 </span>
                               </div>
                             ))}
@@ -897,7 +1206,7 @@ export default function TugasKurir() {
                           <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs font-bold">
                             <span className="text-gray-600 dark:text-gray-400">Total Keseluruhan:</span>
                             <span className="text-green-600 dark:text-green-400 text-sm">
-                              Rp {santri.totalCost.toLocaleString('id-ID')}
+                              Rp {formatRupiah(santri.totalCost)}
                             </span>
                           </div>
                         </div>
@@ -913,7 +1222,7 @@ export default function TugasKurir() {
                                 <span className="font-bold text-gray-900 dark:text-white">Pesanan #{o.id}</span>
                                 <span className="text-gray-400 text-[11px] ml-1.5">({o.canteen?.name})</span>
                                 <div className="text-[10px] text-gray-500">
-                                  Status: <strong className="capitalize">{o.status}</strong> • Total: Rp {parseFloat(o.total_price).toLocaleString('id-ID')}
+                                  Status: <strong className="capitalize">{o.status}</strong> • Total: Rp {formatRupiah(Math.max(0, parseFloat(o.total_price || 0) - parseFloat(o.admin_fee || 0)))}
                                 </div>
                               </div>
                               <div className="flex items-center gap-1.5">

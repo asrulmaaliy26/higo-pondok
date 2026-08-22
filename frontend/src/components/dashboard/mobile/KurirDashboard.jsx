@@ -157,7 +157,7 @@ export default function KurirDashboard({ user }) {
                 </div>
                 <div className="text-right shrink-0">
                   <span className="text-xs font-bold text-green-600 dark:text-green-400 block">
-                    Rp {parseFloat(order.total_price || 0).toLocaleString('id-ID')}
+                    Rp {Math.round(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.admin_fee || 0))).toLocaleString('id-ID')}
                   </span>
                   <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded-full ${
                     order.status === 'pending' ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'

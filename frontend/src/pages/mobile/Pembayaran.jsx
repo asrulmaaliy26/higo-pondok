@@ -116,8 +116,11 @@ export default function Pembayaran() {
   };
 
   const buildOrderWAText = (order) => {
-    const subtotal = order.items?.reduce((sum, item) => sum + parseFloat(item.subtotal), 0) || 0;
-    const ongkir = parseFloat(order.total_price) - subtotal;
+    const subtotal = order.is_custom 
+      ? Math.max(0, parseFloat(order.total_price) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0))
+      : (order.items?.reduce((sum, item) => sum + parseFloat(item.subtotal), 0) || 0);
+    const ongkir = parseFloat(order.delivery_fee || 0);
+    const admin = parseFloat(order.admin_fee || 0);
 
     let text = `Assalamu'alaikum Warahmatullahi Wabarakatuh, ${order.canteen?.name || 'Kantin'}.\n`;
     text += `Saya ingin mengonfirmasi pesanan saya:\n`;
@@ -127,13 +130,18 @@ export default function Pembayaran() {
     text += `📚 Kelas/Jenjang: ${user?.santri_class || '-'} / ${user?.santri_level || '-'}\n`;
     if (order.delivery_location) text += `🏠 Lokasi: ${order.delivery_location}\n`;
     text += `\n*Rincian Pesanan*:\n`;
-    order.items?.forEach(item => {
-      text += `🔸 ${item.quantity}x ${item.product?.name} @ Rp ${parseFloat(item.price_per_item || (parseFloat(item.subtotal)/item.quantity)).toLocaleString('id-ID')}\n`;
-    });
+    if (order.is_custom) {
+      text += `🔸 1x Pesanan Khusus (${order.custom_notes || 'Titipan'})\n`;
+    } else {
+      order.items?.forEach(item => {
+        text += `🔸 ${item.quantity}x ${item.product?.name} @ Rp ${Math.round(parseFloat(item.price_per_item || (parseFloat(item.subtotal)/item.quantity))).toLocaleString('id-ID')}\n`;
+      });
+    }
     text += `\n*Ringkasan Biaya*:`;
-    text += `\n- Subtotal: Rp ${subtotal.toLocaleString('id-ID')}`;
-    if (ongkir > 0) text += `\n- Ongkos Kirim: Rp ${ongkir.toLocaleString('id-ID')}`;
-    text += `\n\n*Total Tagihan: Rp ${parseFloat(order.total_price).toLocaleString('id-ID')}*\n\n`;
+    text += `\n- Subtotal: Rp ${Math.round(subtotal).toLocaleString('id-ID')}`;
+    if (ongkir > 0) text += `\n- Ongkos Kirim: Rp ${Math.round(ongkir).toLocaleString('id-ID')}`;
+    if (admin > 0) text += `\n- Biaya Admin: Rp ${Math.round(admin).toLocaleString('id-ID')}`;
+    text += `\n\n*Total Tagihan: Rp ${Math.round(parseFloat(order.total_price)).toLocaleString('id-ID')}*\n\n`;
     text += `Mohon segera diproses ya, Syukron Jazakumullah Khairan. 🙏`;
     return text;
   };
@@ -226,6 +234,20 @@ export default function Pembayaran() {
                   </div>
                 )}
 
+                {order.is_custom && parseFloat(order.total_price) > 0 && (
+                  <div className="text-sm p-2 -mx-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors">
+                    <div className="flex justify-between items-center">
+                      <span className="text-purple-700 dark:text-purple-300 flex items-center gap-2">
+                        <span className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 font-bold px-1.5 py-0.5 rounded text-xs">1x</span>
+                        <span className="font-medium">Pesanan Khusus / Titip Beli</span>
+                      </span>
+                      <span className="font-bold text-gray-900 dark:text-white">
+                        Rp {Math.round(Math.max(0, parseFloat(order.total_price) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0))).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {order.items?.map(item => (
                   <div key={item.id} className="text-sm p-2 -mx-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors">
                     <div className="flex justify-between items-center cursor-pointer" onClick={() => setSelectedProduct(item.product)}>
@@ -234,7 +256,7 @@ export default function Pembayaran() {
                         <span className="font-medium">{item.product?.name}</span>
                       </span>
                       <span className="font-medium text-gray-900 dark:text-white">
-                        Rp {parseFloat(item.subtotal).toLocaleString('id-ID')}
+                        Rp {Math.round(parseFloat(item.subtotal)).toLocaleString('id-ID')}
                       </span>
                     </div>
                     {item.notes && (
@@ -374,33 +396,37 @@ export default function Pembayaran() {
                 {expandedOrders[order.id] && (
                   <div className="space-y-1 mb-3 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-100 dark:border-gray-800/80">
                     <div className="flex justify-between">
-                      <span>Subtotal Makanan</span>
+                      <span>Subtotal {order.is_custom ? 'Pesanan Khusus' : 'Makanan'}</span>
                       <span>
                         Rp {
-                          (order.items?.reduce((sum, item) => sum + parseFloat(item.subtotal), 0) || 0).toLocaleString('id-ID')
+                          (() => {
+                            const sub = order.is_custom
+                              ? Math.max(0, parseFloat(order.total_price) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0))
+                              : (order.items?.reduce((sum, item) => sum + parseFloat(item.subtotal), 0) || 0);
+                            return Math.round(sub).toLocaleString('id-ID');
+                          })()
                         }
                       </span>
                     </div>
-                    {(() => {
-                      const fees = parseFloat(order.total_price) - (order.items?.reduce((sum, item) => sum + parseFloat(item.subtotal), 0) || 0);
-                      return (
-                        <>
-                          {fees > 0 && (
-                            <div className="flex justify-between">
-                              <span>Ongkir & Biaya Admin</span>
-                              <span>Rp {fees.toLocaleString('id-ID')}</span>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
+                    {parseFloat(order.delivery_fee) > 0 && (
+                      <div className="flex justify-between">
+                        <span>Ongkos Kirim</span>
+                        <span>Rp {Math.round(parseFloat(order.delivery_fee)).toLocaleString('id-ID')}</span>
+                      </div>
+                    )}
+                    {parseFloat(order.admin_fee) > 0 && (
+                      <div className="flex justify-between">
+                        <span>Biaya Layanan & Admin</span>
+                        <span>Rp {Math.round(parseFloat(order.admin_fee)).toLocaleString('id-ID')}</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 <div className="flex justify-between items-center mb-3">
                   <p className="text-sm text-gray-500 dark:text-gray-400">Total Belanja</p>
                   <p className="font-bold text-green-600 dark:text-green-400 text-lg">
-                    Rp {parseFloat(order.total_price).toLocaleString('id-ID')}
+                    Rp {Math.round(parseFloat(order.total_price)).toLocaleString('id-ID')}
                   </p>
                 </div>
 

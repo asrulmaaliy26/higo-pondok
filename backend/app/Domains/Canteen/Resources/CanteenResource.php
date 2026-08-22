@@ -22,7 +22,7 @@ class CanteenResource extends JsonResource
             
             foreach ($completedOrders as $order) {
                 // Product income is the sum of all item subtotals for this order
-                $itemsTotal = $order->items->sum('subtotal');
+                $itemsTotal = ($order->items && $order->items->count() > 0) ? $order->items->sum('subtotal') : (float) $order->total_price;
                 $product_income += $itemsTotal;
                 
                 // If it was delivered by the canteen itself (no courier_id)

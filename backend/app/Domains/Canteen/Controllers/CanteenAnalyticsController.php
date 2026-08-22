@@ -117,7 +117,7 @@ class CanteenAnalyticsController extends Controller
         $totalIncome = 0;
 
         foreach ($orders as $order) {
-            $itemsTotal = $order->items->sum('subtotal');
+            $itemsTotal = ($order->items && $order->items->count() > 0) ? $order->items->sum('subtotal') : (float) $order->total_price;
             $totalIncome += $itemsTotal;
             
             // Jika tidak ada kurir (diantar sendiri / ambil di tempat), ongkir masuk ke pendapatan kantin

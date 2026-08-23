@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios, { getStorageUrl } from '../../lib/axios';
 import { Store, CheckCircle, XCircle, ChevronLeft, Save, MapPin } from 'lucide-react';
@@ -170,8 +171,8 @@ export default function Pertokoan() {
     </div>
 
     {/* MODAL DETAIL KANTIN */}
-      {selectedCanteen && (
-        <div className="fixed inset-0 z-[60] bg-white dark:bg-gray-950 flex flex-col animate-in slide-in-from-bottom-full duration-300">
+      {selectedCanteen && createPortal(
+        <div className="fixed inset-0 z-[100] bg-white dark:bg-gray-950 flex flex-col animate-in slide-in-from-bottom-full duration-300">
           <div className="sticky top-0 z-20 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-100 dark:border-gray-800 px-4 py-3 flex items-center gap-3">
             <button 
               onClick={() => setSelectedCanteen(null)}
@@ -383,7 +384,7 @@ export default function Pertokoan() {
                 <button
                   type="submit"
                   disabled={updateHoursMutation.isPending}
-                  className="w-full mt-2 bg-orange-600 hover:bg-orange-700 text-white p-3 rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full mt-2 bg-green-600 hover:bg-green-700 text-white p-3 rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   <Save size={18} />
                   <span>{updateHoursMutation.isPending ? 'Menyimpan...' : 'Simpan Jam Operasional'}</span>
@@ -391,12 +392,68 @@ export default function Pertokoan() {
               </form>
             </div>
 
-            {/* Fund Withdrawal (Pencairan Dana) Section */}
+            {/* Rekening Pembayaran Section */}
+            <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
+              <h3 className="font-bold text-gray-900 dark:text-white mb-3">Rekening Pembayaran Toko</h3>
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  updateBankMutation.mutate({
+                    id: selectedCanteen.id,
+                    bank_name: bankName,
+                    bank_account_number: bankAccountNumber,
+                    bank_account_holder: bankAccountHolder
+                  });
+                }}
+                className="space-y-3"
+              >
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Nama Bank / E-Wallet</label>
+                  <input
+                    type="text"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    className="w-full rounded-xl border-gray-200 dark:border-gray-700 dark:bg-gray-800 shadow-sm focus:border-green-500 focus:ring-green-500 text-gray-900 dark:text-white text-sm"
+                    placeholder="Contoh: BCA / Mandiri / GoPay / DANA"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Nomor Rekening / No. HP</label>
+                  <input
+                    type="text"
+                    value={bankAccountNumber}
+                    onChange={(e) => setBankAccountNumber(e.target.value)}
+                    className="w-full rounded-xl border-gray-200 dark:border-gray-700 dark:bg-gray-800 shadow-sm focus:border-green-500 focus:ring-green-500 text-gray-900 dark:text-white text-sm"
+                    placeholder="Contoh: 1234567890"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Atas Nama (Pemilik Rekening)</label>
+                  <input
+                    type="text"
+                    value={bankAccountHolder}
+                    onChange={(e) => setBankAccountHolder(e.target.value)}
+                    className="w-full rounded-xl border-gray-200 dark:border-gray-700 dark:bg-gray-800 shadow-sm focus:border-green-500 focus:ring-green-500 text-gray-900 dark:text-white text-sm"
+                    placeholder="Contoh: Budi Santoso"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={updateBankMutation.isPending}
+                  className="w-full mt-2 bg-green-600 hover:bg-green-700 text-white p-2.5 rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+                >
+                  <Save size={16} />
+                  {updateBankMutation.isPending ? 'Menyimpan...' : 'Simpan Rekening'}
+                </button>
+              </form>
+            </div>
+
+            {/* Tarik Saldo Section */}
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800/50">
-              <h3 className="font-bold text-blue-900 dark:text-blue-400 mb-2">Pencairan Dana Kantin</h3>
-              <div className="mb-4">
-                <p className="text-sm text-blue-800 dark:text-blue-300">Total Saldo (Bisa Dicairkan):</p>
-                <p className="text-2xl font-black text-blue-700 dark:text-blue-500">
+              <h3 className="font-bold text-blue-900 dark:text-blue-400 mb-2">Pencairan Dana (Withdrawal)</h3>
+              <div className="mb-3">
+                <span className="text-xs text-blue-700 dark:text-blue-300">Saldo Toko Saat Ini:</span>
+                <p className="text-xl font-bold text-blue-900 dark:text-blue-200">
                   Rp {parseFloat(selectedCanteen.balance || 0).toLocaleString('id-ID')}
                 </p>
               </div>
@@ -447,7 +504,8 @@ export default function Pertokoan() {
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

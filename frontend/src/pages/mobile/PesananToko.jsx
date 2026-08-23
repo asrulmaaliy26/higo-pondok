@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ChevronLeft, ShoppingBag, CheckCircle, Clock, Truck, MessageCircle, X, Image as ImageIcon, ChevronDown, ChevronRight, Store, Upload, Trash2, RotateCcw, FileText, Filter, Search } from 'lucide-react';
@@ -33,6 +34,20 @@ function getWeeksInMonth(year, month) {
       endDate: week[week.length - 1]
     };
   });
+}
+
+function getCurrentWeekIndex(year, month) {
+  const weeks = getWeeksInMonth(year, month);
+  const now = new Date();
+  const todayDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  const idx = weeks.findIndex(w => {
+    const start = new Date(w.startDate.getFullYear(), w.startDate.getMonth(), w.startDate.getDate()).getTime();
+    const end = new Date(w.endDate.getFullYear(), w.endDate.getMonth(), w.endDate.getDate()).getTime();
+    return todayDateOnly >= start && todayDateOnly <= end;
+  });
+
+  return idx >= 0 ? idx : 0;
 }
 
 const formatRupiah = (num) => {
@@ -126,9 +141,7 @@ export default function PesananToko() {
   const [filterMonth, setFilterMonth] = useState(today.getMonth());
   const [filterYear, setFilterYear] = useState(today.getFullYear());
   const [filterWeekIndex, setFilterWeekIndex] = useState(() => {
-    const weeks = getWeeksInMonth(today.getFullYear(), today.getMonth());
-    const idx = weeks.findIndex(w => today >= w.startDate && today <= w.endDate);
-    return idx >= 0 ? idx : 0;
+    return getCurrentWeekIndex(today.getFullYear(), today.getMonth());
   });
 
   const [selectedCanteenFilter, setSelectedCanteenFilter] = useState('all');
@@ -147,7 +160,8 @@ export default function PesananToko() {
     } 
     else if (filterMode === 'week') {
       const weeks = getWeeksInMonth(filterYear, filterMonth);
-      const week = weeks[filterWeekIndex] || weeks[0];
+      const safeIndex = filterWeekIndex < weeks.length ? filterWeekIndex : 0;
+      const week = weeks[safeIndex] || weeks[0];
       return { start_date: format(week.startDate), end_date: format(week.endDate), period: 'week' };
     }
     else if (filterMode === 'month') {
@@ -172,7 +186,8 @@ export default function PesananToko() {
     if (filterMode === 'week') {
       const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
       const weeks = getWeeksInMonth(filterYear, filterMonth);
-      const weekName = weeks[filterWeekIndex]?.name || `Minggu ${filterWeekIndex + 1}`;
+      const safeIndex = filterWeekIndex < weeks.length ? filterWeekIndex : 0;
+      const weekName = (weeks[safeIndex] || weeks[0])?.name || `Minggu ${safeIndex + 1}`;
       return `${weekName} - ${months[filterMonth]} ${filterYear}`;
     }
     if (filterMode === 'month') {
@@ -861,7 +876,12 @@ export default function PesananToko() {
             ].map((m) => (
               <button
                 key={m.id}
-                onClick={() => setFilterMode(m.id)}
+                onClick={() => {
+                  setFilterMode(m.id);
+                  if (m.id === 'week') {
+                    setFilterWeekIndex(getCurrentWeekIndex(filterYear, filterMonth));
+                  }
+                }}
                 className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all shadow-xs ${
                   filterMode === m.id
                     ? 'bg-green-600 text-white shadow-sm ring-2 ring-green-600/20'
@@ -921,8 +941,9 @@ export default function PesananToko() {
                   <select
                     value={filterMonth}
                     onChange={(e) => {
-                      setFilterMonth(parseInt(e.target.value));
-                      setFilterWeekIndex(0);
+                      const newMonth = parseInt(e.target.value);
+                      setFilterMonth(newMonth);
+                      setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
                     }}
                     className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                   >
@@ -941,7 +962,7 @@ export default function PesananToko() {
                     PILIH RENTANG MINGGU:
                   </label>
                   <select
-                    value={filterWeekIndex}
+                    value={filterWeekIndex < getWeeksInMonth(filterYear, filterMonth).length ? filterWeekIndex : 0}
                     onChange={(e) => setFilterWeekIndex(parseInt(e.target.value))}
                     className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                   >
@@ -963,7 +984,11 @@ export default function PesananToko() {
                 </label>
                 <select
                   value={filterMonth}
-                  onChange={(e) => setFilterMonth(parseInt(e.target.value))}
+                  onChange={(e) => {
+                    const newMonth = parseInt(e.target.value);
+                    setFilterMonth(newMonth);
+                    setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
+                  }}
                   className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                 >
                   {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
@@ -985,10 +1010,14 @@ export default function PesananToko() {
                 </label>
                 <select
                   value={filterYear}
-                  onChange={(e) => setFilterYear(parseInt(e.target.value))}
+                  onChange={(e) => {
+                    const newYear = parseInt(e.target.value);
+                    setFilterYear(newYear);
+                    setFilterWeekIndex(getCurrentWeekIndex(newYear, filterMonth));
+                  }}
                   className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                 >
-                  {[2024, 2025, 2026, 2027].map((y) => (
+                  {[2024, 2025, 2026, 2027, 2028].map((y) => (
                     <option key={y} value={y}>
                       {y}
                     </option>
@@ -996,7 +1025,6 @@ export default function PesananToko() {
                 </select>
               </div>
             )}
-
             {/* Status Filter */}
             <div>
               <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
@@ -1267,8 +1295,8 @@ export default function PesananToko() {
       </div>
 
       {/* COURIER SELECTION MODAL */}
-      {showCourierModal && activeOrderForCourier && (
-        <div className="fixed inset-0 z-[60] bg-white dark:bg-gray-950 flex flex-col animate-in slide-in-from-bottom-full duration-300">
+      {showCourierModal && activeOrderForCourier && createPortal(
+        <div className="fixed inset-0 z-[100] bg-white dark:bg-gray-950 flex flex-col animate-in slide-in-from-bottom-full duration-300">
           <div className="bg-white dark:bg-gray-900 sticky top-0 z-20 shadow-sm px-4 py-3 flex items-center gap-3">
             <button 
               onClick={() => {
@@ -1389,12 +1417,13 @@ export default function PesananToko() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* PROOF OF DELIVERY MODAL */}
-      {showProofModal && activeOrderForProof && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex flex-col justify-end animate-in fade-in duration-200">
+      {showProofModal && activeOrderForProof && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/60 flex flex-col justify-end animate-in fade-in duration-200">
           <div className="bg-white dark:bg-gray-900 w-full rounded-t-3xl overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-8 duration-300">
             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
               <div>
@@ -1476,13 +1505,14 @@ export default function PesananToko() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
 
       {/* UPLOAD RECEIPT / BUKTI PESANAN MODAL */}
-      {showReceiptModal && activeOrderForReceipt && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex flex-col justify-end animate-in fade-in duration-200">
+      {showReceiptModal && activeOrderForReceipt && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/60 flex flex-col justify-end animate-in fade-in duration-200">
           <div className="bg-white dark:bg-gray-900 w-full rounded-t-3xl overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-8 duration-300">
             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
               <div>
@@ -1581,13 +1611,14 @@ export default function PesananToko() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MANUAL ORDER MODAL */}
-      {showManualModal && (
-        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl">
+      {showManualModal && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl my-auto">
             <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Buat Pesanan Manual</h3>
               <button onClick={() => setShowManualModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
@@ -1693,13 +1724,14 @@ export default function PesananToko() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* SET CUSTOM ORDER PRICE MODAL */}
-      {showSetPriceModal && activeOrderForSetPrice && (
-        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl">
+      {showSetPriceModal && activeOrderForSetPrice && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl my-auto">
             <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Tentukan Harga Pesanan</h3>
               <button onClick={() => setShowSetPriceModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
@@ -1784,12 +1816,13 @@ export default function PesananToko() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* PROOF OF DELIVERY / PAYMENT FULL-SCREEN MODAL */}
-      {selectedProofs.length > 0 && (
-        <div className="fixed inset-0 z-[70] bg-black flex flex-col animate-in fade-in duration-200">
+      {selectedProofs.length > 0 && createPortal(
+        <div className="fixed inset-0 z-[110] bg-black flex flex-col animate-in fade-in duration-200">
           {/* Header */}
           <div className="flex justify-between items-center px-4 py-3 bg-black/80 shrink-0">
             <span className="text-white font-bold text-sm">{selectedProofs.length} Foto</span>
@@ -1828,13 +1861,14 @@ export default function PesananToko() {
               </div>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Recap Modal */}
-      {showRecapModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-xl border border-gray-100 dark:border-gray-800 flex flex-col max-h-[80vh]">
+      {showRecapModal && createPortal(
+        <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-800 flex flex-col max-h-[85vh] my-auto">
             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
               <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <ShoppingBag className="w-5 h-5 text-green-600" />
@@ -1903,7 +1937,8 @@ export default function PesananToko() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

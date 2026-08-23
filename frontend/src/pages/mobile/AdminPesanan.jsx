@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
@@ -50,6 +51,20 @@ function getWeeksInMonth(year, month) {
   }));
 }
 
+function getCurrentWeekIndex(year, month) {
+  const weeks = getWeeksInMonth(year, month);
+  const now = new Date();
+  const todayDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  const idx = weeks.findIndex(w => {
+    const start = new Date(w.startDate.getFullYear(), w.startDate.getMonth(), w.startDate.getDate()).getTime();
+    const end = new Date(w.endDate.getFullYear(), w.endDate.getMonth(), w.endDate.getDate()).getTime();
+    return todayDateOnly >= start && todayDateOnly <= end;
+  });
+
+  return idx >= 0 ? idx : 0;
+}
+
 export default function AdminPesanan() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -65,9 +80,7 @@ export default function AdminPesanan() {
   const [filterMonth, setFilterMonth] = useState(today.getMonth());
   const [filterYear, setFilterYear] = useState(today.getFullYear());
   const [filterWeekIndex, setFilterWeekIndex] = useState(() => {
-    const weeks = getWeeksInMonth(today.getFullYear(), today.getMonth());
-    const idx = weeks.findIndex(w => today >= w.startDate && today <= w.endDate);
-    return idx >= 0 ? idx : 0;
+    return getCurrentWeekIndex(today.getFullYear(), today.getMonth());
   });
 
   const [selectedCanteenFilter, setSelectedCanteenFilter] = useState('all');
@@ -101,7 +114,8 @@ export default function AdminPesanan() {
       return { start_date: filterDate, end_date: filterDate, period: 'day' };
     } else if (filterMode === 'week') {
       const weeks = getWeeksInMonth(filterYear, filterMonth);
-      const week = weeks[filterWeekIndex] || weeks[0];
+      const safeIndex = filterWeekIndex < weeks.length ? filterWeekIndex : 0;
+      const week = weeks[safeIndex] || weeks[0];
       return { start_date: format(week.startDate), end_date: format(week.endDate), period: 'week' };
     } else if (filterMode === 'month') {
       const start = new Date(filterYear, filterMonth, 1);
@@ -181,7 +195,8 @@ export default function AdminPesanan() {
     if (filterMode === 'week') {
       const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
       const weeks = getWeeksInMonth(filterYear, filterMonth);
-      const weekName = weeks[filterWeekIndex]?.name || `Minggu ${filterWeekIndex + 1}`;
+      const safeIndex = filterWeekIndex < weeks.length ? filterWeekIndex : 0;
+      const weekName = (weeks[safeIndex] || weeks[0])?.name || `Minggu ${safeIndex + 1}`;
       return `${weekName} - ${months[filterMonth]} ${filterYear}`;
     }
     if (filterMode === 'month') {
@@ -256,7 +271,12 @@ export default function AdminPesanan() {
           ].map((m) => (
             <button
               key={m.id}
-              onClick={() => setFilterMode(m.id)}
+              onClick={() => {
+                setFilterMode(m.id);
+                if (m.id === 'week') {
+                  setFilterWeekIndex(getCurrentWeekIndex(filterYear, filterMonth));
+                }
+              }}
               className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all shadow-xs ${
                 filterMode === m.id
                   ? 'bg-green-600 text-white shadow-sm ring-2 ring-green-600/20'
@@ -316,8 +336,9 @@ export default function AdminPesanan() {
                 <select
                   value={filterMonth}
                   onChange={(e) => {
-                    setFilterMonth(parseInt(e.target.value));
-                    setFilterWeekIndex(0);
+                    const newMonth = parseInt(e.target.value);
+                    setFilterMonth(newMonth);
+                    setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
                   }}
                   className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                 >
@@ -336,7 +357,7 @@ export default function AdminPesanan() {
                   Pilih Rentang Minggu:
                 </label>
                 <select
-                  value={filterWeekIndex}
+                  value={filterWeekIndex < getWeeksInMonth(filterYear, filterMonth).length ? filterWeekIndex : 0}
                   onChange={(e) => setFilterWeekIndex(parseInt(e.target.value))}
                   className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                 >
@@ -358,7 +379,11 @@ export default function AdminPesanan() {
               </label>
               <select
                 value={filterMonth}
-                onChange={(e) => setFilterMonth(parseInt(e.target.value))}
+                onChange={(e) => {
+                  const newMonth = parseInt(e.target.value);
+                  setFilterMonth(newMonth);
+                  setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
+                }}
                 className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
               >
                 {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
@@ -380,10 +405,14 @@ export default function AdminPesanan() {
               </label>
               <select
                 value={filterYear}
-                onChange={(e) => setFilterYear(parseInt(e.target.value))}
+                onChange={(e) => {
+                  const newYear = parseInt(e.target.value);
+                  setFilterYear(newYear);
+                  setFilterWeekIndex(getCurrentWeekIndex(newYear, filterMonth));
+                }}
                 className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
               >
-                {[2024, 2025, 2026, 2027].map((y) => (
+                {[2024, 2025, 2026, 2027, 2028].map((y) => (
                   <option key={y} value={y}>
                     {y}
                   </option>
@@ -869,9 +898,9 @@ export default function AdminPesanan() {
       )}
 
       {/* MODAL KONFIRMASI HAPUS PESANAN */}
-      {orderToDelete && (
-        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-100 dark:border-gray-800 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+      {orderToDelete && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-100 dark:border-gray-800 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
             <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>
@@ -920,12 +949,13 @@ export default function AdminPesanan() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL VIEWER GAMBAR / BUKTI */}
-      {selectedProofs.length > 0 && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xs flex flex-col animate-in fade-in duration-200">
+      {selectedProofs.length > 0 && createPortal(
+        <div className="fixed inset-0 z-[110] bg-black/90 backdrop-blur-xs flex flex-col animate-in fade-in duration-200">
           <div className="flex justify-between items-center px-4 py-3 bg-black/50 shrink-0">
             <span className="text-white font-bold text-xs">{selectedProofs.length} Berkas Bukti</span>
             <button
@@ -947,7 +977,8 @@ export default function AdminPesanan() {
               </div>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

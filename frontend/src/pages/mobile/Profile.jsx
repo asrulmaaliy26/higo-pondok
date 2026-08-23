@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, Edit2, ShieldCheck, PlusCircle, CreditCard, Users, Bookmark, Activity, Ticket, Shield, LogOut, ChevronRight, Store, Camera, Save, X, Plus, BookOpen } from 'lucide-react';
 import { ROLES, getUserRole } from '../../config/roles';
@@ -375,9 +376,9 @@ export default function Profile() {
         </div>
 
       {/* Modal Daftar Toko (Multi-Store) */}
-      {userRole === ROLES.KANTIN && showStoreListModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+      {userRole === ROLES.KANTIN && showStoreListModal && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] my-auto">
             <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Kelola Toko Saya</h3>
               <button onClick={() => setShowStoreListModal(false)} className="text-gray-400 hover:text-gray-500">
@@ -440,13 +441,14 @@ export default function Profile() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Tambah Toko Baru */}
-      {showAddStoreModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+      {showAddStoreModal && createPortal(
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col my-auto">
             <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-2">
                 <button onClick={() => {
@@ -476,13 +478,14 @@ export default function Profile() {
               </button>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Edit Kantin */}
-      {userRole === ROLES.KANTIN && showEditStoreModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+      {userRole === ROLES.KANTIN && showEditStoreModal && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] my-auto">
             <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-2">
                 <button onClick={() => {
@@ -593,13 +596,14 @@ export default function Profile() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Edit User Modal */}
-      {showEditUserModal && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-gray-900 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+      {showEditUserModal && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 w-full sm:max-w-md rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] my-auto">
             <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Edit Profil Pribadi</h3>
               <button onClick={() => setShowEditUserModal(false)} className="text-gray-400 hover:text-gray-500">
@@ -664,13 +668,14 @@ export default function Profile() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Keluarga Santri */}
-      {showKeluargaModal && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-gray-900 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+      {showKeluargaModal && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 w-full sm:max-w-md rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] my-auto">
             <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Keluarga Santri</h3>
               <button onClick={() => setShowKeluargaModal(false)} className="text-gray-400 hover:text-gray-500">
@@ -802,12 +807,13 @@ export default function Profile() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* Modal Alur Kerja */}
-      {showWorkflowModal && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col">
+      {showWorkflowModal && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col my-auto">
             <div className="flex justify-between items-center px-5 py-4 border-b border-gray-100 dark:border-gray-800">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Alur Kerja Saya</h3>
               <button onClick={() => setShowWorkflowModal(false)} className="text-gray-400 hover:text-gray-600">
@@ -944,7 +950,8 @@ export default function Profile() {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

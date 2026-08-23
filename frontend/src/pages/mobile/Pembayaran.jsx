@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ShoppingBag, ChevronLeft, CheckCircle, Clock, Store, MessageCircle, Image as ImageIcon, X, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -476,8 +477,8 @@ export default function Pembayaran() {
       </div>
 
       {/* PRODUCT DETAIL FULL-SCREEN MODAL */}
-      {selectedProduct && (
-        <div className="fixed inset-0 z-[60] bg-white dark:bg-gray-950 flex flex-col animate-in slide-in-from-bottom-full duration-300">
+      {selectedProduct && createPortal(
+        <div className="fixed inset-0 z-[100] bg-white dark:bg-gray-950 flex flex-col animate-in slide-in-from-bottom-full duration-300">
           {/* Header & Image */}
           <div className="relative h-64 sm:h-80 bg-gray-100 dark:bg-gray-900 shrink-0">
             {selectedProduct.image ? (
@@ -536,12 +537,13 @@ export default function Pembayaran() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* PROOF OF DELIVERY / PAYMENT FULL-SCREEN MODAL */}
-      {selectedProofs.length > 0 && (
-        <div className="fixed inset-0 z-[70] bg-black flex flex-col animate-in fade-in duration-200">
+      {selectedProofs.length > 0 && createPortal(
+        <div className="fixed inset-0 z-[110] bg-black flex flex-col animate-in fade-in duration-200">
           {/* Header */}
           <div className="flex justify-between items-center px-4 py-3 bg-black/80 shrink-0">
             <span className="text-white font-bold text-sm">{selectedProofs.length} Foto</span>
@@ -580,12 +582,13 @@ export default function Pembayaran() {
               </div>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* UPLOAD PAYMENT PROOF MODAL */}
-      {showPaymentProofModal && activeOrderForPaymentProof && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex flex-col justify-end animate-in fade-in duration-200">
+      {showPaymentProofModal && activeOrderForPaymentProof && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/60 flex flex-col justify-end animate-in fade-in duration-200">
           <div className="bg-white dark:bg-gray-900 w-full rounded-t-3xl overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-8 duration-300">
             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
               <div>
@@ -676,7 +679,8 @@ export default function Pembayaran() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

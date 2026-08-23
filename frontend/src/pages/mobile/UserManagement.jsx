@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, Plus, MoreVertical, Edit2, Trash2, Filter, Shield, User, Coffee, Bus, LogIn, X, AlertTriangle } from 'lucide-react';
 import { ROLES } from '../../config/roles';
 import { useAuthStore } from '../../store/authStore';
@@ -301,9 +302,9 @@ export default function UserManagement() {
       </div>
 
       {/* Modal CRUD */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-xl animate-in zoom-in-95 duration-200">
+      {isModalOpen && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-xl animate-in zoom-in-95 duration-200 my-auto">
             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
               <h3 className="font-bold text-lg text-gray-900 dark:text-white">
                 {modalMode === 'add' ? 'Tambah User Baru' : 'Edit User'}
@@ -404,13 +405,14 @@ export default function UserManagement() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* SP (Penalty) Modal */}
-      {isSPModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm overflow-hidden shadow-xl animate-in zoom-in-95 duration-200">
+      {isSPModalOpen && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm overflow-hidden shadow-xl animate-in zoom-in-95 duration-200 my-auto">
             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-amber-50 dark:bg-amber-900/20">
               <h3 className="font-bold text-lg text-amber-900 dark:text-amber-400 flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5" /> Kelola SP Kurir
@@ -474,7 +476,8 @@ export default function UserManagement() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

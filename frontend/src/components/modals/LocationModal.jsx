@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 
 export const LocationModal = ({
   isOpen,
@@ -17,9 +18,9 @@ export const LocationModal = ({
 }) => {
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] my-auto">
         <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-800">
           <h3 className="text-xl font-bold text-gray-900 dark:text-white">Lokasi Pengiriman</h3>
           <p className="text-sm text-gray-500 mt-1">Pilih lokasi pengantaran pesanan Anda</p>
@@ -103,6 +104,7 @@ export const LocationModal = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

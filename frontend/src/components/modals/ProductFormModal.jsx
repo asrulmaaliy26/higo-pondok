@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Store } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getStorageUrl } from '../../lib/axios';
@@ -58,9 +59,9 @@ export const ProductFormModal = ({
     return 'Rp ' + parseInt(value, 10).toLocaleString('id-ID');
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-gray-900 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
+      <div className="bg-white dark:bg-gray-900 w-full sm:max-w-md rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] my-auto">
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white">
             {editingProduct ? 'Edit Menu' : 'Tambah Menu Baru'}
@@ -145,6 +146,7 @@ export const ProductFormModal = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from '@tanstack/react-router';
 import { ChevronLeft, MapPin, Store, Star, Clock, Info, X, Plus, Minus, Search, ShoppingCart } from 'lucide-react';
@@ -280,8 +281,8 @@ export default function DetailKantin() {
       )}
 
       {/* PRODUCT DETAIL FULL-SCREEN MODAL */}
-      {selectedProduct && (
-        <div className="fixed inset-0 z-[60] bg-white dark:bg-gray-950 flex flex-col animate-in slide-in-from-bottom-full duration-300">
+      {selectedProduct && createPortal(
+        <div className="fixed inset-0 z-[100] bg-white dark:bg-gray-950 flex flex-col animate-in slide-in-from-bottom-full duration-300">
           {/* Header & Image */}
           <div className="relative h-64 sm:h-80 bg-gray-100 dark:bg-gray-900 shrink-0">
             {selectedProduct.image ? (
@@ -309,7 +310,6 @@ export default function DetailKantin() {
                 <div className="flex items-center gap-2 mt-2">
                   <span className="text-sm text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md">{selectedProduct.category || 'Makanan'}</span>
                 </div>
-
               </div>
               
               <div className="flex items-center gap-2 mb-4 text-sm text-gray-500">
@@ -318,17 +318,28 @@ export default function DetailKantin() {
                 <span>Disukai oleh banyak santri</span>
               </div>
               
-              <div className="flex items-center mb-6">
-                  <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                    Rp {parseFloat(selectedProduct.price).toLocaleString('id-ID')}
-                  </span>
+              <div className="text-2xl font-bold text-green-600 mb-6">
+                Rp {selectedProduct.price?.toLocaleString()}
               </div>
               
-              <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
-                <h3 className="font-bold text-gray-900 dark:text-white mb-2">Deskripsi Produk</h3>
-                <p className="text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                  {selectedProduct.description || 'Tidak ada deskripsi detail untuk produk ini.'}
+              <div className="border-t border-gray-100 dark:border-gray-800 pt-4 mb-6">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Deskripsi Produk</h3>
+                <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-line">
+                  {selectedProduct.description || 'Tidak ada deskripsi untuk produk ini.'}
                 </p>
+              </div>
+              
+              <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Kantin Penyedia</h3>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-950 flex items-center justify-center text-green-600">
+                    <Store className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-white">{canteen.name}</div>
+                    <div className="text-xs text-gray-500">{canteen.location}</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -370,12 +381,14 @@ export default function DetailKantin() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+
       {/* CUSTOM ORDER MODAL */}
-      {showCustomModal && (
-        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl">
+      {showCustomModal && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl my-auto">
             <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Pesanan Khusus / Titip Beli</h3>
               <button onClick={() => setShowCustomModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
@@ -455,13 +468,14 @@ export default function DetailKantin() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       
       {/* Profil Belum Lengkap Modal */}
-      {showProfileAlert && (
-        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl p-6 text-center">
+      {showProfileAlert && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl p-6 text-center my-auto">
             <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-8 h-8 text-amber-600 dark:text-amber-500" />
             </div>
@@ -487,7 +501,8 @@ export default function DetailKantin() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

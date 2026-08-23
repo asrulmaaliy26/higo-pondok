@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Package, Camera, CheckCircle, Upload, X, MessageCircle, Trash2, 
@@ -35,6 +36,20 @@ function getWeeksInMonth(year, month) {
   });
 }
 
+function getCurrentWeekIndex(year, month) {
+  const weeks = getWeeksInMonth(year, month);
+  const now = new Date();
+  const todayDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  const idx = weeks.findIndex(w => {
+    const start = new Date(w.startDate.getFullYear(), w.startDate.getMonth(), w.startDate.getDate()).getTime();
+    const end = new Date(w.endDate.getFullYear(), w.endDate.getMonth(), w.endDate.getDate()).getTime();
+    return todayDateOnly >= start && todayDateOnly <= end;
+  });
+
+  return idx >= 0 ? idx : 0;
+}
+
 const formatRupiah = (val) => {
   const num = Math.round(Number(val) || 0);
   return num.toLocaleString('id-ID');
@@ -54,9 +69,7 @@ export default function TugasKurir() {
   const [filterMonth, setFilterMonth] = useState(today.getMonth());
   const [filterYear, setFilterYear] = useState(today.getFullYear());
   const [filterWeekIndex, setFilterWeekIndex] = useState(() => {
-    const weeks = getWeeksInMonth(today.getFullYear(), today.getMonth());
-    const idx = weeks.findIndex(w => today >= w.startDate && today <= w.endDate);
-    return idx >= 0 ? idx : 0;
+    return getCurrentWeekIndex(today.getFullYear(), today.getMonth());
   });
 
   const getFilterParams = () => {
@@ -71,7 +84,8 @@ export default function TugasKurir() {
     } 
     else if (filterMode === 'week') {
       const weeks = getWeeksInMonth(filterYear, filterMonth);
-      const week = weeks[filterWeekIndex] || weeks[0];
+      const safeIndex = filterWeekIndex < weeks.length ? filterWeekIndex : 0;
+      const week = weeks[safeIndex] || weeks[0];
       return { start_date: format(week.startDate), end_date: format(week.endDate), period: 'week' };
     }
     else if (filterMode === 'month') {
@@ -96,7 +110,8 @@ export default function TugasKurir() {
     if (filterMode === 'week') {
       const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
       const weeks = getWeeksInMonth(filterYear, filterMonth);
-      const weekName = weeks[filterWeekIndex]?.name || `Minggu ${filterWeekIndex + 1}`;
+      const safeIndex = filterWeekIndex < weeks.length ? filterWeekIndex : 0;
+      const weekName = (weeks[safeIndex] || weeks[0])?.name || `Minggu ${safeIndex + 1}`;
       return `${weekName} - ${months[filterMonth]} ${filterYear}`;
     }
     if (filterMode === 'month') {
@@ -527,7 +542,12 @@ export default function TugasKurir() {
             ].map((m) => (
               <button
                 key={m.id}
-                onClick={() => setFilterMode(m.id)}
+                onClick={() => {
+                  setFilterMode(m.id);
+                  if (m.id === 'week') {
+                    setFilterWeekIndex(getCurrentWeekIndex(filterYear, filterMonth));
+                  }
+                }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all shadow-xs ${
                   filterMode === m.id
                     ? 'bg-green-600 text-white shadow-xs ring-2 ring-green-600/20'
@@ -565,8 +585,9 @@ export default function TugasKurir() {
                   <select
                     value={filterMonth}
                     onChange={(e) => {
-                      setFilterMonth(parseInt(e.target.value));
-                      setFilterWeekIndex(0);
+                      const newMonth = parseInt(e.target.value);
+                      setFilterMonth(newMonth);
+                      setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
                     }}
                     className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                   >
@@ -585,7 +606,7 @@ export default function TugasKurir() {
                     PILIH RENTANG MINGGU:
                   </label>
                   <select
-                    value={filterWeekIndex}
+                    value={filterWeekIndex < getWeeksInMonth(filterYear, filterMonth).length ? filterWeekIndex : 0}
                     onChange={(e) => setFilterWeekIndex(parseInt(e.target.value))}
                     className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                   >
@@ -606,7 +627,11 @@ export default function TugasKurir() {
                 </label>
                 <select
                   value={filterMonth}
-                  onChange={(e) => setFilterMonth(parseInt(e.target.value))}
+                  onChange={(e) => {
+                    const newMonth = parseInt(e.target.value);
+                    setFilterMonth(newMonth);
+                    setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
+                  }}
                   className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                 >
                   {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
@@ -627,10 +652,14 @@ export default function TugasKurir() {
                 </label>
                 <select
                   value={filterYear}
-                  onChange={(e) => setFilterYear(parseInt(e.target.value))}
+                  onChange={(e) => {
+                    const newYear = parseInt(e.target.value);
+                    setFilterYear(newYear);
+                    setFilterWeekIndex(getCurrentWeekIndex(newYear, filterMonth));
+                  }}
                   className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                 >
-                  {[2024, 2025, 2026, 2027].map((y) => (
+                  {[2024, 2025, 2026, 2027, 2028].map((y) => (
                     <option key={y} value={y}>
                       {y}
                     </option>
@@ -1254,9 +1283,9 @@ export default function TugasKurir() {
       {/* ======================================================== */}
       {/* UPLOAD PROOF MODAL (RECEIPT / DELIVERY PROOF) */}
       {/* ======================================================== */}
-      {selectedOrder && (
-        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl">
+      {selectedOrder && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl my-auto">
             <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
                 Upload Foto Bukti #{selectedOrder.id}
@@ -1424,14 +1453,15 @@ export default function TugasKurir() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ======================================================== */}
       {/* FULL SCREEN PHOTO VIEWER MODAL */}
       {/* ======================================================== */}
-      {selectedProofs.length > 0 && (
-        <div className="fixed inset-0 z-[70] bg-black/95 flex flex-col animate-in fade-in duration-200">
+      {selectedProofs.length > 0 && createPortal(
+        <div className="fixed inset-0 z-[110] bg-black/95 flex flex-col animate-in fade-in duration-200">
           <div className="flex justify-between items-center px-4 py-3 bg-black/80 shrink-0 border-b border-gray-800">
             <span className="text-white font-bold text-sm">Foto Bukti Terunggah ({selectedProofs.length} Foto)</span>
             <button 
@@ -1455,15 +1485,16 @@ export default function TugasKurir() {
               </div>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ======================================================== */}
       {/* CONFIRMATION MODAL FOR COMPLETING ORDER */}
       {/* ======================================================== */}
-      {confirmCompleteOrder && (
-        <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl p-5 text-center space-y-3">
+      {confirmCompleteOrder && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl p-5 text-center space-y-3 my-auto">
             {!(confirmCompleteOrder.proof_of_purchase?.length > 0 || confirmCompleteOrder.proof_of_delivery?.length > 0) ? (
               <div className="w-14 h-14 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded-full flex items-center justify-center mx-auto">
                 <AlertCircle className="w-7 h-7" />
@@ -1506,7 +1537,8 @@ export default function TugasKurir() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

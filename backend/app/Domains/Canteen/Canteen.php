@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Domains\Auth\User;
 use App\Traits\LogsActivity;
 
+use Illuminate\Support\Facades\Cache;
+
 class Canteen extends Model
 {
     use HasFactory, LogsActivity, SoftDeletes;
@@ -51,15 +53,26 @@ class Canteen extends Model
         ];
     }
 
-    protected $appends = ['is_open'];
+    protected $appends = ['is_open', 'is_force_closed'];
+
+    public function getIsForceClosedAttribute(): bool
+    {
+        if (Cache::get('admin_global_canteen_force_closed', false)) {
+            return true;
+        }
+        return (bool) Cache::get('canteen_force_closed_' . $this->id, false);
+    }
 
     public function getIsOpenAttribute()
     {
         if ($this->status !== 'approved') return false;
+        if ($this->is_force_closed) return false;
         
         $now = now('Asia/Jakarta')->format('H:i:s');
         $open = $this->open_time ?? '09:00:00';
         $close = $this->close_time ?? '17:00:00';
+
+        if ($open === $close) return false;
 
         if ($open <= $close) {
             return $now >= $open && $now <= $close;
@@ -101,12 +114,16 @@ class Canteen extends Model
 
     public function scopeOpen($query)
     {
+        if (Cache::get('admin_global_canteen_force_closed', false)) {
+            return $query->whereRaw('1 = 0');
+        }
+
         $now = now('Asia/Jakarta')->format('H:i:s');
         
         return $query->where('status', 'approved')
             ->where(function($q) use ($now) {
                 $q->where(function($q1) use ($now) {
-                    $q1->whereRaw('open_time <= close_time')
+                    $q1->whereRaw('open_time < close_time')
                        ->whereTime('open_time', '<=', $now)
                        ->whereTime('close_time', '>=', $now);
                 })->orWhere(function($q2) use ($now) {

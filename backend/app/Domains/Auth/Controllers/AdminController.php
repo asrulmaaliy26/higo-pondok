@@ -4,10 +4,14 @@ namespace App\Domains\Auth\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use App\Domains\Canteen\Canteen;
 use App\Domains\Delivery\Driver;
 use App\Domains\Auth\User;
 use App\Domains\Canteen\Order;
+use App\Domains\Canteen\Resources\CanteenResource;
+use App\Domains\Canteen\Requests\BulkUpdateHoursRequest;
+use App\Domains\Canteen\Requests\UpdateCanteenHoursRequest;
 
 class AdminController extends Controller
 {
@@ -18,7 +22,69 @@ class AdminController extends Controller
             $q->orderBy('created_at', 'desc');
         }])->orderBy('created_at', 'desc')->get();
         
-        return response()->json($canteens);
+        return CanteenResource::collection($canteens);
+    }
+
+    public function globalStatus()
+    {
+        $isGlobalForceClosed = (bool) Cache::get('admin_global_canteen_force_closed', false);
+        return response()->json([
+            'is_global_force_closed' => $isGlobalForceClosed,
+            'total_canteens' => Canteen::count(),
+            'approved_canteens' => Canteen::where('status', 'approved')->count(),
+        ]);
+    }
+
+    public function bulkClose(Request $request)
+    {
+        Cache::forever('admin_global_canteen_force_closed', true);
+
+        return response()->json([
+            'message' => 'Seluruh toko berhasil ditutup langsung.',
+            'is_global_force_closed' => true
+        ]);
+    }
+
+    public function bulkOpen(Request $request)
+    {
+        Cache::forget('admin_global_canteen_force_closed');
+
+        if ($request->input('reset_all', true)) {
+            $canteens = Canteen::where('status', 'approved')->get();
+            foreach ($canteens as $canteen) {
+                Cache::forget('canteen_force_closed_' . $canteen->id);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Seluruh toko berhasil dibuka kembali (mengikuti jadwal operasional masing-masing).',
+            'is_global_force_closed' => false
+        ]);
+    }
+
+    public function toggleDirectClose(Request $request, $id)
+    {
+        $canteen = Canteen::findOrFail($id);
+        $cacheKey = 'canteen_force_closed_' . $canteen->id;
+        $currentState = (bool) Cache::get($cacheKey, false);
+
+        $newState = $request->has('force_close') 
+            ? (bool) $request->input('force_close') 
+            : !$currentState;
+
+        if ($newState) {
+            Cache::forever($cacheKey, true);
+            $msg = "Toko {$canteen->name} berhasil ditutup langsung.";
+        } else {
+            Cache::forget($cacheKey);
+            $msg = "Toko {$canteen->name} berhasil dibuka (mengikuti jadwal operasional).";
+        }
+
+        return response()->json([
+            'message' => $msg,
+            'is_force_closed' => $newState,
+            'canteen' => new CanteenResource($canteen->fresh())
+        ]);
     }
 
     public function updateFees(Request $request, $id)
@@ -36,16 +102,11 @@ class AdminController extends Controller
             'delivery_rates' => $request->input('delivery_rates', $canteen->delivery_rates),
         ]);
         
-        return response()->json(['message' => 'Zona lokasi & tarif toko berhasil diperbarui', 'canteen' => $canteen]);
+        return response()->json(['message' => 'Zona lokasi & tarif toko berhasil diperbarui', 'canteen' => new CanteenResource($canteen)]);
     }
 
-    public function updateHours(Request $request, $id)
+    public function updateHours(UpdateCanteenHoursRequest $request, $id)
     {
-        $request->validate([
-            'open_time' => 'required|date_format:H:i',
-            'close_time' => 'required|date_format:H:i',
-        ]);
-        
         $canteen = Canteen::findOrFail($id);
         
         $canteen->update([
@@ -53,7 +114,44 @@ class AdminController extends Controller
             'close_time' => $request->close_time,
         ]);
         
-        return response()->json(['message' => 'Jam operasional berhasil diperbarui', 'canteen' => $canteen]);
+        return response()->json([
+            'message' => 'Jam operasional berhasil diperbarui', 
+            'canteen' => new CanteenResource($canteen->fresh())
+        ]);
+    }
+
+    public function bulkUpdateHours(BulkUpdateHoursRequest $request)
+    {
+        $query = Canteen::where('status', 'approved');
+
+        if ($request->filled('category') && $request->category !== 'all') {
+            $query->where('category', $request->category);
+        }
+
+        $count = $query->count();
+        $query->update([
+            'open_time' => $request->open_time,
+            'close_time' => $request->close_time,
+        ]);
+
+        if ($request->input('reopen_force_closed', false)) {
+            Cache::forget('admin_global_canteen_force_closed');
+            $affectedCanteens = $query->get();
+            foreach ($affectedCanteens as $c) {
+                Cache::forget('canteen_force_closed_' . $c->id);
+            }
+        }
+
+        $categoryLabel = match($request->category) {
+            'kauman' => 'Zona Kauman',
+            'kota' => 'Zona Kota',
+            default => 'Semua Toko'
+        };
+
+        return response()->json([
+            'message' => "Jam operasional {$categoryLabel} ({$count} toko) berhasil diatur ke {$request->open_time} - {$request->close_time}.",
+            'affected_count' => $count
+        ]);
     }
 
     public function dashboardStats()

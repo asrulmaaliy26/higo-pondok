@@ -26,6 +26,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/admin/users/{id}', [\App\Domains\Auth\Controllers\UserController::class, 'destroy']);
 
         Route::get('/admin/canteens', [AdminController::class, 'allCanteens']);
+        Route::get('/admin/canteens/status', [AdminController::class, 'globalStatus']);
+        Route::post('/admin/canteens/bulk-close', [AdminController::class, 'bulkClose']);
+        Route::post('/admin/canteens/bulk-open', [AdminController::class, 'bulkOpen']);
+        Route::match(['put', 'post'], '/admin/canteens/bulk-hours', [AdminController::class, 'bulkUpdateHours']);
+        Route::put('/admin/canteens/{id}/toggle-direct-close', [AdminController::class, 'toggleDirectClose']);
         Route::get('/admin/stats', [AdminController::class, 'dashboardStats']);
         Route::put('/admin/canteens/{id}/fees', [AdminController::class, 'updateFees']);
         Route::put('/admin/canteens/{id}/hours', [AdminController::class, 'updateHours']);

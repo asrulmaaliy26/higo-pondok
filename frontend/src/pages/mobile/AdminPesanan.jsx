@@ -94,13 +94,17 @@ export default function AdminPesanan() {
   const [selectedProofs, setSelectedProofs] = useState([]);
 
   // Fetch all canteens for dropdown filter
-  const { data: canteensList = [] } = useQuery({
+  const { data: rawCanteens = [] } = useQuery({
     queryKey: ['admin_all_canteens'],
     queryFn: async () => {
       const res = await api.get('/admin/canteens');
-      return res.data;
+      return res.data.data || res.data || [];
     }
   });
+
+  const canteensList = Array.isArray(rawCanteens)
+    ? rawCanteens
+    : (Array.isArray(rawCanteens?.data) ? rawCanteens.data : []);
 
   // Helper to compute start_date and end_date for API queries
   const getFilterParams = () => {
@@ -133,7 +137,7 @@ export default function AdminPesanan() {
 
   // Query Orders List
   const {
-    data: orders = [],
+    data: rawOrders = [],
     isLoading: isLoadingOrders,
     isFetching: isFetchingOrders,
     refetch: refetchOrders
@@ -155,9 +159,13 @@ export default function AdminPesanan() {
       if (searchQuery.trim()) params.append('search', searchQuery.trim());
 
       const res = await api.get(`/admin/orders?${params.toString()}`);
-      return res.data;
+      return res.data.data || res.data || [];
     }
   });
+
+  const orders = Array.isArray(rawOrders)
+    ? rawOrders
+    : (Array.isArray(rawOrders?.data) ? rawOrders.data : []);
 
   // Query Recap Data (Uses the exact same date & store filter)
   const {

@@ -61,13 +61,17 @@ export default function PesananToko() {
   const [selectedCouriers, setSelectedCouriers] = useState({});
 
   // Fetch all canteens owned by this user
-  const { data: canteensList } = useQuery({
+  const { data: rawCanteensList } = useQuery({
     queryKey: ['my_canteens_list'],
     queryFn: async () => {
       const res = await api.get('/my-canteens');
-      return res.data.data || res.data;
+      return res.data.data || res.data || [];
     }
   });
+
+  const canteensList = Array.isArray(rawCanteensList)
+    ? rawCanteensList
+    : (Array.isArray(rawCanteensList?.data) ? rawCanteensList.data : []);
 
 
   const [showCourierModal, setShowCourierModal] = useState(false);

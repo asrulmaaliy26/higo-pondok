@@ -35,13 +35,17 @@ export default function UserManagement() {
   const queryClient = useQueryClient();
 
   // Fetch users
-  const { data: users = [], isLoading } = useQuery({
+  const { data: rawUsers = [], isLoading } = useQuery({
     queryKey: ['admin_users'],
     queryFn: async () => {
       const res = await api.get('/admin/users');
-      return res.data;
+      return res.data.data || res.data || [];
     }
   });
+
+  const users = Array.isArray(rawUsers)
+    ? rawUsers
+    : (Array.isArray(rawUsers?.data) ? rawUsers.data : []);
 
   // Create User Mutation
   const createUserMutation = useMutation({

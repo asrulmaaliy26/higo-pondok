@@ -22,7 +22,9 @@ return new class extends Migration
 
         Schema::table('orders', function (Blueprint $table) {
             $table->json('proof_of_delivery')->nullable()->change();
-            $table->json('proof_of_payment')->nullable()->after('proof_of_delivery');
+            if (!Schema::hasColumn('orders', 'proof_of_payment')) {
+                $table->json('proof_of_payment')->nullable()->after('proof_of_delivery');
+            }
         });
     }
 
@@ -33,7 +35,9 @@ return new class extends Migration
     {
         Schema::table('orders', function (Blueprint $table) {
             $table->string('proof_of_delivery')->nullable()->change();
-            $table->dropColumn('proof_of_payment');
+            if (Schema::hasColumn('orders', 'proof_of_payment')) {
+                $table->dropColumn('proof_of_payment');
+            }
         });
     }
 };

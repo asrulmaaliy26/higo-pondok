@@ -225,12 +225,83 @@ class AdminOrderController extends Controller
     }
 
     /**
-     * Delete an order by Admin (with disk clean up & activity log)
+     * Move an order to Recycle Bin (Soft Delete)
      */
     public function destroy(Request $request, $id)
     {
         return DB::transaction(function () use ($request, $id) {
-            $order = Order::with('items')->findOrFail($id);
+            $order = Order::findOrFail($id);
+
+            $orderId = $order->id;
+            $canteenName = $order->canteen ? $order->canteen->name : "Kantin #{$order->canteen_id}";
+            $customerName = $order->user ? $order->user->name : "User #{$order->user_id}";
+            $totalAmount = number_format($order->total_price, 0, ',', '.');
+
+            // Soft delete order
+            $order->delete();
+
+            // Log activity
+            ActivityLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'trash_order',
+                'model_type' => Order::class,
+                'model_id' => $orderId,
+                'description' => "Admin {$request->user()->name} memindahkan pesanan #{$orderId} ({$canteenName} - {$customerName} Rp {$totalAmount}) ke Kotak Sampah",
+            ]);
+
+            return response()->json([
+                'message' => "Pesanan #{$orderId} berhasil dipindahkan ke Kotak Sampah.",
+            ]);
+        });
+    }
+
+    /**
+     * List all deleted orders in Recycle Bin
+     */
+    public function trash(Request $request)
+    {
+        $trashedOrders = Order::onlyTrashed()
+            ->with(['user', 'canteen', 'items.product', 'courier'])
+            ->latest('deleted_at')
+            ->get();
+
+        return response()->json($trashedOrders);
+    }
+
+    /**
+     * Restore an order from Recycle Bin
+     */
+    public function restore(Request $request, $id)
+    {
+        return DB::transaction(function () use ($request, $id) {
+            $order = Order::onlyTrashed()->with(['canteen', 'user'])->findOrFail($id);
+            $orderId = $order->id;
+            $canteenName = $order->canteen ? $order->canteen->name : "Kantin #{$order->canteen_id}";
+            $customerName = $order->user ? $order->user->name : "User #{$order->user_id}";
+
+            $order->restore();
+
+            ActivityLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'restore_order',
+                'model_type' => Order::class,
+                'model_id' => $orderId,
+                'description' => "Admin {$request->user()->name} memulihkan pesanan #{$orderId} ({$canteenName} - {$customerName}) dari Kotak Sampah",
+            ]);
+
+            return response()->json([
+                'message' => "Pesanan #{$orderId} berhasil dipulihkan.",
+            ]);
+        });
+    }
+
+    /**
+     * Permanently delete an order from Recycle Bin (Hard Delete with File Cleanup)
+     */
+    public function forceDelete(Request $request, $id)
+    {
+        return DB::transaction(function () use ($request, $id) {
+            $order = Order::onlyTrashed()->with(['items', 'canteen', 'user'])->findOrFail($id);
 
             // Delete proof files from public storage
             $deleteFiles = function ($field) {
@@ -253,20 +324,68 @@ class AdminOrderController extends Controller
             $customerName = $order->user ? $order->user->name : "User #{$order->user_id}";
             $totalAmount = number_format($order->total_price, 0, ',', '.');
 
-            // Delete order (and cascade delete order_items)
-            $order->delete();
+            // Force delete items & order
+            $order->items()->delete();
+            $order->forceDelete();
 
-            // Log activity
             ActivityLog::create([
                 'user_id' => $request->user()->id,
-                'action' => 'delete_order',
+                'action' => 'force_delete_order',
                 'model_type' => Order::class,
                 'model_id' => $orderId,
-                'description' => "Admin {$request->user()->name} menghapus pesanan #{$orderId} ({$canteenName} - {$customerName} Rp {$totalAmount})",
+                'description' => "Admin {$request->user()->name} menghapus permanen pesanan #{$orderId} ({$canteenName} - {$customerName} Rp {$totalAmount})",
             ]);
 
             return response()->json([
-                'message' => "Pesanan #{$orderId} berhasil dihapus beserta berkas bukti yang terkait.",
+                'message' => "Pesanan #{$orderId} berhasil dihapus permanen beserta berkas buktinya.",
+            ]);
+        });
+    }
+
+    /**
+     * Empty entire Recycle Bin (Permanently delete all trashed orders)
+     */
+    public function emptyTrash(Request $request)
+    {
+        return DB::transaction(function () use ($request) {
+            $trashedOrders = Order::onlyTrashed()->with('items')->get();
+            $count = $trashedOrders->count();
+
+            if ($count === 0) {
+                return response()->json([
+                    'message' => "Kotak sampah sudah kosong.",
+                ]);
+            }
+
+            $deleteFiles = function ($field) {
+                if (empty($field)) return;
+                $files = is_array($field) ? $field : [$field];
+                foreach ($files as $file) {
+                    if ($file && is_string($file)) {
+                        Storage::disk('public')->delete($file);
+                    }
+                }
+            };
+
+            foreach ($trashedOrders as $order) {
+                $deleteFiles($order->proof_of_delivery);
+                $deleteFiles($order->proof_of_purchase);
+                $deleteFiles($order->proof_of_payment);
+                $deleteFiles($order->proof_courier_paid);
+                $order->items()->delete();
+                $order->forceDelete();
+            }
+
+            ActivityLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'empty_trash_orders',
+                'model_type' => Order::class,
+                'model_id' => null,
+                'description' => "Admin {$request->user()->name} mengosongkan Kotak Sampah ({$count} pesanan dihapus permanen)",
+            ]);
+
+            return response()->json([
+                'message' => "Kotak sampah berhasil dikosongkan. {$count} pesanan telah dihapus permanen.",
             ]);
         });
     }

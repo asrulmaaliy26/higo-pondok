@@ -12,10 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->string('santri_name')->nullable()->after('password');
-            $table->string('santri_room')->nullable()->after('santri_name');
-            $table->string('santri_class')->nullable()->after('santri_room');
-            $table->string('santri_level')->nullable()->after('santri_class');
+            if (!Schema::hasColumn('users', 'santri_name')) $table->string('santri_name')->nullable()->after('password');
+            if (!Schema::hasColumn('users', 'santri_room')) $table->string('santri_room')->nullable()->after('santri_name');
+            if (!Schema::hasColumn('users', 'santri_class')) $table->string('santri_class')->nullable()->after('santri_room');
+            if (!Schema::hasColumn('users', 'santri_level')) $table->string('santri_level')->nullable()->after('santri_class');
         });
     }
 
@@ -25,7 +25,12 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn(['santri_name', 'santri_room', 'santri_class', 'santri_level']);
+            $cols = [];
+            if (Schema::hasColumn('users', 'santri_name')) $cols[] = 'santri_name';
+            if (Schema::hasColumn('users', 'santri_room')) $cols[] = 'santri_room';
+            if (Schema::hasColumn('users', 'santri_class')) $cols[] = 'santri_class';
+            if (Schema::hasColumn('users', 'santri_level')) $cols[] = 'santri_level';
+            if (!empty($cols)) $table->dropColumn($cols);
         });
     }
 };

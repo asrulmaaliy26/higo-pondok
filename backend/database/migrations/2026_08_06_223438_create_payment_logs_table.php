@@ -11,15 +11,19 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('payment_logs', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('order_id')->nullable()->constrained('orders')->nullOnDelete();
-            $table->decimal('amount', 12, 2)->default(0);
-            $table->string('type'); // e.g., order_payment, admin_fee, courier_fee, withdraw
-            $table->text('description')->nullable();
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('payment_logs')) {
+            Schema::create('payment_logs', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+                $table->foreignId('order_id')->nullable()->constrained('orders')->nullOnDelete();
+                $table->string('type'); // order_payment, refund, withdrawal, fee_deduction
+                $table->decimal('amount', 12, 2);
+                $table->string('status'); // success, pending, failed
+                $table->string('payment_method')->nullable();
+                $table->text('description')->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     /**

@@ -12,8 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->boolean('is_custom')->default(false)->after('canteen_id');
-            $table->text('custom_notes')->nullable()->after('is_custom');
+            if (!Schema::hasColumn('orders', 'is_custom')) $table->boolean('is_custom')->default(false)->after('canteen_id');
+            if (!Schema::hasColumn('orders', 'custom_notes')) $table->text('custom_notes')->nullable()->after('is_custom');
         });
     }
 
@@ -23,7 +23,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->dropColumn(['is_custom', 'custom_notes']);
+            $cols = [];
+            if (Schema::hasColumn('orders', 'is_custom')) $cols[] = 'is_custom';
+            if (Schema::hasColumn('orders', 'custom_notes')) $cols[] = 'custom_notes';
+            if (!empty($cols)) $table->dropColumn($cols);
         });
     }
 };

@@ -12,8 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            if (!Schema::hasColumn('orders', 'proof_of_purchase')) {
-                $table->json('proof_of_purchase')->nullable()->after('proof_of_delivery');
+            if (!Schema::hasColumn('orders', 'deleted_at')) {
+                $table->softDeletes()->after('updated_at');
             }
         });
     }
@@ -24,8 +24,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            if (Schema::hasColumn('orders', 'proof_of_purchase')) {
-                $table->dropColumn('proof_of_purchase');
+            if (Schema::hasColumn('orders', 'deleted_at')) {
+                $table->dropSoftDeletes();
             }
         });
     }

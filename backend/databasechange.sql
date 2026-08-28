@@ -18,3 +18,7 @@ MODIFY proof_of_delivery JSON NULL;
 -- 4. Tambahkan kolom JSON yang baru
 ALTER TABLE orders 
 ADD proof_of_payment JSON NULL AFTER proof_of_delivery;
+
+-- 5. Tambahkan kolom Soft Deletes (deleted_at) untuk fitur Kotak Sampah / Recycle Bin
+ALTER TABLE orders 
+ADD deleted_at TIMESTAMP NULL DEFAULT NULL AFTER updated_at;

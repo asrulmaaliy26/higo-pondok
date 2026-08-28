@@ -12,8 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->decimal('admin_fee', 12, 2)->default(0)->after('total_price');
-            $table->decimal('delivery_fee', 12, 2)->default(0)->after('admin_fee');
+            if (!Schema::hasColumn('orders', 'admin_fee')) $table->decimal('admin_fee', 12, 2)->default(0)->after('total_price');
+            if (!Schema::hasColumn('orders', 'delivery_fee')) $table->decimal('delivery_fee', 12, 2)->default(0)->after('admin_fee');
         });
     }
 
@@ -23,7 +23,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->dropColumn(['admin_fee', 'delivery_fee']);
+            $cols = [];
+            if (Schema::hasColumn('orders', 'admin_fee')) $cols[] = 'admin_fee';
+            if (Schema::hasColumn('orders', 'delivery_fee')) $cols[] = 'delivery_fee';
+            if (!empty($cols)) $table->dropColumn($cols);
         });
     }
 };

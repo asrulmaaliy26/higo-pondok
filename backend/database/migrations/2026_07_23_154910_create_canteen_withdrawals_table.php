@@ -11,14 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('canteen_withdrawals', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('canteen_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('admin_id')->constrained('users')->cascadeOnDelete();
-            $table->decimal('amount', 12, 2);
-            $table->string('notes')->nullable();
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('canteen_withdrawals')) {
+            Schema::create('canteen_withdrawals', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('canteen_id')->constrained()->cascadeOnDelete();
+                $table->foreignId('admin_id')->constrained('users')->cascadeOnDelete();
+                $table->decimal('amount', 12, 2);
+                $table->string('notes')->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     /**

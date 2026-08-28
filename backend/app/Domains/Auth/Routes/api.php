@@ -48,10 +48,14 @@ Route::middleware('auth:sanctum')->group(function () {
         // Impersonate Route
         Route::post('/admin/impersonate/{id}', [AdminController::class, 'impersonateUser']);
 
-        // Admin Orders & Recap
+        // Admin Orders & Recap & Recycle Bin
         Route::get('/admin/orders', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'index']);
         Route::get('/admin/orders/recap', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'recap']);
+        Route::get('/admin/orders/trash', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'trash']);
         Route::delete('/admin/orders/{id}', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'destroy']);
+        Route::post('/admin/orders/{id}/restore', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'restore']);
+        Route::delete('/admin/orders/{id}/force', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'forceDelete']);
+        Route::post('/admin/orders/trash/empty', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'emptyTrash']);
 
         // Logs
         Route::get('/admin/logs/activity', [AdminController::class, 'activityLogs']);

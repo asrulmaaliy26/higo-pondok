@@ -21,7 +21,10 @@ import {
   TrendingUp,
   CreditCard,
   User,
-  Filter
+  Filter,
+  RotateCcw,
+  ArchiveRestore,
+  AlertTriangle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
@@ -87,8 +90,12 @@ export default function AdminPesanan() {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Delete modal state
+  // Delete modal state (Soft Delete / Move to Trash)
   const [orderToDelete, setOrderToDelete] = useState(null);
+
+  // Recycle Bin Modal States (Permanent Delete & Empty Trash)
+  const [orderToForceDelete, setOrderToForceDelete] = useState(null);
+  const [showEmptyTrashModal, setShowEmptyTrashModal] = useState(false);
 
   // Proof viewer modal state
   const [selectedProofs, setSelectedProofs] = useState([]);
@@ -217,21 +224,88 @@ export default function AdminPesanan() {
     return '';
   };
 
-  // Mutation Delete Order
+  // Query Recycle Bin / Trashed Orders
+  const {
+    data: rawTrash = [],
+    isLoading: isLoadingTrash,
+    isFetching: isFetchingTrash,
+    refetch: refetchTrash
+  } = useQuery({
+    queryKey: ['admin_orders_trash'],
+    queryFn: async () => {
+      const res = await api.get('/admin/orders/trash');
+      return res.data || [];
+    }
+  });
+
+  const trashedOrders = Array.isArray(rawTrash) ? rawTrash : (rawTrash?.data || []);
+
+  // Mutation Move to Trash (Soft Delete)
   const deleteOrderMutation = useMutation({
     mutationFn: async (id) => {
       const res = await api.delete(`/admin/orders/${id}`);
       return res.data;
     },
     onSuccess: (data) => {
-      toast.success(data.message || 'Pesanan berhasil dihapus');
+      toast.success(data.message || 'Pesanan dipindahkan ke Kotak Sampah');
       queryClient.invalidateQueries({ queryKey: ['admin_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['admin_orders_trash'] });
       queryClient.invalidateQueries({ queryKey: ['admin_orders_recap'] });
       queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
       setOrderToDelete(null);
     },
     onError: (err) => {
       toast.error(err.response?.data?.message || 'Gagal menghapus pesanan');
+    }
+  });
+
+  // Mutation Restore Order from Trash
+  const restoreOrderMutation = useMutation({
+    mutationFn: async (id) => {
+      const res = await api.post(`/admin/orders/${id}/restore`);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Pesanan berhasil dipulihkan!');
+      queryClient.invalidateQueries({ queryKey: ['admin_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['admin_orders_trash'] });
+      queryClient.invalidateQueries({ queryKey: ['admin_orders_recap'] });
+      queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal memulihkan pesanan');
+    }
+  });
+
+  // Mutation Permanently Delete Order (Force Delete)
+  const forceDeleteMutation = useMutation({
+    mutationFn: async (id) => {
+      const res = await api.delete(`/admin/orders/${id}/force`);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Pesanan berhasil dihapus permanen');
+      queryClient.invalidateQueries({ queryKey: ['admin_orders_trash'] });
+      setOrderToForceDelete(null);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal menghapus permanen');
+    }
+  });
+
+  // Mutation Empty Trash (Empty entire Recycle Bin)
+  const emptyTrashMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/admin/orders/trash/empty');
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Kotak sampah berhasil dikosongkan');
+      queryClient.invalidateQueries({ queryKey: ['admin_orders_trash'] });
+      setShowEmptyTrashModal(false);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal mengosongkan kotak sampah');
     }
   });
 
@@ -470,10 +544,10 @@ export default function AdminPesanan() {
       </div>
 
       {/* MAIN TAB SWITCHER (DITARUH DI BAWAH FILTER) */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 flex gap-4 rounded-2xl shadow-sm">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 flex gap-4 rounded-2xl shadow-sm overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveTab('orders')}
-          className={`py-3.5 px-3 text-sm font-bold border-b-2 flex items-center gap-2 transition-colors ${
+          className={`py-3.5 px-3 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
             activeTab === 'orders'
               ? 'border-green-600 text-green-600 dark:text-green-400'
               : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -484,7 +558,7 @@ export default function AdminPesanan() {
         </button>
         <button
           onClick={() => setActiveTab('recap')}
-          className={`py-3.5 px-3 text-sm font-bold border-b-2 flex items-center gap-2 transition-colors ${
+          className={`py-3.5 px-3 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
             activeTab === 'recap'
               ? 'border-green-600 text-green-600 dark:text-green-400'
               : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -492,6 +566,22 @@ export default function AdminPesanan() {
         >
           <FileText className="w-4 h-4" />
           Tab Rekap & Statistik
+        </button>
+        <button
+          onClick={() => setActiveTab('trash')}
+          className={`py-3.5 px-3 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
+            activeTab === 'trash'
+              ? 'border-amber-600 text-amber-600 dark:text-amber-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          <Trash2 className="w-4 h-4" />
+          <span>Kotak Sampah</span>
+          {trashedOrders.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">
+              {trashedOrders.length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -905,18 +995,155 @@ export default function AdminPesanan() {
         </div>
       )}
 
-      {/* MODAL KONFIRMASI HAPUS PESANAN */}
+      {/* TAB 3: KOTAK SAMPAH / RECYCLE BIN */}
+      {activeTab === 'trash' && (
+        <div className="space-y-4 animate-fade-in-up">
+          {/* Header Bar */}
+          <div className="bg-amber-50 dark:bg-amber-950/40 p-4 rounded-2xl border border-amber-200 dark:border-amber-800/60 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-amber-600" />
+                Kotak Sampah / Recycle Bin ({trashedOrders.length} Pesanan)
+              </h3>
+              <p className="text-xs text-amber-700 dark:text-amber-300/90 mt-0.5">
+                Pesanan yang dihapus sementara tersimpan di sini. Anda dapat memulihkannya kapan saja atau menghapusnya secara permanen.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => refetchTrash()}
+                className="px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-2xs"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isFetchingTrash ? 'animate-spin' : ''}`} /> Refresh
+              </button>
+
+              {trashedOrders.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowEmptyTrashModal(true)}
+                  disabled={emptyTrashMutation.isPending}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-2xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Kosongkan Sampah
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Trashed Orders List */}
+          {isLoadingTrash ? (
+            <div className="flex justify-center items-center py-20">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
+            </div>
+          ) : trashedOrders.length === 0 ? (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl p-12 text-center border border-gray-100 dark:border-gray-800 shadow-sm space-y-2">
+              <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 flex items-center justify-center mx-auto">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200">Kotak Sampah Kosong</h4>
+              <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                Tidak ada pesanan yang tersimpan di dalam kotak sampah saat ini.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {trashedOrders.map((order) => {
+                const deletedDate = order.deleted_at 
+                  ? new Date(order.deleted_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) 
+                  : '-';
+
+                return (
+                  <div
+                    key={order.id}
+                    className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-amber-100 dark:border-amber-950/60 shadow-xs space-y-3 relative overflow-hidden"
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-sm text-gray-900 dark:text-white">
+                            Pesanan #{order.id}
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                            Di Kotak Sampah
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mt-0.5">
+                          🏪 {order.canteen?.name || 'Toko / Kantin'}
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="font-extrabold text-sm text-gray-900 dark:text-white">
+                          Rp {parseFloat(order.total_price || 0).toLocaleString('id-ID')}
+                        </div>
+                        <div className="text-[10px] text-gray-500">
+                          {order.payment_status === 'paid' ? '💳 Lunas' : '⚠️ Belum Lunas'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Customer & Item details */}
+                    <div className="bg-gray-50 dark:bg-gray-800/60 p-2.5 rounded-xl text-xs space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Pemesan / Santri:</span>
+                        <strong className="text-gray-800 dark:text-gray-200">
+                          {order.user?.santri_name || order.user?.name || 'Santri'}
+                        </strong>
+                      </div>
+                      {order.user?.santri_room && (
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-gray-500">Asrama / Kamar:</span>
+                          <span className="text-gray-700 dark:text-gray-300">{order.user.santri_room}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-[11px] pt-1 border-t border-gray-200/60 dark:border-gray-700/60">
+                        <span className="text-gray-500">Waktu Dihapus:</span>
+                        <span className="text-amber-700 dark:text-amber-300 font-medium">🕒 {deletedDate}</span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 pt-1 border-t border-gray-100 dark:border-gray-800">
+                      <button
+                        type="button"
+                        onClick={() => restoreOrderMutation.mutate(order.id)}
+                        disabled={restoreOrderMutation.isPending}
+                        className="flex-1 py-2 px-3 bg-green-50 hover:bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" /> Pulihkan (Restore)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setOrderToForceDelete(order)}
+                        className="py-2 px-3 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                        title="Hapus Permanen"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Hapus Permanen
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODAL KONFIRMASI PINDAHKAN KE SAMPAH (SOFT DELETE) */}
       {orderToDelete && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-100 dark:border-gray-800 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
-            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>
 
             <div className="text-center space-y-1.5">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Hapus Pesanan #{orderToDelete.id}?</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Pindahkan ke Kotak Sampah?</h3>
               <p className="text-xs text-gray-500 leading-relaxed">
-                Tindakan ini akan menghapus pesanan atas nama{' '}
+                Pesanan <strong>#{orderToDelete.id}</strong> atas nama{' '}
                 <strong className="text-gray-800 dark:text-gray-200">
                   {orderToDelete.user?.santri_name || orderToDelete.user?.name}
                 </strong>{' '}
@@ -924,8 +1151,11 @@ export default function AdminPesanan() {
                 <strong className="text-gray-800 dark:text-gray-200">{orderToDelete.canteen?.name}</strong> senilai{' '}
                 <strong className="text-green-600">
                   Rp {parseFloat(orderToDelete.total_price || 0).toLocaleString('id-ID')}
-                </strong>
-                . Semua berkas bukti pembayaran/struk terkait juga akan dihapus dari server.
+                </strong>{' '}
+                akan dipindahkan ke <strong>Kotak Sampah (Recycle Bin)</strong>.
+              </p>
+              <p className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded-xl border border-amber-200 dark:border-amber-800">
+                💡 Pesanan tidak akan muncul di daftar aktif atau perhitungan rekap, namun dapat Anda <strong>pulihkan (restore)</strong> kapan saja.
               </p>
             </div>
 
@@ -942,16 +1172,110 @@ export default function AdminPesanan() {
                 type="button"
                 onClick={handleDeleteConfirm}
                 disabled={deleteOrderMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
               >
                 {deleteOrderMutation.isPending ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Memindahkan...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" /> Pindahkan ke Sampah
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL KONFIRMASI HAPUS PERMANEN (FORCE DELETE) */}
+      {orderToForceDelete && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-100 dark:border-gray-800 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
+            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Hapus Permanen Pesanan #{orderToForceDelete.id}?</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Tindakan ini akan <strong>menghapus permanen</strong> data pesanan dan seluruh berkas bukti transfer/foto dari server. Tindakan ini <strong>tidak dapat dibatalkan</strong>.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setOrderToForceDelete(null)}
+                disabled={forceDeleteMutation.isPending}
+                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => forceDeleteMutation.mutate(orderToForceDelete.id)}
+                disabled={forceDeleteMutation.isPending}
+                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                {forceDeleteMutation.isPending ? (
                   <>
                     <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     Menghapus...
                   </>
                 ) : (
                   <>
-                    <Trash2 className="w-3.5 h-3.5" /> Ya, Hapus
+                    <Trash2 className="w-3.5 h-3.5" /> Ya, Hapus Permanen
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL KONFIRMASI KOSONGKAN SELURUH KOTAK SAMPAH */}
+      {showEmptyTrashModal && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-100 dark:border-gray-800 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
+            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Kosongkan Kotak Sampah?</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Seluruh <strong>{trashedOrders.length} pesanan</strong> di dalam kotak sampah akan dihapus secara permanen beserta berkas buktinya. Tindakan ini <strong>tidak dapat dibatalkan</strong>.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowEmptyTrashModal(false)}
+                disabled={emptyTrashMutation.isPending}
+                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => emptyTrashMutation.mutate()}
+                disabled={emptyTrashMutation.isPending}
+                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                {emptyTrashMutation.isPending ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Mengosongkan...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" /> Ya, Kosongkan Semua
                   </>
                 )}
               </button>

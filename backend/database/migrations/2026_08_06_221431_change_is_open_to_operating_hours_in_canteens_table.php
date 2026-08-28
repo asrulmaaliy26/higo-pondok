@@ -12,9 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('canteens', function (Blueprint $table) {
-            $table->dropColumn('is_open');
-            $table->time('open_time')->default('09:00:00');
-            $table->time('close_time')->default('17:00:00');
+            if (Schema::hasColumn('canteens', 'is_open')) {
+                $table->dropColumn('is_open');
+            }
+            if (!Schema::hasColumn('canteens', 'open_time')) {
+                $table->time('open_time')->default('09:00:00');
+            }
+            if (!Schema::hasColumn('canteens', 'close_time')) {
+                $table->time('close_time')->default('17:00:00');
+            }
         });
     }
 
@@ -24,8 +30,13 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('canteens', function (Blueprint $table) {
-            $table->boolean('is_open')->default(false);
-            $table->dropColumn(['open_time', 'close_time']);
+            if (!Schema::hasColumn('canteens', 'is_open')) {
+                $table->boolean('is_open')->default(false);
+            }
+            $cols = [];
+            if (Schema::hasColumn('canteens', 'open_time')) $cols[] = 'open_time';
+            if (Schema::hasColumn('canteens', 'close_time')) $cols[] = 'close_time';
+            if (!empty($cols)) $table->dropColumn($cols);
         });
     }
 };

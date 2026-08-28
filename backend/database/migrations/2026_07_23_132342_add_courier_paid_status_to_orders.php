@@ -12,8 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->boolean('is_courier_paid_by_canteen')->default(false)->after('courier_id');
-            $table->string('proof_courier_paid')->nullable()->after('is_courier_paid_by_canteen');
+            if (!Schema::hasColumn('orders', 'is_courier_paid_by_canteen')) {
+                $table->boolean('is_courier_paid_by_canteen')->default(false)->after('courier_id');
+            }
+            if (!Schema::hasColumn('orders', 'proof_courier_paid')) {
+                $table->string('proof_courier_paid')->nullable()->after('is_courier_paid_by_canteen');
+            }
         });
     }
 
@@ -23,7 +27,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->dropColumn(['is_courier_paid_by_canteen', 'proof_courier_paid']);
+            $cols = [];
+            if (Schema::hasColumn('orders', 'is_courier_paid_by_canteen')) $cols[] = 'is_courier_paid_by_canteen';
+            if (Schema::hasColumn('orders', 'proof_courier_paid')) $cols[] = 'proof_courier_paid';
+            if (!empty($cols)) $table->dropColumn($cols);
         });
     }
 };

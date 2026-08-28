@@ -12,11 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('canteens', function (Blueprint $table) {
-            $table->decimal('balance', 12, 2)->default(0)->after('status');
+            if (!Schema::hasColumn('canteens', 'balance')) {
+                $table->decimal('balance', 12, 2)->default(0)->after('status');
+            }
         });
 
         Schema::table('users', function (Blueprint $table) {
-            $table->decimal('balance', 12, 2)->default(0)->after('email');
+            if (!Schema::hasColumn('users', 'balance')) {
+                $table->decimal('balance', 12, 2)->default(0)->after('email');
+            }
         });
     }
 
@@ -26,11 +30,15 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('canteens', function (Blueprint $table) {
-            $table->dropColumn('balance');
+            if (Schema::hasColumn('canteens', 'balance')) {
+                $table->dropColumn('balance');
+            }
         });
 
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('balance');
+            if (Schema::hasColumn('users', 'balance')) {
+                $table->dropColumn('balance');
+            }
         });
     }
 };

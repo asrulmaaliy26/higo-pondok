@@ -4,6 +4,7 @@ namespace App\Domains\Canteen;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Domains\Auth\User;
 use App\Domains\Canteen\Canteen;
 use App\Domains\Canteen\OrderItem;
@@ -11,7 +12,7 @@ use App\Traits\LogsActivity;
 
 class Order extends Model
 {
-    use HasFactory, LogsActivity;
+    use HasFactory, LogsActivity, SoftDeletes;
 
     protected $fillable = [
         'user_id',

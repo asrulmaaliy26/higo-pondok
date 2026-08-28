@@ -10,6 +10,41 @@ import {
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
 import { useAuthStore } from '../../store/authStore';
+import santriData from '../../data/santri.json';
+
+function getSantriGender(santriName = '', santriRoom = '') {
+  const sName = (santriName || '').toLowerCase().trim();
+  const sRoom = (santriRoom || '').toLowerCase().trim();
+
+  // 1. Match against santri.json if exists
+  if (sName && santriData?.data) {
+    const match = santriData.data.find(r => {
+      if (!r || !r[1]) return false;
+      const rawName = r[1].toLowerCase().replace(/\s+(laki-laki|perempuan)$/i, '').trim();
+      return rawName === sName || sName.includes(rawName) || rawName.includes(sName);
+    });
+
+    if (match && match[1]) {
+      if (match[1].toLowerCase().includes('perempuan')) return 'putri';
+      if (match[1].toLowerCase().includes('laki-laki')) return 'putra';
+    }
+  }
+
+  // 2. Check room / dormitory name
+  if (sRoom.includes('asmah') || sRoom.includes('aminah') || sRoom.includes('putri') || sRoom.includes('akhwat') || sRoom.includes('khadijah') || sRoom.includes('fatimah') || sRoom.includes('aisyah')) {
+    return 'putri';
+  }
+  if (sRoom.includes('majid') || sRoom.includes('malik') || sRoom.includes('putra') || sRoom.includes('ikhwan') || sRoom.includes('mannan') || sRoom.includes('ali') || sRoom.includes('umar') || sRoom.includes('utsman')) {
+    return 'putra';
+  }
+
+  // 3. Heuristics
+  if (/\b(binti|putri|siti|shofiya|nida|zahra|khadijah|aisyah|nurul|dewi|ayu|anisa|annisa|fatimah|salma|nayla)\b/i.test(sName)) {
+    return 'putri';
+  }
+
+  return 'putra';
+}
 
 function getWeeksInMonth(year, month) {
   const weeks = [];
@@ -127,11 +162,11 @@ export default function TugasKurir() {
   const currentParams = getFilterParams();
 
   // View & Filter States
-  const [viewMode, setViewMode] = useState('list'); // 'list' | 'grouped'
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'canteen'
   const [statusTab, setStatusTab] = useState('all'); // 'all' | 'my_tasks' | 'pending' | 'processing' | 'completed'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCanteenFilter, setSelectedCanteenFilter] = useState('all');
-  const [expandedSantri, setExpandedSantri] = useState({});
+  const [expandedCanteen, setExpandedCanteen] = useState({});
 
   // Modals States
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -305,10 +340,10 @@ export default function TugasKurir() {
     uploadProofMutation.mutate({ id: selectedOrder.id, files: photoFiles, type: uploadType });
   };
 
-  const toggleSantriExpand = (santriKey) => {
-    setExpandedSantri(prev => ({
+  const toggleCanteenExpand = (canteenId) => {
+    setExpandedCanteen(prev => ({
       ...prev,
-      [santriKey]: !prev[santriKey]
+      [canteenId]: !prev[canteenId]
     }));
   };
 
@@ -353,28 +388,28 @@ export default function TugasKurir() {
     });
   }, [orders, statusTab, selectedCanteenFilter, searchQuery, currentUser?.id]);
 
-  // Grouped by Santri / Wali
-  const groupedBySantri = useMemo(() => {
+
+
+  // Grouped by Toko / Kantin
+  const groupedByCanteen = useMemo(() => {
     const map = {};
 
     filteredOrders.forEach(order => {
-      const u = order.user;
-      const santriName = u?.santri_name || u?.name || 'Santri Tanpa Nama';
-      const waliName = u?.name || 'Wali Santri';
-      const key = `${u?.id || 0}_${santriName}`;
+      const canteen = order.canteen;
+      const canteenId = order.canteen_id || canteen?.id || 'unknown';
+      const canteenName = canteen?.name || 'Toko / Kantin';
+      const canteenCategory = canteen?.category || 'kauman';
+      const canteenPhone = canteen?.whatsapp_number || canteen?.phone;
 
-      if (!map[key]) {
-        map[key] = {
-          key,
-          userId: u?.id,
-          santriName,
-          waliName,
-          santriRoom: u?.santri_room || 'Kamar belum diisi',
-          santriClass: u?.santri_class || '',
-          santriLevel: u?.santri_level || '',
-          phone: u?.phone,
+      if (!map[canteenId]) {
+        map[canteenId] = {
+          canteenId,
+          canteenName,
+          canteenCategory,
+          canteenPhone,
           orders: [],
-          allItems: [],
+          customersMap: {},
+          itemRecap: {},
           totalCost: 0,
           totalDeliveryFee: 0,
           totalItemCount: 0,
@@ -384,36 +419,78 @@ export default function TugasKurir() {
         };
       }
 
-      const courierOrderTotal = Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.admin_fee || 0));
-      map[key].orders.push(order);
-      map[key].totalCost += courierOrderTotal;
-      map[key].totalDeliveryFee += parseFloat(order.delivery_fee || 0);
+      // Pure product cost (only products, excluding delivery fee and admin fee)
+      let orderProductCost = 0;
+      if (order.items && order.items.length > 0) {
+        orderProductCost = order.items.reduce((acc, it) => acc + (parseFloat(it.subtotal) || (parseFloat(it.price || 0) * parseInt(it.quantity || 1))), 0);
+      } else {
+        orderProductCost = Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0));
+      }
+
+      map[canteenId].orders.push(order);
+      map[canteenId].totalCost += orderProductCost;
+      map[canteenId].totalDeliveryFee += parseFloat(order.delivery_fee || 0);
 
       if (order.status === 'pending') {
-        map[key].hasPending = true;
-        map[key].allCompleted = false;
+        map[canteenId].hasPending = true;
+        map[canteenId].allCompleted = false;
       } else if (order.status === 'processing') {
-        map[key].hasProcessing = true;
-        map[key].allCompleted = false;
+        map[canteenId].hasProcessing = true;
+        map[canteenId].allCompleted = false;
       } else if (order.status !== 'completed') {
-        map[key].allCompleted = false;
+        map[canteenId].allCompleted = false;
       }
+
+      // Group customer info for "siapa aja"
+      const u = order.user;
+      const santriName = u?.santri_name || u?.name || 'Santri Tanpa Nama';
+      const custKey = `${u?.id || 0}_${santriName}`;
+      const gender = getSantriGender(santriName, u?.santri_room);
+
+      if (!map[canteenId].customersMap[custKey]) {
+        map[canteenId].customersMap[custKey] = {
+          custKey,
+          userId: u?.id,
+          santriName,
+          gender,
+          waliName: u?.name || 'Wali Santri',
+          santriRoom: u?.santri_room || 'Kamar belum diisi',
+          santriClass: u?.santri_class || '',
+          santriLevel: u?.santri_level || '',
+          phone: u?.phone,
+          orders: [],
+          items: [],
+          totalCost: 0,
+          totalItemCount: 0,
+        };
+      }
+
+      map[canteenId].customersMap[custKey].orders.push(order);
+      map[canteenId].customersMap[custKey].totalCost += orderProductCost;
 
       if (order.items && order.items.length > 0) {
         order.items.forEach(item => {
-          map[key].totalItemCount += parseInt(item.quantity || 1);
-          map[key].allItems.push({
+          const qty = parseInt(item.quantity || 1);
+          const name = item.product?.name || 'Makanan';
+          map[canteenId].totalItemCount += qty;
+          map[canteenId].customersMap[custKey].totalItemCount += qty;
+          map[canteenId].customersMap[custKey].items.push({
             ...item,
             orderId: order.id,
             orderStatus: order.status,
-            canteenName: order.canteen?.name || 'Kantin',
-            canteenWhatsapp: order.canteen?.whatsapp_number
           });
+
+          if (!map[canteenId].itemRecap[name]) {
+            map[canteenId].itemRecap[name] = { quantity: 0, total: 0 };
+          }
+          map[canteenId].itemRecap[name].quantity += qty;
+          map[canteenId].itemRecap[name].total += parseFloat(item.subtotal || (parseFloat(item.price || 0) * qty));
         });
       } else if (order.is_custom || order.custom_notes) {
         const customProductPrice = Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0));
-        map[key].totalItemCount += 1;
-        map[key].allItems.push({
+        map[canteenId].totalItemCount += 1;
+        map[canteenId].customersMap[custKey].totalItemCount += 1;
+        const customItem = {
           id: `custom_${order.id}`,
           orderId: order.id,
           orderStatus: order.status,
@@ -422,13 +499,34 @@ export default function TugasKurir() {
           price: customProductPrice,
           subtotal: customProductPrice,
           notes: 'Pesanan Khusus',
-          canteenName: order.canteen?.name || 'Kantin',
-          canteenWhatsapp: order.canteen?.whatsapp_number
-        });
+        };
+        map[canteenId].customersMap[custKey].items.push(customItem);
+
+        const customName = `Titip Beli: ${order.custom_notes || 'Pesanan Khusus'}`;
+        if (!map[canteenId].itemRecap[customName]) {
+          map[canteenId].itemRecap[customName] = { quantity: 0, total: 0 };
+        }
+        map[canteenId].itemRecap[customName].quantity += 1;
+        map[canteenId].itemRecap[customName].total += customProductPrice;
       }
     });
 
-    return Object.values(map);
+    return Object.values(map).map(c => {
+      const customers = Object.values(c.customersMap);
+      const customersPutra = customers.filter(cust => cust.gender === 'putra');
+      const customersPutri = customers.filter(cust => cust.gender === 'putri');
+
+      return {
+        ...c,
+        customers,
+        customersPutra,
+        customersPutri,
+        itemRecapList: Object.keys(c.itemRecap).map(k => ({
+          name: k,
+          ...c.itemRecap[k]
+        })).sort((a, b) => b.quantity - a.quantity)
+      };
+    });
   }, [filteredOrders]);
 
   // Counts for tabs
@@ -721,22 +819,22 @@ export default function TugasKurir() {
               className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                 viewMode === 'list' 
                   ? 'bg-white dark:bg-gray-900 text-green-700 dark:text-green-400 shadow-sm' 
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <ShoppingBag className="w-3.5 h-3.5" />
-              Daftar Pesanan ({filteredOrders.length})
+              <span>Daftar Pesanan ({filteredOrders.length})</span>
             </button>
             <button
-              onClick={() => setViewMode('grouped')}
+              onClick={() => setViewMode('canteen')}
               className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                viewMode === 'grouped' 
+                viewMode === 'canteen' 
                   ? 'bg-white dark:bg-gray-900 text-green-700 dark:text-green-400 shadow-sm' 
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Layers className="w-3.5 h-3.5" />
-              Rekap Per Santri / Wali ({groupedBySantri.length})
+              <Store className="w-3.5 h-3.5" />
+              <span>Rekap Per Toko ({groupedByCanteen.length})</span>
             </button>
           </div>
 
@@ -1122,154 +1220,413 @@ export default function TugasKurir() {
         )}
 
         {/* ======================================================== */}
-        {/* MODE 2: REKAP PER SANTRI / WALI (GROUPED VIEW) */}
+        {/* MODE 2: REKAP PER TOKO / KANTIN (CANTEEN GROUPED VIEW) */}
         {/* ======================================================== */}
-        {viewMode === 'grouped' && (
-          <div className="space-y-3.5">
-            <div className="bg-green-50 dark:bg-green-950/40 p-3 rounded-2xl border border-green-200 dark:border-green-800 text-xs text-green-900 dark:text-green-300">
-              💡 <strong>Mode Rekap Santri/Wali:</strong> Mengelompokkan seluruh pesanan dan makanan milik masing-masing santri (meskipun berasal dari beberapa kantin berbeda) untuk mempermudah saat diantarkan ke asrama.
+        {viewMode === 'canteen' && (
+          <div className="space-y-3.5 animate-fade-in-up">
+            <div className="bg-blue-50 dark:bg-blue-950/40 p-3 rounded-2xl border border-blue-200 dark:border-blue-800 text-xs text-blue-900 dark:text-blue-300 flex items-start gap-2">
+              <Store className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+              <div>
+                <strong>Mode Rekap Per Toko / Kantin:</strong> Menampilkan total makanan yang harus diambil di setiap toko, serta daftar <strong>siapa saja santri/pemesan</strong> yang memesan di toko tersebut.
+              </div>
             </div>
 
-            {groupedBySantri.length === 0 ? (
+            {groupedByCanteen.length === 0 ? (
               <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 text-center border border-gray-100 dark:border-gray-800 shadow-xs">
-                <User className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
-                <p className="text-gray-500 dark:text-gray-400 font-semibold text-sm">Tidak ada data santri pada filter saat ini.</p>
+                <Store className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
+                <p className="text-gray-500 dark:text-gray-400 font-semibold text-sm">Tidak ada data toko/pesanan pada filter saat ini.</p>
               </div>
             ) : (
-              groupedBySantri.map(santri => {
-                const isExpanded = !!expandedSantri[santri.key];
+              groupedByCanteen.map(canteen => {
+                const isExpanded = !!expandedCanteen[canteen.canteenId];
 
                 return (
                   <div 
-                    key={santri.key}
+                    key={canteen.canteenId}
                     className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs overflow-hidden transition-all"
                   >
-                    {/* SANTRI HEADER BAR */}
+                    {/* CANTEEN HEADER BAR */}
                     <div 
-                      onClick={() => toggleSantriExpand(santri.key)}
+                      onClick={() => toggleCanteenExpand(canteen.canteenId)}
                       className="p-3.5 sm:p-4 cursor-pointer hover:bg-gray-50/70 dark:hover:bg-gray-800/40 transition-colors flex items-start justify-between gap-2"
                     >
                       <div className="flex items-start gap-3 flex-1 min-w-0">
-                        <div className="w-10 h-10 rounded-2xl bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 flex items-center justify-center font-extrabold text-sm shrink-0 shadow-xs">
-                          {santri.santriName.substring(0, 2).toUpperCase()}
+                        <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 flex items-center justify-center font-extrabold text-sm shrink-0 shadow-xs">
+                          <Store className="w-5 h-5" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-bold text-gray-900 dark:text-white text-base leading-tight">
-                              {santri.santriName}
+                              {canteen.canteenName}
                             </h3>
-                            {santri.hasPending && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800 capitalize">
+                              {canteen.canteenCategory || 'Kantin'}
+                            </span>
+                            {canteen.hasPending && (
                               <span className="px-2 py-0.2 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 text-[10px] font-bold rounded-full">
                                 Perlu Diambil
                               </span>
                             )}
-                            {santri.hasProcessing && (
+                            {canteen.hasProcessing && (
                               <span className="px-2 py-0.2 bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] font-bold rounded-full">
                                 Sedang Diantar
                               </span>
                             )}
-                            {santri.allCompleted && (
+                            {canteen.allCompleted && (
                               <span className="px-2 py-0.2 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 text-[10px] font-bold rounded-full">
                                 Selesai
                               </span>
                             )}
                           </div>
                           
-                          <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mt-0.5">
-                            🏠 {santri.santriRoom} {santri.santriClass ? `• Kelas ${santri.santriClass}/${santri.santriLevel}` : ''}
+                          <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mt-1 flex items-center gap-1.5 flex-wrap">
+                            <span>🛍️ <strong>{canteen.totalItemCount} Makanan</strong></span>
+                            <span>•</span>
+                            <span>📦 <strong>{canteen.orders.length} Pesanan</strong></span>
+                            <span>•</span>
+                            <span>👥 <strong>{canteen.customers.length} Pemesan</strong></span>
                           </p>
+
                           <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                            Wali: <strong>{santri.waliName}</strong> • {santri.orders.length} Pesanan ({santri.totalItemCount} Makanan)
+                            Total Tagihan Toko: <strong className="text-green-600 dark:text-green-400">Rp {formatRupiah(canteen.totalCost)}</strong>
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
+                        {canteen.canteenPhone && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const phone = canteen.canteenPhone.replace(/^0/, '62');
+                              window.open(`https://wa.me/${phone}`, '_blank');
+                            }}
+                            className="p-2 bg-green-50 hover:bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-xl transition-colors"
+                            title="Hubungi Toko via WA"
+                          >
+                            <Phone className="w-4 h-4" />
+                          </button>
+                        )}
                         <div className="p-1 text-gray-400">
-                          {isExpanded ? <ChevronDown className="w-5 h-5 text-green-600" /> : <ChevronRight className="w-5 h-5" />}
+                          {isExpanded ? <ChevronDown className="w-5 h-5 text-blue-600" /> : <ChevronRight className="w-5 h-5" />}
                         </div>
                       </div>
                     </div>
 
-                    {/* EXPANDED CONTENT: COMPLETE FOOD BREAKDOWN */}
+                    {/* EXPANDED CONTENT: SUMMARY OF FOOD TO PICK UP + WHO ORDERED WHAT */}
                     {isExpanded && (
-                      <div className="p-3.5 sm:p-4 bg-gray-50/70 dark:bg-gray-800/40 border-t border-gray-100 dark:border-gray-800 space-y-3">
-                        <div className="bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs space-y-2">
+                      <div className="p-3.5 sm:p-4 bg-gray-50/70 dark:bg-gray-800/40 border-t border-gray-100 dark:border-gray-800 space-y-4">
+                        
+                        {/* 1. REKAP TOTAL MAKANAN DI TOKO INI */}
+                        <div className="bg-white dark:bg-gray-900 p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs space-y-2">
                           <h4 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                            🍽️ Seluruh Makanan yang Dipesan Santri Ini:
+                            🍽️ Total Makanan yang Harus Diambil di {canteen.canteenName}:
                           </h4>
 
                           <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                            {santri.allItems.map((item, idx) => (
-                              <div key={idx} className="py-2 first:pt-1 last:pb-0 flex items-start justify-between gap-2">
-                                <div className="flex items-start gap-2 flex-1">
-                                  <span className="w-5 h-5 rounded-md bg-green-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
+                            {canteen.itemRecapList.map((item, idx) => (
+                              <div key={idx} className="py-2 first:pt-1 last:pb-0 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-6 h-6 rounded-lg bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
                                     {item.quantity}x
                                   </span>
-                                  <div>
-                                    <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight">
-                                      {item.product?.name || 'Makanan'}
-                                    </p>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                      <span className="text-[10px] text-orange-600 dark:text-orange-400 font-semibold bg-orange-50 dark:bg-orange-950/40 px-1.5 py-0.2 rounded">
-                                        {item.canteenName}
-                                      </span>
-                                      <span className="text-[10px] text-gray-400">
-                                        (Pesanan #{item.orderId} - {item.orderStatus})
-                                      </span>
-                                    </div>
-                                    {item.notes && (
-                                      <p className="text-[10px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded mt-0.5 font-medium inline-block">
-                                        📝 {item.notes}
-                                      </p>
-                                    )}
-                                  </div>
+                                  <span className="text-xs font-bold text-gray-900 dark:text-white">
+                                    {item.name}
+                                  </span>
                                 </div>
                                 <span className="text-xs font-bold text-gray-900 dark:text-white">
-                                  Rp {formatRupiah(item.subtotal || item.price || 0)}
+                                  Rp {formatRupiah(item.total)}
                                 </span>
                               </div>
                             ))}
                           </div>
 
-                          <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs font-bold">
-                            <span className="text-gray-600 dark:text-gray-400">Total Keseluruhan:</span>
+                          <div className="pt-2.5 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs font-bold">
+                            <span className="text-gray-600 dark:text-gray-400">Total Nilai Produk:</span>
                             <span className="text-green-600 dark:text-green-400 text-sm">
-                              Rp {formatRupiah(santri.totalCost)}
+                              Rp {formatRupiah(canteen.totalCost)}
                             </span>
                           </div>
                         </div>
 
-                        {/* Individual Orders Quick Links */}
-                        <div className="space-y-2">
-                          <h5 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                            Daftar Pesanan ({santri.orders.length}):
-                          </h5>
-                          {santri.orders.map(o => (
-                            <div key={o.id} className="p-2.5 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2 text-xs">
-                              <div>
-                                <span className="font-bold text-gray-900 dark:text-white">Pesanan #{o.id}</span>
-                                <span className="text-gray-400 text-[11px] ml-1.5">({o.canteen?.name})</span>
-                                <div className="text-[10px] text-gray-500">
-                                  Status: <strong className="capitalize">{o.status}</strong> • Total: Rp {formatRupiah(Math.max(0, parseFloat(o.total_price || 0) - parseFloat(o.admin_fee || 0)))}
+                        {/* 2. SIAPA AJA YANG PESAN DI TOKO INI (DIPISAHKAN PUTRA & PUTRI) */}
+                        <div className="space-y-4 pt-1">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <h4 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                              👥 Siapa Aja yang Pesan ({canteen.customers.length} Pemesan):
+                            </h4>
+                            <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold">
+                              <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300">
+                                👦 Putra: {canteen.customersPutra.length}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-300">
+                                👧 Putri: {canteen.customersPutri.length}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* KELOMPOK 1: SANTRI PUTRA (LAKI-LAKI) */}
+                          {canteen.customersPutra.length > 0 && (
+                            <div className="space-y-2.5">
+                              <div className="flex items-center justify-between bg-blue-50/80 dark:bg-blue-950/40 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm">👦</span>
+                                  <span className="text-xs font-bold text-blue-900 dark:text-blue-300">
+                                    Santri Putra (Laki-laki)
+                                  </span>
                                 </div>
+                                <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-blue-200/70 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                                  {canteen.customersPutra.length} Santri
+                                </span>
                               </div>
-                              <div className="flex items-center gap-1.5">
-                                {o.status !== 'completed' && (
-                                  <button
-                                    onClick={() => {
-                                      setSelectedOrder(o);
-                                      setUploadType('delivery');
-                                    }}
-                                    className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[11px]"
+
+                              <div className="space-y-2.5">
+                                {canteen.customersPutra.map(cust => (
+                                  <div 
+                                    key={cust.custKey}
+                                    className="bg-white dark:bg-gray-900 rounded-xl p-3 border border-blue-100 dark:border-blue-900/40 shadow-xs space-y-2"
                                   >
-                                    + Bukti Antar
-                                  </button>
-                                )}
+                                    {/* Customer Header */}
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex items-start gap-2.5 min-w-0">
+                                        <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 flex items-center justify-center font-bold text-xs shrink-0">
+                                          👦
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <h5 className="font-bold text-gray-900 dark:text-white text-sm">
+                                              {cust.santriName}
+                                            </h5>
+                                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                              Putra
+                                            </span>
+                                            <span className="text-[10px] text-gray-500 font-medium bg-gray-100 dark:bg-gray-800 px-1.5 py-0.2 rounded">
+                                              Wali: {cust.waliName}
+                                            </span>
+                                          </div>
+                                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                                            🏠 {cust.santriRoom} {cust.santriClass ? `• Kelas ${cust.santriClass}/${cust.santriLevel}` : ''}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {cust.phone && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const phone = cust.phone.replace(/^0/, '62');
+                                            window.open(`https://wa.me/${phone}`, '_blank');
+                                          }}
+                                          className="text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 dark:bg-green-900/30 p-1.5 rounded-full shrink-0"
+                                          title="Hubungi Wali Santri"
+                                        >
+                                          <MessageCircle className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {/* Customer's items from this store */}
+                                    <div className="bg-gray-50 dark:bg-gray-800/60 p-2.5 rounded-lg space-y-1.5 border border-gray-100 dark:border-gray-750">
+                                      {cust.items.map((it, idx) => (
+                                        <div key={idx} className="flex justify-between items-start text-xs">
+                                          <div>
+                                            <span className="font-semibold text-gray-800 dark:text-gray-200">
+                                              {it.quantity}x {it.product?.name || 'Makanan'}
+                                            </span>
+                                            {it.notes && (
+                                              <p className="text-[10px] text-amber-700 dark:text-amber-300">
+                                                📝 {it.notes}
+                                              </p>
+                                            )}
+                                          </div>
+                                          <span className="font-medium text-gray-900 dark:text-white shrink-0 ml-2">
+                                            Rp {formatRupiah(it.subtotal || it.price || 0)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    {/* Order IDs and Actions */}
+                                    <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800 text-xs flex-wrap gap-2">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-[11px] text-gray-500 font-medium">Order:</span>
+                                        {cust.orders.map(o => (
+                                          <span key={o.id} className="font-bold text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-[11px]">
+                                            #{o.id} ({o.status})
+                                          </span>
+                                        ))}
+                                      </div>
+
+                                      <div className="flex items-center gap-1.5">
+                                        {cust.orders.map(o => (
+                                          <React.Fragment key={o.id}>
+                                            {o.status === 'pending' && (!o.courier_id || o.courier_id !== currentUser?.id) && (
+                                              <button
+                                                type="button"
+                                                onClick={() => takeOrderMutation.mutate(o.id)}
+                                                disabled={takeOrderMutation.isPending}
+                                                className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs"
+                                              >
+                                                <CheckCircle className="w-3 h-3" /> Ambil #{o.id}
+                                              </button>
+                                            )}
+                                            {o.status === 'processing' && o.courier_id === currentUser?.id && (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setSelectedOrder(o);
+                                                  setUploadType('delivery');
+                                                }}
+                                                className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs"
+                                              >
+                                                <Camera className="w-3 h-3" /> + Bukti #{o.id}
+                                              </button>
+                                            )}
+                                          </React.Fragment>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
                             </div>
-                          ))}
+                          )}
+
+                          {/* KELOMPOK 2: SANTRI PUTRI (PEREMPUAN) */}
+                          {canteen.customersPutri.length > 0 && (
+                            <div className="space-y-2.5">
+                              <div className="flex items-center justify-between bg-pink-50/80 dark:bg-pink-950/40 px-3 py-1.5 rounded-xl border border-pink-200 dark:border-pink-800">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm">👧</span>
+                                  <span className="text-xs font-bold text-pink-900 dark:text-pink-300">
+                                    Santri Putri (Perempuan)
+                                  </span>
+                                </div>
+                                <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-pink-200/70 dark:bg-pink-900 text-pink-800 dark:text-pink-200">
+                                  {canteen.customersPutri.length} Santri
+                                </span>
+                              </div>
+
+                              <div className="space-y-2.5">
+                                {canteen.customersPutri.map(cust => (
+                                  <div 
+                                    key={cust.custKey}
+                                    className="bg-white dark:bg-gray-900 rounded-xl p-3 border border-pink-100 dark:border-pink-900/40 shadow-xs space-y-2"
+                                  >
+                                    {/* Customer Header */}
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex items-start gap-2.5 min-w-0">
+                                        <div className="w-7 h-7 rounded-lg bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300 flex items-center justify-center font-bold text-xs shrink-0">
+                                          👧
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <h5 className="font-bold text-gray-900 dark:text-white text-sm">
+                                              {cust.santriName}
+                                            </h5>
+                                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-pink-50 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300">
+                                              Putri
+                                            </span>
+                                            <span className="text-[10px] text-gray-500 font-medium bg-gray-100 dark:bg-gray-800 px-1.5 py-0.2 rounded">
+                                              Wali: {cust.waliName}
+                                            </span>
+                                          </div>
+                                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                                            🏠 {cust.santriRoom} {cust.santriClass ? `• Kelas ${cust.santriClass}/${cust.santriLevel}` : ''}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {cust.phone && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const phone = cust.phone.replace(/^0/, '62');
+                                            window.open(`https://wa.me/${phone}`, '_blank');
+                                          }}
+                                          className="text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 dark:bg-green-900/30 p-1.5 rounded-full shrink-0"
+                                          title="Hubungi Wali Santri"
+                                        >
+                                          <MessageCircle className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {/* Customer's items from this store */}
+                                    <div className="bg-gray-50 dark:bg-gray-800/60 p-2.5 rounded-lg space-y-1.5 border border-gray-100 dark:border-gray-750">
+                                      {cust.items.map((it, idx) => (
+                                        <div key={idx} className="flex justify-between items-start text-xs">
+                                          <div>
+                                            <span className="font-semibold text-gray-800 dark:text-gray-200">
+                                              {it.quantity}x {it.product?.name || 'Makanan'}
+                                            </span>
+                                            {it.notes && (
+                                              <p className="text-[10px] text-amber-700 dark:text-amber-300">
+                                                📝 {it.notes}
+                                              </p>
+                                            )}
+                                          </div>
+                                          <span className="font-medium text-gray-900 dark:text-white shrink-0 ml-2">
+                                            Rp {formatRupiah(it.subtotal || it.price || 0)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    {/* Order IDs and Actions */}
+                                    <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800 text-xs flex-wrap gap-2">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-[11px] text-gray-500 font-medium">Order:</span>
+                                        {cust.orders.map(o => (
+                                          <span key={o.id} className="font-bold text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-[11px]">
+                                            #{o.id} ({o.status})
+                                          </span>
+                                        ))}
+                                      </div>
+
+                                      <div className="flex items-center gap-1.5">
+                                        {cust.orders.map(o => (
+                                          <React.Fragment key={o.id}>
+                                            {o.status === 'pending' && (!o.courier_id || o.courier_id !== currentUser?.id) && (
+                                              <button
+                                                type="button"
+                                                onClick={() => takeOrderMutation.mutate(o.id)}
+                                                disabled={takeOrderMutation.isPending}
+                                                className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs"
+                                              >
+                                                <CheckCircle className="w-3 h-3" /> Ambil #{o.id}
+                                              </button>
+                                            )}
+                                            {o.status === 'processing' && o.courier_id === currentUser?.id && (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setSelectedOrder(o);
+                                                  setUploadType('delivery');
+                                                }}
+                                                className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs"
+                                              >
+                                                <Camera className="w-3 h-3" /> + Bukti #{o.id}
+                                              </button>
+                                            )}
+                                          </React.Fragment>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {canteen.customers.length === 0 && (
+                            <div className="text-center py-4 text-xs text-gray-500">
+                              Belum ada pemesan di toko ini.
+                            </div>
+                          )}
                         </div>
+
                       </div>
                     )}
                   </div>
@@ -1278,6 +1635,8 @@ export default function TugasKurir() {
             )}
           </div>
         )}
+
+
       </div>
 
       {/* ======================================================== */}

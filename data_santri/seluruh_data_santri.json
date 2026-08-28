@@ -1,5 +1,5 @@
 {
-    "total_data": 1699,
+    "total_data": 1700,
     "headers": [
         "",
         "Nama",
@@ -24,6 +24,19 @@
         "Angkatan"
     ],
     "data": [
+        [
+            "",
+            "AGASTA ARYASATYA RAMADANI Laki-laki",
+            "202508239",
+            "3123476439",
+            "SMP",
+            "8 / VIII",
+            "A",
+            "Pondok",
+            "081384485667",
+            "Detail",
+            "Al Majid 1"
+        ],
         [
             "",
             "MUHAMMAD RIZA MAHAR DHIKA Laki-laki",

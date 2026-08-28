@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { ChevronLeft, ShoppingBag, CheckCircle, Clock, Truck, MessageCircle, X, Image as ImageIcon, ChevronDown, ChevronRight, Store, Upload, Trash2, RotateCcw, FileText, Filter, Search } from 'lucide-react';
+import { ChevronLeft, ShoppingBag, CheckCircle, Clock, Truck, MessageCircle, X, Image as ImageIcon, ChevronDown, ChevronRight, Store, Upload, Trash2, RotateCcw, FileText, Filter, Search, AlertTriangle, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
 import { useCanteenStore } from '../../store/canteenStore';
@@ -96,6 +96,9 @@ export default function PesananToko() {
   
   // Recap Modal State
   const [showRecapModal, setShowRecapModal] = useState(false);
+
+  // Unpaid Proceed Confirmation Modal State
+  const [unpaidProceedOrder, setUnpaidProceedOrder] = useState(null);
 
   // Fetch Santri List for Manual Order
   const { data: santriList = [] } = useQuery({
@@ -757,10 +760,15 @@ export default function PesananToko() {
                         </button>
 
                         <button 
+                          disabled={updateStatusMutation.isPending || updatePaymentMutation.isPending}
                           onClick={() => {
-                            updateStatusMutation.mutate({ id: order.id, status: 'processing', canteen_id: order.canteen_id });
+                            if (order.payment_status !== 'paid') {
+                              setUnpaidProceedOrder(order);
+                            } else {
+                              updateStatusMutation.mutate({ id: order.id, status: 'processing', canteen_id: order.canteen_id });
+                            }
                           }}
-                          className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm"
+                          className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm disabled:opacity-50"
                         >
                           <CheckCircle className="w-4 h-4" /> ✅ Lanjutkan Pesanan
                         </button>
@@ -1725,6 +1733,114 @@ export default function PesananToko() {
                 className="flex-[2] py-2.5 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex justify-center items-center gap-2 shadow-sm"
               >
                 {createManualOrderMutation.isPending ? 'Membuat...' : 'Buat Pesanan'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* CONFIRMATION ALERT MODAL WHEN PROCEEDING UNPAID ORDER */}
+      {unpaidProceedOrder && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-800 p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-200 my-auto text-left">
+            {/* Header Icon & Title */}
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 shadow-inner">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white leading-tight">
+                  Konfirmasi Lanjutkan Pesanan
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Pembayaran pesanan ini belum lunas
+                </p>
+              </div>
+              <button 
+                onClick={() => setUnpaidProceedOrder(null)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 -mr-1 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Order Info Card */}
+            <div className="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 rounded-2xl p-3.5 space-y-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-gray-600 dark:text-gray-400">Order ID:</span>
+                <span className="font-bold text-gray-900 dark:text-white">#{unpaidProceedOrder.id}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-gray-600 dark:text-gray-400">Nama Pemesan:</span>
+                <span className="font-semibold text-gray-900 dark:text-white">
+                  {unpaidProceedOrder.user?.name || 'Santri'}
+                  {unpaidProceedOrder.user?.santri_name ? ` (${unpaidProceedOrder.user.santri_name})` : ''}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-gray-600 dark:text-gray-400">Status Pembayaran:</span>
+                <span className={`px-2 py-0.5 rounded-full font-extrabold text-[10px] ${
+                  unpaidProceedOrder.payment_status === 'waiting_confirmation'
+                    ? 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-200 ring-1 ring-amber-300'
+                    : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
+                }`}>
+                  {unpaidProceedOrder.payment_status === 'waiting_confirmation'
+                    ? '⏳ Menunggu Validasi'
+                    : '⚠️ Belum Bayar'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-amber-200/60 dark:border-amber-900/50 text-sm font-bold text-gray-900 dark:text-white">
+                <span>Total Tagihan:</span>
+                <span className="text-green-600 dark:text-green-400">
+                  Rp {formatRupiah(unpaidProceedOrder.total_price)}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+              Pesanan ini belum dikonfirmasi lunas oleh toko. Apakah Anda yakin ingin tetap melanjutkan pesanan ini ke tahap proses?
+            </p>
+
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                disabled={updateStatusMutation.isPending || updatePaymentMutation.isPending}
+                onClick={async () => {
+                  const ord = unpaidProceedOrder;
+                  setUnpaidProceedOrder(null);
+                  try {
+                    await updatePaymentMutation.mutateAsync({ id: ord.id, status: 'paid', canteen_id: ord.canteen_id });
+                    updateStatusMutation.mutate({ id: ord.id, status: 'processing', canteen_id: ord.canteen_id });
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+                className="w-full py-3 px-4 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md shadow-green-600/20 active:scale-98 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <CheckCircle className="w-4 h-4" /> Tandai Lunas & Lanjutkan
+              </button>
+
+              <button
+                type="button"
+                disabled={updateStatusMutation.isPending || updatePaymentMutation.isPending}
+                onClick={() => {
+                  const ord = unpaidProceedOrder;
+                  setUnpaidProceedOrder(null);
+                  updateStatusMutation.mutate({ id: ord.id, status: 'processing', canteen_id: ord.canteen_id });
+                }}
+                className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-98 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                Tetap Lanjutkan (Belum Lunas)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setUnpaidProceedOrder(null)}
+                className="w-full py-2.5 px-4 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl text-xs sm:text-sm font-semibold transition-colors"
+              >
+                Batal
               </button>
             </div>
           </div>

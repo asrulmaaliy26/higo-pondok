@@ -24,10 +24,15 @@ import {
   Filter,
   RotateCcw,
   ArchiveRestore,
-  AlertTriangle
+  AlertTriangle,
+  ExternalLink,
+  Download,
+  Printer
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
+import { getFileType, getFileNameFromPath } from '../../lib/fileUtils';
+import ThermalReceiptModal from '../../components/receipt/ThermalReceiptModal';
 
 function getWeeksInMonth(year, month) {
   const weeks = [];
@@ -92,6 +97,41 @@ export default function AdminPesanan() {
 
   // Delete modal state (Soft Delete / Move to Trash)
   const [orderToDelete, setOrderToDelete] = useState(null);
+  const [restoreOrderId, setRestoreOrderId] = useState(null);
+  const [forceDeleteOrderId, setForceDeleteOrderId] = useState(null);
+
+  // Receipt Modal State for Admin
+  const [receiptModalConfig, setReceiptModalConfig] = useState({
+    isOpen: false,
+    mode: 'single', // 'single' | 'batch'
+    order: null,
+    orders: [],
+    title: ''
+  });
+
+  const handlePrintSingleReceipt = (orderToPrint) => {
+    setReceiptModalConfig({
+      isOpen: true,
+      mode: 'single',
+      order: orderToPrint,
+      orders: [],
+      title: `Struk Pesanan #ORD-${orderToPrint.id}`
+    });
+  };
+
+  const handlePrintBatchReceipt = () => {
+    if (orders.length === 0) {
+      toast.error('Tidak ada pesanan aktif pada filter saat ini.');
+      return;
+    }
+    setReceiptModalConfig({
+      isOpen: true,
+      mode: 'batch',
+      order: null,
+      orders: orders,
+      title: `Rekap Semua Pesanan (${orders.length} Pesanan)`
+    });
+  };
 
   // Recycle Bin Modal States (Permanent Delete & Empty Trash)
   const [orderToForceDelete, setOrderToForceDelete] = useState(null);
@@ -544,45 +584,53 @@ export default function AdminPesanan() {
       </div>
 
       {/* MAIN TAB SWITCHER (DITARUH DI BAWAH FILTER) */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 flex gap-4 rounded-2xl shadow-sm overflow-x-auto no-scrollbar">
-        <button
-          onClick={() => setActiveTab('orders')}
-          className={`py-3.5 px-3 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
-            activeTab === 'orders'
-              ? 'border-green-600 text-green-600 dark:text-green-400'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          <ShoppingBag className="w-4 h-4" />
-          Daftar Semua Pesanan ({orders.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('recap')}
-          className={`py-3.5 px-3 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
-            activeTab === 'recap'
-              ? 'border-green-600 text-green-600 dark:text-green-400'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          Tab Rekap & Statistik
-        </button>
-        <button
-          onClick={() => setActiveTab('trash')}
-          className={`py-3.5 px-3 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
-            activeTab === 'trash'
-              ? 'border-amber-600 text-amber-600 dark:text-amber-400'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          <Trash2 className="w-4 h-4" />
-          <span>Kotak Sampah</span>
-          {trashedOrders.length > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">
-              {trashedOrders.length}
-            </span>
-          )}
-        </button>
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-2 flex items-center justify-between gap-4 rounded-2xl shadow-sm overflow-x-auto no-scrollbar">
+        <div className="flex gap-4">
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`py-2 px-3 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === 'orders'
+                ? 'border-green-600 text-green-600 dark:text-green-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <ShoppingBag className="w-4 h-4" />
+            Daftar Semua Pesanan ({orders.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('recap')}
+            className={`py-2 px-3 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === 'recap'
+                ? 'border-green-600 text-green-600 dark:text-green-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            Tab Rekap & Statistik
+          </button>
+          <button
+            onClick={() => setActiveTab('trash')}
+            className={`py-2 px-3 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === 'trash'
+                ? 'border-amber-600 text-amber-600 dark:text-amber-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <Trash2 className="w-4 h-4" />
+            Tong Sampah ({trashedOrders.length})
+          </button>
+        </div>
+
+        {activeTab === 'orders' && orders.length > 0 && (
+          <button
+            onClick={handlePrintBatchReceipt}
+            className="py-1.5 px-3 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs active:scale-95 shrink-0"
+            title="Cetak Rekap Seluruh Pesanan ke Printer Thermal"
+          >
+            <Printer className="w-3.5 h-3.5 text-green-400" />
+            <span>🖨️ Cetak Rekap ({orders.length})</span>
+          </button>
+        )}
       </div>
 
       {/* TAB 1: DAFTAR SEMUA PESANAN */}
@@ -789,14 +837,25 @@ export default function AdminPesanan() {
                         </span>
                       </div>
 
-                      {/* Actions: Delete Button */}
-                      <button
-                        onClick={() => setOrderToDelete(order)}
-                        className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-900/50 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs border border-red-200 dark:border-red-800 self-end sm:self-auto"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                        Hapus Pesanan
-                      </button>
+                      {/* Actions: Cetak Struk & Delete Button */}
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                        <button
+                          onClick={() => handlePrintSingleReceipt(order)}
+                          className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+                          title="Cetak Struk Thermal iWare"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                          <span>Cetak Struk</span>
+                        </button>
+
+                        <button
+                          onClick={() => setOrderToDelete(order)}
+                          className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-900/50 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs border border-red-200 dark:border-red-800"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                          Hapus Pesanan
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -1288,30 +1347,72 @@ export default function AdminPesanan() {
       {/* MODAL VIEWER GAMBAR / BUKTI */}
       {selectedProofs.length > 0 && createPortal(
         <div className="fixed inset-0 z-[110] bg-black/90 backdrop-blur-xs flex flex-col animate-in fade-in duration-200">
-          <div className="flex justify-between items-center px-4 py-3 bg-black/50 shrink-0">
-            <span className="text-white font-bold text-xs">{selectedProofs.length} Berkas Bukti</span>
+          <div className="flex justify-between items-center px-4 py-3 bg-black/70 border-b border-white/10 shrink-0">
+            <span className="text-white font-bold text-xs flex items-center gap-1.5">
+              <ImageIcon className="w-3.5 h-3.5 text-green-400" />
+              {selectedProofs.length} Foto / Berkas Bukti
+            </span>
             <button
               onClick={() => setSelectedProofs([])}
-              className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20"
+              className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center gap-4">
-            {selectedProofs.map((proof, idx) => (
-              <div key={idx} className="w-full max-w-lg bg-gray-900 rounded-2xl p-2">
-                <img
-                  src={proof}
-                  alt={`Bukti ${idx + 1}`}
-                  className="w-full rounded-xl object-contain max-h-[70vh]"
-                />
-              </div>
-            ))}
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center gap-4 pb-12">
+            {selectedProofs.map((proof, idx) => {
+              const fileType = getFileType(proof);
+              const fileName = getFileNameFromPath(proof);
+
+              return (
+                <div key={idx} className="w-full max-w-lg bg-gray-900 border border-gray-800 rounded-2xl p-2.5 flex flex-col items-center gap-2">
+                  <div className="w-full flex items-center justify-between px-2 text-xs text-gray-400">
+                    <span className="font-medium">Bukti {idx + 1} dari {selectedProofs.length}</span>
+                    <a 
+                      href={proof} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="text-green-400 hover:text-green-300 flex items-center gap-1 text-[11px]"
+                    >
+                      Buka Resolusi Penuh <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <img
+                    src={proof}
+                    alt={`Bukti ${idx + 1}`}
+                    className="w-full rounded-xl object-contain max-h-[75vh] bg-black/40"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                  <div
+                    style={{ display: 'none' }}
+                    className="w-full h-48 rounded-xl bg-gray-800 flex flex-col items-center justify-center text-gray-400 text-sm gap-2"
+                  >
+                    <FileText className="w-10 h-10 opacity-40 text-green-400" />
+                    <span>Pratinjau langsung tidak tersedia untuk format ini</span>
+                    <a href={proof} target="_blank" rel="noreferrer" className="text-green-400 text-xs underline break-all px-4 text-center">Buka Berkas ({fileName})</a>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>,
         document.body
       )}
+      {/* MODAL CETAK STRUK THERMAL IWARE UNTUK ADMIN */}
+      <ThermalReceiptModal
+        isOpen={receiptModalConfig.isOpen}
+        onClose={() => setReceiptModalConfig(prev => ({ ...prev, isOpen: false }))}
+        mode={receiptModalConfig.mode}
+        order={receiptModalConfig.order}
+        orders={receiptModalConfig.orders}
+        courierName={receiptModalConfig.order?.courier?.name || 'Administrator'}
+        title={receiptModalConfig.title}
+      />
     </div>
   );
 }

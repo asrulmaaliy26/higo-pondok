@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ShoppingBag, ChevronLeft, CheckCircle, Clock, Store, MessageCircle, Image as ImageIcon, X, XCircle } from 'lucide-react';
+import { ShoppingBag, ChevronLeft, CheckCircle, Clock, Store, MessageCircle, Image as ImageIcon, X, XCircle, FileText, Download, ExternalLink, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl, getPublicUrl } from '../../lib/axios';
 import { useAuthStore } from '../../store/authStore';
+import { getFileType, isImageFile, isHeifFile, isPdfFile, formatFileSize, getFileNameFromPath, compressImageFiles } from '../../lib/fileUtils';
 
 export default function Pembayaran() {
   const user = useAuthStore(state => state.user);
@@ -16,6 +17,7 @@ export default function Pembayaran() {
   const [showPaymentProofModal, setShowPaymentProofModal] = useState(false);
   const [activeOrderForPaymentProof, setActiveOrderForPaymentProof] = useState(null);
   const [paymentProofFiles, setPaymentProofFiles] = useState([]);
+  const [isCompressing, setIsCompressing] = useState(false);
 
   const isPaymentTime = (order) => {
     if (!order?.canteen?.open_time || !order?.canteen?.close_time) {
@@ -543,44 +545,112 @@ export default function Pembayaran() {
 
       {/* PROOF OF DELIVERY / PAYMENT FULL-SCREEN MODAL */}
       {selectedProofs.length > 0 && createPortal(
-        <div className="fixed inset-0 z-[110] bg-black flex flex-col animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[110] bg-black/90 backdrop-blur-xs flex flex-col animate-in fade-in duration-200">
           {/* Header */}
-          <div className="flex justify-between items-center px-4 py-3 bg-black/80 shrink-0">
-            <span className="text-white font-bold text-sm">{selectedProofs.length} Foto</span>
+          <div className="flex justify-between items-center px-4 py-3 bg-black/70 border-b border-white/10 shrink-0">
+            <span className="text-white font-bold text-sm flex items-center gap-2">
+              <FileText className="w-4 h-4 text-green-400" />
+              {selectedProofs.length} Berkas Bukti
+            </span>
             <button 
               onClick={() => setSelectedProofs([])}
-              className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
+              className="w-9 h-9 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white active:scale-95 transition-all"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
             </button>
           </div>
           
-          {/* Images */}
-          <div className="flex-1 overflow-y-auto flex flex-col items-center gap-4 p-4 pb-10">
-            {selectedProofs.map((proof, idx) => (
-              <div key={idx} className="w-full max-w-xl">
-                <p className="text-white/50 text-xs mb-1 text-center">Bukti {idx + 1}</p>
-                <img 
-                  src={proof}
-                  alt={`Bukti ${idx + 1}`}
-                  className="w-full rounded-xl shadow-2xl object-contain bg-gray-900"
-                  style={{ maxHeight: '80vh' }}
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'flex';
-                  }}
-                />
-                <div
-                  style={{ display: 'none' }}
-                  className="w-full h-48 rounded-xl bg-gray-800 flex flex-col items-center justify-center text-gray-400 text-sm gap-2"
-                >
-                  <ImageIcon className="w-10 h-10 opacity-40" />
-                  <span>Gambar tidak dapat dimuat</span>
-                  <a href={proof} target="_blank" rel="noreferrer" className="text-green-400 text-xs underline break-all px-4 text-center">{proof}</a>
+          {/* Images & Documents */}
+          <div className="flex-1 overflow-y-auto flex flex-col items-center gap-4 p-4 pb-12">
+            {selectedProofs.map((proof, idx) => {
+              const fileType = getFileType(proof);
+              const fileName = getFileNameFromPath(proof);
+
+              if (fileType === 'pdf') {
+                return (
+                  <div key={idx} className="w-full max-w-2xl bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col items-center gap-3 shadow-xl">
+                    <div className="w-full flex items-center justify-between text-xs text-gray-400 border-b border-gray-800 pb-2">
+                      <span className="font-semibold text-white flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-red-400" /> Bukti {idx + 1}: {fileName}
+                      </span>
+                      <span className="px-2 py-0.5 bg-red-900/40 text-red-300 rounded font-mono text-[10px]">PDF</span>
+                    </div>
+                    <iframe 
+                      src={proof} 
+                      title={`Bukti PDF ${idx + 1}`} 
+                      className="w-full h-[55vh] rounded-xl bg-white border border-gray-700" 
+                    />
+                    <a
+                      href={proof}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 active:scale-98 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md"
+                    >
+                      <ExternalLink className="w-4 h-4" /> Buka / Unduh Dokumen PDF
+                    </a>
+                  </div>
+                );
+              }
+
+              if (fileType === 'image') {
+                return (
+                  <div key={idx} className="w-full max-w-xl bg-gray-900/60 border border-white/5 rounded-2xl p-2.5 flex flex-col items-center gap-2">
+                    <div className="w-full flex items-center justify-between px-2 text-xs text-gray-400">
+                      <span>Bukti {idx + 1}</span>
+                      <a 
+                        href={proof} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="text-green-400 hover:text-green-300 flex items-center gap-1 text-[11px]"
+                      >
+                        Buka Gambar Penuh <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                    <img 
+                      src={proof}
+                      alt={`Bukti ${idx + 1}`}
+                      className="w-full rounded-xl shadow-2xl object-contain bg-black/40"
+                      style={{ maxHeight: '75vh' }}
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                    <div
+                      style={{ display: 'none' }}
+                      className="w-full h-48 rounded-xl bg-gray-800 flex flex-col items-center justify-center text-gray-400 text-sm gap-2"
+                    >
+                      <ImageIcon className="w-10 h-10 opacity-40" />
+                      <span>Gambar tidak dapat dimuat langsung</span>
+                      <a href={proof} target="_blank" rel="noreferrer" className="text-green-400 text-xs underline break-all px-4 text-center">Buka Berkas ({fileName})</a>
+                    </div>
+                  </div>
+                );
+              }
+
+              // HEIF / Document / Spreadsheet / Archive / Other File
+              return (
+                <div key={idx} className="w-full max-w-xl bg-gray-900 border border-gray-800 rounded-2xl p-5 flex flex-col items-center gap-4 text-center shadow-xl">
+                  <div className="w-16 h-16 rounded-2xl bg-green-950/60 border border-green-800/50 flex items-center justify-center text-green-400">
+                    <FileText className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <p className="text-white font-bold text-sm break-all">{fileName}</p>
+                    <p className="text-gray-400 text-xs mt-1">Berkas Bukti Pembayaran #{idx + 1}</p>
+                  </div>
+                  <a
+                    href={proof}
+                    target="_blank"
+                    download
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 active:scale-98 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md"
+                  >
+                    <Download className="w-4 h-4" /> Unduh / Buka Berkas
+                  </a>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>,
         document.body
@@ -621,35 +691,96 @@ export default function Pembayaran() {
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Foto Bukti Transfer (Bisa Lebih Dari 1) <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Foto Bukti Transfer <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-[11px] text-green-600 dark:text-green-400 font-medium">
+                      Semua format foto & bebas ukuran
+                    </span>
+                  </div>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.heic,.heif"
                     multiple
-                    onChange={(e) => {
+                    disabled={isCompressing}
+                    onChange={async (e) => {
                       const files = Array.from(e.target.files);
-                      const validFiles = [];
-                      for (const file of files) {
-                        if (file.size > 2 * 1024 * 1024) {
-                          toast.error(`File "${file.name}" melebihi ukuran maksimal 2 MB`);
-                        } else {
-                          validFiles.push(file);
+                      if (files.length > 0) {
+                        setIsCompressing(true);
+                        const toastId = toast.loading('Mengompresi foto otomatis...');
+                        try {
+                          const compressed = await compressImageFiles(files);
+                          setPaymentProofFiles(prev => [...prev, ...compressed]);
+                          toast.success('Foto berhasil disiapkan & dikompresi', { id: toastId });
+                        } catch (err) {
+                          setPaymentProofFiles(prev => [...prev, ...files]);
+                          toast.dismiss(toastId);
+                        } finally {
+                          setIsCompressing(false);
                         }
                       }
-                      setPaymentProofFiles(validFiles);
+                      e.target.value = '';
                     }}
-                    className="w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-green-900/30 dark:file:text-green-400 dark:text-gray-400"
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-green-900/30 dark:file:text-green-400 dark:text-gray-400 border border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-1 disabled:opacity-60"
                   />
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 flex items-center gap-1">
+                    <span>✨ Otomatis dikompresi agar hemat ukuran & cepat terunggah.</span>
+                  </p>
                 </div>
+
                 {paymentProofFiles.length > 0 && (
-                  <div className="mt-4 grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-2">
-                    {paymentProofFiles.map((file, idx) => (
-                      <div key={idx} className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 aspect-square">
-                        <img src={URL.createObjectURL(file)} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
-                      </div>
-                    ))}
+                  <div>
+                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">
+                      Berkas Dipilih ({paymentProofFiles.length}):
+                    </p>
+                    <div className="grid grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
+                      {paymentProofFiles.map((file, idx) => {
+                        const isImg = isImageFile(file);
+                        const isPdf = isPdfFile(file);
+                        const isHeif = isHeifFile(file);
+
+                        return (
+                          <div key={idx} className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-2 flex flex-col justify-between group">
+                            {isImg ? (
+                              <div className="aspect-video w-full rounded-lg overflow-hidden bg-black/5 mb-1.5">
+                                <img src={URL.createObjectURL(file)} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                              </div>
+                            ) : (
+                              <div className="aspect-video w-full rounded-lg bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800/40 flex flex-col items-center justify-center text-green-600 dark:text-green-400 mb-1.5">
+                                <FileText className="w-6 h-6" />
+                                <span className="text-[10px] font-mono font-bold mt-0.5 uppercase">
+                                  {isPdf ? 'PDF' : isHeif ? 'HEIF' : file.name.split('.').pop() || 'FILE'}
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="pr-6">
+                              <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate" title={file.name}>
+                                {file.name}
+                              </p>
+                              <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                                <span>{formatFileSize(file.size)}</span>
+                                {file.originalSize && file.originalSize > file.size && (
+                                  <span className="text-green-600 dark:text-green-400 font-bold">
+                                    (Hemat {Math.round((1 - file.size / file.originalSize) * 100)}%)
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setPaymentProofFiles(prev => prev.filter((_, i) => i !== idx))}
+                              className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-transform active:scale-95 z-10"
+                              title="Hapus berkas ini"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -658,12 +789,12 @@ export default function Pembayaran() {
             <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-3 sticky bottom-0 bg-white dark:bg-gray-900">
               <button 
                 onClick={() => {setShowPaymentProofModal(false); setPaymentProofFiles([]);}}
-                className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold"
+                className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-sm"
               >
                 Batal
               </button>
               <button 
-                disabled={paymentProofFiles.length === 0 || uploadPaymentProofMutation.isPending}
+                disabled={paymentProofFiles.length === 0 || uploadPaymentProofMutation.isPending || isCompressing}
                 onClick={() => {
                   const formData = new FormData();
                   paymentProofFiles.forEach((file) => {
@@ -671,10 +802,20 @@ export default function Pembayaran() {
                   });
                   uploadPaymentProofMutation.mutate({ id: activeOrderForPaymentProof.id, formData });
                 }}
-                className="flex-[2] py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
+                className="flex-[2] py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm text-sm"
               >
-                {uploadPaymentProofMutation.isPending ? 'Mengunggah...' : (
-                  <>Unggah Bukti <CheckCircle className="w-5 h-5"/></>
+                {uploadPaymentProofMutation.isPending ? (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    <span>Mengunggah ({paymentProofFiles.length} berkas)...</span>
+                  </div>
+                ) : isCompressing ? (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    <span>Mengompresi...</span>
+                  </div>
+                ) : (
+                  <>Unggah {paymentProofFiles.length > 0 ? `(${paymentProofFiles.length}) Bukti` : 'Bukti'} <CheckCircle className="w-4 h-4"/></>
                 )}
               </button>
             </div>

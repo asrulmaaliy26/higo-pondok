@@ -41,7 +41,7 @@ class CanteenBannerController extends Controller
             return response()->json(['message' => 'Toko tidak ditemukan'], 404);
         }
 
-        $imagePath = $request->file('image')->store($this->getUserUploadPath($request->user(), 'banners'), 'public');
+        $imagePath = $this->storeOptimizedImage($request->file('image'), $request->user(), 'banners');
 
         $banner = $canteen->banners()->create([
             'title' => $request->title,

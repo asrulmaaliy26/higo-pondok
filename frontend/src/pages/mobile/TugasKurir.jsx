@@ -5,12 +5,15 @@ import {
   Package, Camera, CheckCircle, Upload, X, MessageCircle, Trash2, 
   FileText, Image as ImageIcon, Search, Store, User, MapPin, 
   ChevronDown, ChevronRight, Layers, Clock, Truck, RefreshCw, 
-  Phone, CheckSquare, AlertCircle, ShoppingBag, Filter, Calendar
+  Phone, CheckSquare, AlertCircle, ShoppingBag, Filter, Calendar,
+  Download, ExternalLink, Printer
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
 import { useAuthStore } from '../../store/authStore';
 import santriData from '../../data/santri.json';
+import { getFileType, isImageFile, isHeifFile, isPdfFile, formatFileSize, getFileNameFromPath, compressImageFiles } from '../../lib/fileUtils';
+import ThermalReceiptModal from '../../components/receipt/ThermalReceiptModal';
 
 function getSantriGender(santriName = '', santriRoom = '') {
   const sName = (santriName || '').toLowerCase().trim();
@@ -175,6 +178,37 @@ export default function TugasKurir() {
   const [photoFiles, setPhotoFiles] = useState([]);
   const [selectedProofs, setSelectedProofs] = useState([]);
   const [confirmCompleteOrder, setConfirmCompleteOrder] = useState(null);
+  const [receiptModalConfig, setReceiptModalConfig] = useState({
+    isOpen: false,
+    mode: 'single', // 'single' | 'batch'
+    order: null,
+    orders: [],
+    title: ''
+  });
+
+  const handlePrintSingleReceipt = (orderToPrint) => {
+    setReceiptModalConfig({
+      isOpen: true,
+      mode: 'single',
+      order: orderToPrint,
+      orders: [],
+      title: `Struk Pesanan #ORD-${orderToPrint.id}`
+    });
+  };
+
+  const handlePrintBatchReceipt = () => {
+    if (filteredOrders.length === 0) {
+      toast.error('Tidak ada pesanan aktif pada filter saat ini.');
+      return;
+    }
+    setReceiptModalConfig({
+      isOpen: true,
+      mode: 'batch',
+      order: null,
+      orders: filteredOrders,
+      title: `Rekap Antaran (${filteredOrders.length} Pesanan)`
+    });
+  };
 
   // Fetch all orders for courier
   const { data: rawOrders, isLoading, isRefetching, refetch } = useQuery({
@@ -288,19 +322,27 @@ export default function TugasKurir() {
     }
   });
 
-  const handleFileChange = (e) => {
+  const [isCompressing, setIsCompressing] = useState(false);
+
+  const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length > 0) {
-      const validFiles = files.filter(file => {
-        if (file.size > 3 * 1024 * 1024) {
-          toast.error(`Ukuran foto ${file.name} melebihi 3MB`);
-          return false;
-        }
-        return true;
-      });
-      setPhotoFiles(prev => [...prev, ...validFiles]);
-      setPhotoPreviews(prev => [...prev, ...validFiles.map(file => URL.createObjectURL(file))]);
+      setIsCompressing(true);
+      const toastId = toast.loading('Mengompresi foto...');
+      try {
+        const compressed = await compressImageFiles(files);
+        setPhotoFiles(prev => [...prev, ...compressed]);
+        setPhotoPreviews(prev => [...prev, ...compressed.map(file => URL.createObjectURL(file))]);
+        toast.success('Foto berhasil disiapkan & dikompresi', { id: toastId });
+      } catch (err) {
+        setPhotoFiles(prev => [...prev, ...files]);
+        setPhotoPreviews(prev => [...prev, ...files.map(file => URL.createObjectURL(file))]);
+        toast.dismiss(toastId);
+      } finally {
+        setIsCompressing(false);
+      }
     }
+    e.target.value = '';
   };
 
   const handleRemoveNewPhoto = (index, e) => {
@@ -866,8 +908,17 @@ export default function TugasKurir() {
               ))}
             </div>
 
-            {/* Total Uang Produk & Total Ongkir (Dipaling Kanan Sejajar Filter) */}
+            {/* Total Uang Produk & Total Ongkir & Tombol Cetak Rekap */}
             <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button
+                onClick={handlePrintBatchReceipt}
+                className="py-1.5 px-3 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                title="Cetak Rekap / Manifest Seluruh Antaran Aktif"
+              >
+                <Printer className="w-3.5 h-3.5 text-green-400" />
+                <span>🖨️ Cetak Rekap ({filteredOrders.length})</span>
+              </button>
+
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs shadow-xs">
                 <span className="text-gray-500 dark:text-gray-400 font-medium">Uang Produk:</span>
                 <span className="font-extrabold text-gray-900 dark:text-white">
@@ -1145,6 +1196,30 @@ export default function TugasKurir() {
                             💳 Bukti Transfer
                           </button>
                         )}
+
+                        {/* TOMBOL CETAK STRUK SATUAN */}
+                        <button
+                          onClick={() => handlePrintSingleReceipt(order)}
+                          className="py-1.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                          title="Cetak Struk Thermal iWare"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                          <span>Cetak Struk</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Jika pesanan sudah selesai tapi ingin cetak ulang struk */}
+                    {isCompleted && (
+                      <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex justify-end">
+                        <button
+                          onClick={() => handlePrintSingleReceipt(order)}
+                          className="py-1.5 px-3 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+                          title="Cetak Ulang Struk"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>Cetak Ulang Struk</span>
+                        </button>
                       </div>
                     )}
 
@@ -1697,26 +1772,38 @@ export default function TugasKurir() {
                 return (
                   <div className="bg-gray-50 dark:bg-gray-800/60 p-3 rounded-xl border border-gray-200 dark:border-gray-700 space-y-2">
                     <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                      Foto Tersimpan ({currentPhotos.length}):
+                      Berkas Tersimpan ({currentPhotos.length}):
                     </span>
                     <div className="grid grid-cols-3 gap-2 max-h-36 overflow-y-auto">
-                      {currentPhotos.map((path, idx) => (
-                        <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600 group">
-                          <img src={getStorageUrl(path)} alt={`Saved ${idx + 1}`} className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (window.confirm('Hapus foto ini dari database?')) {
-                                deleteProofMutation.mutate({ id: selectedOrder.id, type: currentField, path });
-                              }
-                            }}
-                            className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-transform active:scale-95 z-10"
-                            title="Hapus foto ini"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
+                      {currentPhotos.map((path, idx) => {
+                        const fileType = getFileType(path);
+                        const isImg = fileType === 'image';
+
+                        return (
+                          <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600 bg-black/10 flex items-center justify-center group">
+                            {isImg ? (
+                              <img src={getStorageUrl(path)} alt={`Saved ${idx + 1}`} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="flex flex-col items-center justify-center p-1 text-center text-gray-600 dark:text-gray-300">
+                                <FileText className="w-6 h-6" />
+                                <span className="text-[9px] font-mono mt-0.5 uppercase truncate max-w-full px-1">{fileType}</span>
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm('Hapus berkas ini dari database?')) {
+                                  deleteProofMutation.mutate({ id: selectedOrder.id, type: currentField, path });
+                                }
+                              }}
+                              className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-transform active:scale-95 z-10"
+                              title="Hapus berkas ini"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -1724,22 +1811,57 @@ export default function TugasKurir() {
               
               {/* NEW PREVIEWS */}
               <div className="space-y-3">
-                {photoPreviews.length > 0 && (
+                {photoFiles.length > 0 && (
                   <div className="border-2 border-dashed border-green-500 bg-green-50/50 dark:bg-green-900/10 rounded-xl p-3">
-                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                      {photoPreviews.map((preview, idx) => (
-                        <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                          <img src={preview} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={(e) => handleRemoveNewPhoto(idx, e)}
-                            className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-transform active:scale-95"
-                            title="Hapus"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
+                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">
+                      Berkas Baru Dipilih ({photoFiles.length}):
+                    </p>
+                    <div className="grid grid-cols-2 gap-2.5 max-h-48 overflow-y-auto pr-1">
+                      {photoFiles.map((file, idx) => {
+                        const isImg = isImageFile(file);
+                        const isPdf = isPdfFile(file);
+                        const isHeif = isHeifFile(file);
+
+                        return (
+                          <div key={idx} className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 flex flex-col justify-between group shadow-xs">
+                            {isImg ? (
+                              <div className="aspect-video w-full rounded-lg overflow-hidden bg-black/5 mb-1.5">
+                                <img src={URL.createObjectURL(file)} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                              </div>
+                            ) : (
+                              <div className="aspect-video w-full rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/40 flex flex-col items-center justify-center text-blue-600 dark:text-blue-400 mb-1.5">
+                                <FileText className="w-6 h-6" />
+                                <span className="text-[10px] font-mono font-bold mt-0.5 uppercase">
+                                  {isPdf ? 'PDF' : isHeif ? 'HEIF' : file.name.split('.').pop() || 'FILE'}
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="pr-6">
+                              <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate" title={file.name}>
+                                {file.name}
+                              </p>
+                              <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                                <span>{formatFileSize(file.size)}</span>
+                                {file.originalSize && file.originalSize > file.size && (
+                                  <span className="text-blue-600 dark:text-blue-400 font-bold">
+                                    (Hemat {Math.round((1 - file.size / file.originalSize) * 100)}%)
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(e) => handleRemoveNewPhoto(idx, e)}
+                              className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-transform active:scale-95 z-10"
+                              title="Hapus"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1764,7 +1886,7 @@ export default function TugasKurir() {
                     <div className="w-9 h-9 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-full flex items-center justify-center">
                       <ImageIcon className="w-4 h-4" />
                     </div>
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Pilih Galeri</span>
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Pilih Berkas / Galeri</span>
                   </button>
                 </div>
 
@@ -1779,7 +1901,7 @@ export default function TugasKurir() {
                 <input 
                   id="galleryInput"
                   type="file" 
-                  accept="image/*"
+                  accept="image/*,.heic,.heif"
                   multiple
                   onChange={handleFileChange} 
                   className="hidden"
@@ -1796,17 +1918,17 @@ export default function TugasKurir() {
               </button>
               <button 
                 onClick={handleSubmitProof}
-                disabled={photoFiles.length === 0 || uploadProofMutation.isPending}
+                disabled={photoFiles.length === 0 || uploadProofMutation.isPending || isCompressing}
                 className={`flex-[2] py-2.5 rounded-xl font-bold text-white disabled:opacity-50 transition-colors flex justify-center items-center gap-1.5 text-xs ${
                   uploadType === 'delivery' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'
                 }`}
               >
-                {uploadProofMutation.isPending ? (
+                {uploadProofMutation.isPending || isCompressing ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                 ) : (
                   <>
                     <Upload className="w-3.5 h-3.5" />
-                    Simpan Foto ({photoFiles.length})
+                    {isCompressing ? 'Mengompresi...' : `Simpan Berkas (${photoFiles.length})`}
                   </>
                 )}
               </button>
@@ -1817,12 +1939,15 @@ export default function TugasKurir() {
       )}
 
       {/* ======================================================== */}
-      {/* FULL SCREEN PHOTO VIEWER MODAL */}
+      {/* FULL SCREEN PHOTO / DOCUMENT VIEWER MODAL */}
       {/* ======================================================== */}
       {selectedProofs.length > 0 && createPortal(
         <div className="fixed inset-0 z-[110] bg-black/95 flex flex-col animate-in fade-in duration-200">
           <div className="flex justify-between items-center px-4 py-3 bg-black/80 shrink-0 border-b border-gray-800">
-            <span className="text-white font-bold text-sm">Foto Bukti Terunggah ({selectedProofs.length} Foto)</span>
+            <span className="text-white font-bold text-sm flex items-center gap-2">
+              <FileText className="w-4 h-4 text-green-400" />
+              Berkas Bukti ({selectedProofs.length})
+            </span>
             <button 
               onClick={() => setSelectedProofs([])}
               className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
@@ -1832,17 +1957,82 @@ export default function TugasKurir() {
           </div>
           
           <div className="flex-1 overflow-y-auto flex flex-col items-center gap-4 p-4 pb-12">
-            {selectedProofs.map((proof, idx) => (
-              <div key={idx} className="w-full max-w-lg">
-                <p className="text-white/60 text-xs mb-1 text-center font-medium">Foto {idx + 1} dari {selectedProofs.length}</p>
-                <img 
-                  src={proof}
-                  alt={`Foto ${idx + 1}`}
-                  className="w-full rounded-2xl shadow-2xl object-contain bg-gray-900 border border-gray-800"
-                  style={{ maxHeight: '75vh' }}
-                />
-              </div>
-            ))}
+            {selectedProofs.map((proof, idx) => {
+              const fileType = getFileType(proof);
+              const fileName = getFileNameFromPath(proof);
+
+              if (fileType === 'pdf') {
+                return (
+                  <div key={idx} className="w-full max-w-2xl bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col items-center gap-3 shadow-xl">
+                    <div className="w-full flex items-center justify-between text-xs text-gray-400 border-b border-gray-800 pb-2">
+                      <span className="font-semibold text-white flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-red-400" /> Bukti {idx + 1}: {fileName}
+                      </span>
+                      <span className="px-2 py-0.5 bg-red-900/40 text-red-300 rounded font-mono text-[10px]">PDF</span>
+                    </div>
+                    <iframe 
+                      src={proof} 
+                      title={`Bukti PDF ${idx + 1}`} 
+                      className="w-full h-[55vh] rounded-xl bg-white border border-gray-700" 
+                    />
+                    <a
+                      href={proof}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 active:scale-98 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md"
+                    >
+                      <ExternalLink className="w-4 h-4" /> Buka / Unduh Dokumen PDF
+                    </a>
+                  </div>
+                );
+              }
+
+              if (fileType === 'image') {
+                return (
+                  <div key={idx} className="w-full max-w-lg bg-gray-900 border border-gray-800 rounded-2xl p-2.5 flex flex-col items-center gap-2">
+                    <div className="w-full flex items-center justify-between px-2 text-xs text-gray-400">
+                      <span className="font-medium">Bukti {idx + 1} dari {selectedProofs.length}</span>
+                      <a 
+                        href={proof} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="text-green-400 hover:text-green-300 flex items-center gap-1 text-[11px]"
+                      >
+                        Buka Penuh <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                    <img 
+                      src={proof}
+                      alt={`Foto ${idx + 1}`}
+                      className="w-full rounded-xl shadow-2xl object-contain bg-black/40"
+                      style={{ maxHeight: '75vh' }}
+                    />
+                  </div>
+                );
+              }
+
+              // HEIF / Document / Other
+              return (
+                <div key={idx} className="w-full max-w-lg bg-gray-900 border border-gray-800 rounded-2xl p-5 flex flex-col items-center gap-4 text-center shadow-xl">
+                  <div className="w-16 h-16 rounded-2xl bg-green-950/60 border border-green-800/50 flex items-center justify-center text-green-400">
+                    <FileText className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <p className="text-white font-bold text-sm break-all">{fileName}</p>
+                    <p className="text-gray-400 text-xs mt-1">Berkas Bukti #{idx + 1}</p>
+                  </div>
+                  <a
+                    href={proof}
+                    target="_blank"
+                    download
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 active:scale-98 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md"
+                  >
+                    <Download className="w-4 h-4" /> Unduh / Buka Berkas
+                  </a>
+                </div>
+              );
+            })}
           </div>
         </div>,
         document.body
@@ -1899,6 +2089,16 @@ export default function TugasKurir() {
         </div>,
         document.body
       )}
+      {/* MODAL CETAK STRUK THERMAL IWARE */}
+      <ThermalReceiptModal
+        isOpen={receiptModalConfig.isOpen}
+        onClose={() => setReceiptModalConfig(prev => ({ ...prev, isOpen: false }))}
+        mode={receiptModalConfig.mode}
+        order={receiptModalConfig.order}
+        orders={receiptModalConfig.orders}
+        courierName={currentUser?.name || 'Petugas Kurir'}
+        title={receiptModalConfig.title}
+      />
     </div>
   );
 }

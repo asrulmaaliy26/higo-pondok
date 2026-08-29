@@ -1,0 +1,173 @@
+/**
+ * Utility functions for handling file uploads, extensions, image compression, and proof displays
+ */
+
+export const getFileType = (urlOrName = '') => {
+  if (!urlOrName) return 'unknown';
+  const clean = urlOrName.split('?')[0].toLowerCase();
+  
+  if (clean.match(/\.(jpeg|jpg|png|webp|gif|svg|bmp|ico)$/)) {
+    return 'image';
+  }
+  if (clean.match(/\.(heic|heif)$/)) {
+    return 'heif';
+  }
+  if (clean.endsWith('.pdf')) {
+    return 'pdf';
+  }
+  if (clean.match(/\.(doc|docx|odt|rtf|txt)$/)) {
+    return 'document';
+  }
+  if (clean.match(/\.(xls|xlsx|csv)$/)) {
+    return 'spreadsheet';
+  }
+  if (clean.match(/\.(zip|rar|7z|tar|gz)$/)) {
+    return 'archive';
+  }
+  return 'file';
+};
+
+export const isImageFile = (file) => {
+  if (!file) return false;
+  if (file.type && file.type.startsWith('image/') && !file.type.includes('heic') && !file.type.includes('heif')) {
+    return true;
+  }
+  const name = file.name || '';
+  return !!name.match(/\.(jpeg|jpg|png|webp|gif|svg|bmp|ico)$/i);
+};
+
+export const isHeifFile = (file) => {
+  if (!file) return false;
+  if (file.type && (file.type.includes('heic') || file.type.includes('heif'))) return true;
+  const name = file.name || '';
+  return !!name.match(/\.(heic|heif)$/i);
+};
+
+export const isPdfFile = (file) => {
+  if (!file) return false;
+  if (file.type === 'application/pdf') return true;
+  const name = file.name || '';
+  return name.toLowerCase().endsWith('.pdf');
+};
+
+export const formatFileSize = (bytes) => {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+};
+
+export const getFileNameFromPath = (path = '') => {
+  if (!path) return 'Berkas Bukti';
+  const parts = path.split('/');
+  return parts[parts.length - 1] || path;
+};
+
+/**
+ * Compress an image file using browser Canvas.
+ * Reduces large photos (e.g. 5-15MB from phone camera) down to ~150-350KB
+ * without noticeable quality loss for receipts/proofs/photos.
+ *
+ * @param {File} file
+ * @param {Object} options - { maxWidth: 1600, maxHeight: 1600, quality: 0.8, outputType: 'image/jpeg' }
+ * @returns {Promise<File>}
+ */
+export const compressImageFile = async (file, options = {}) => {
+  if (!file || !isImageFile(file)) {
+    return file;
+  }
+
+  const maxWidth = options.maxWidth || 1600;
+  const maxHeight = options.maxHeight || 1600;
+  const quality = options.quality !== undefined ? options.quality : 0.8;
+  const outputType = options.outputType || 'image/jpeg';
+
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = (readerEvent) => {
+        const image = new Image();
+        image.onload = () => {
+          try {
+            let width = image.width;
+            let height = image.height;
+
+            // Calculate proportional dimensions
+            if (width > height) {
+              if (width > maxWidth) {
+                height = Math.round((height * maxWidth) / width);
+                width = maxWidth;
+              }
+            } else {
+              if (height > maxHeight) {
+                width = Math.round((width * maxHeight) / height);
+                height = maxHeight;
+              }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(image, 0, 0, width, height);
+
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) {
+                  resolve(file);
+                  return;
+                }
+
+                // Create a new compressed File object
+                const originalName = file.name || 'image.jpg';
+                const baseName = originalName.replace(/\.[^/.]+$/, "");
+                const newFileName = `${baseName}.jpg`;
+
+                const compressedFile = new File([blob], newFileName, {
+                  type: outputType,
+                  lastModified: Date.now(),
+                });
+
+                // Attach original size info for UI display
+                compressedFile.originalSize = file.size;
+                compressedFile.isCompressed = true;
+
+                resolve(compressedFile);
+              },
+              outputType,
+              quality
+            );
+          } catch (canvasErr) {
+            console.warn('Canvas compression error:', canvasErr);
+            resolve(file);
+          }
+        };
+
+        image.onerror = () => {
+          resolve(file);
+        };
+
+        image.src = readerEvent.target.result;
+      };
+
+      reader.onerror = () => {
+        resolve(file);
+      };
+
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.warn('File reading error in compressImageFile:', err);
+      resolve(file);
+    }
+  });
+};
+
+/**
+ * Compress an array of files concurrently.
+ */
+export const compressImageFiles = async (files, options = {}) => {
+  if (!Array.isArray(files) || files.length === 0) return [];
+  return Promise.all(files.map((file) => compressImageFile(file, options)));
+};

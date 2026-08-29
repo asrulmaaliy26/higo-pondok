@@ -127,7 +127,7 @@ class CanteenController extends Controller
             if ($canteen->image) {
                 Storage::disk('public')->delete($canteen->image);
             }
-            $path = $request->file('image')->store($this->getUserUploadPath($request->user(), 'canteens'), 'public');
+            $path = $this->storeOptimizedImage($request->file('image'), $request->user(), 'canteens');
             $data['image'] = $path;
         }
 

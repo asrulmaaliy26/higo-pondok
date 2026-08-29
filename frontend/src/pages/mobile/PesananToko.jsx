@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { ChevronLeft, ShoppingBag, CheckCircle, Clock, Truck, MessageCircle, X, Image as ImageIcon, ChevronDown, ChevronRight, Store, Upload, Trash2, RotateCcw, FileText, Filter, Search, AlertTriangle, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ShoppingBag, CheckCircle, Clock, Truck, MessageCircle, X, Image as ImageIcon, ChevronDown, ChevronRight, Store, Upload, Trash2, RotateCcw, FileText, Filter, Search, AlertTriangle, AlertCircle, Download, ExternalLink, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
 import { useCanteenStore } from '../../store/canteenStore';
+import { getFileType, isImageFile, isHeifFile, isPdfFile, formatFileSize, getFileNameFromPath, compressImageFiles } from '../../lib/fileUtils';
+import ThermalReceiptModal from '../../components/receipt/ThermalReceiptModal';
 
 function getWeeksInMonth(year, month) {
   // month is 0-indexed
@@ -80,8 +82,42 @@ export default function PesananToko() {
   const [showProofModal, setShowProofModal] = useState(false);
   const [activeOrderForProof, setActiveOrderForProof] = useState(null);
   const [proofFiles, setProofFiles] = useState([]);
+  const [isCompressingProof, setIsCompressingProof] = useState(false);
   
   const [selectedProofs, setSelectedProofs] = useState([]);
+
+  // Receipt Modal State for Canteen
+  const [receiptModalConfig, setReceiptModalConfig] = useState({
+    isOpen: false,
+    mode: 'single', // 'single' | 'batch'
+    order: null,
+    orders: [],
+    title: ''
+  });
+
+  const handlePrintSingleReceipt = (orderToPrint) => {
+    setReceiptModalConfig({
+      isOpen: true,
+      mode: 'single',
+      order: orderToPrint,
+      orders: [],
+      title: `Struk Pesanan #ORD-${orderToPrint.id}`
+    });
+  };
+
+  const handlePrintBatchReceipt = () => {
+    if (orders.length === 0) {
+      toast.error('Tidak ada pesanan aktif pada filter saat ini.');
+      return;
+    }
+    setReceiptModalConfig({
+      isOpen: true,
+      mode: 'batch',
+      order: null,
+      orders: orders,
+      title: `Rekap Pesanan Toko (${orders.length} Pesanan)`
+    });
+  };
 
   // Manual Order by Canteen State
   const [showManualModal, setShowManualModal] = useState(false);
@@ -318,6 +354,7 @@ export default function PesananToko() {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [activeOrderForReceipt, setActiveOrderForReceipt] = useState(null);
   const [receiptFiles, setReceiptFiles] = useState([]);
+  const [isCompressingReceipt, setIsCompressingReceipt] = useState(false);
   const [expandedOrders, setExpandedOrders] = useState({}); // Track which completed orders are expanded
 
   const uploadReceiptMutation = useMutation({
@@ -722,104 +759,113 @@ export default function PesananToko() {
                 </div>
               </div>
 
-              <div className="flex justify-between items-center pt-3 border-t border-gray-100 dark:border-gray-800">
+              <div className="flex justify-between items-center pt-3 border-t border-gray-100 dark:border-gray-800 flex-wrap gap-2">
                 <p className="font-bold text-gray-900 dark:text-white flex flex-col">
                   <span>Total: Rp {formatRupiah(order.total_price)}</span>
                   {order.is_custom && parseFloat(order.total_price) === 0 && (
                     <span className="text-[10px] text-amber-600 font-semibold">(Harga belum ditentukan)</span>
                   )}
                 </p>
-                {order.status === 'pending' || order.status === 'processing' ? (
-                  <div className="flex items-center gap-2 flex-wrap justify-end">
-                    {order.is_custom && order.payment_status !== 'paid' && (
-                      <button 
-                        onClick={() => {
-                          setActiveOrderForSetPrice(order);
-                          const deliveryFee = parseFloat(order.delivery_fee || 0);
-                          const adminFee = parseFloat(order.admin_fee || 0);
-                          const curProductPrice = Math.max(0, parseFloat(order.total_price || 0) - deliveryFee - adminFee);
-                          setNewPriceInput(curProductPrice > 0 ? Math.round(curProductPrice).toString() : '');
-                          setShowSetPriceModal(true);
-                        }}
-                        className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm"
-                      >
-                        🏷️ {parseFloat(order.total_price) === 0 ? 'Set Harga Toko' : 'Edit Harga'}
-                      </button>
-                    )}
-                    {order.status === 'pending' && (
-                      <>
+
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {/* TOMBOL CETAK STRUK UNTUK KANTIN */}
+                  <button 
+                    onClick={() => handlePrintSingleReceipt(order)}
+                    className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+                    title="Cetak Struk Thermal iWare"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                    <span>Cetak Struk</span>
+                  </button>
+
+                  {order.status === 'pending' || order.status === 'processing' ? (
+                    <>
+                      {order.is_custom && order.payment_status !== 'paid' && (
                         <button 
                           onClick={() => {
-                            if(window.confirm('Yakin ingin MENOLAK pesanan ini? Pesanan akan dibatalkan.')) {
-                              cancelOrderMutation.mutate({ id: order.id, canteen_id: order.canteen_id });
-                            }
+                            setActiveOrderForSetPrice(order);
+                            const deliveryFee = parseFloat(order.delivery_fee || 0);
+                            const adminFee = parseFloat(order.admin_fee || 0);
+                            const curProductPrice = Math.max(0, parseFloat(order.total_price || 0) - deliveryFee - adminFee);
+                            setNewPriceInput(curProductPrice > 0 ? Math.round(curProductPrice).toString() : '');
+                            setShowSetPriceModal(true);
                           }}
-                          className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm"
+                          className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm"
                         >
-                          <X className="w-4 h-4" /> Tolak Pesanan
+                          🏷️ {parseFloat(order.total_price) === 0 ? 'Set Harga Toko' : 'Edit Harga'}
                         </button>
-
-                        <button 
-                          disabled={updateStatusMutation.isPending || updatePaymentMutation.isPending}
-                          onClick={() => {
-                            if (order.payment_status !== 'paid') {
-                              setUnpaidProceedOrder(order);
-                            } else {
-                              updateStatusMutation.mutate({ id: order.id, status: 'processing', canteen_id: order.canteen_id });
-                            }
-                          }}
-                          className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm disabled:opacity-50"
-                        >
-                          <CheckCircle className="w-4 h-4" /> ✅ Lanjutkan Pesanan
-                        </button>
-                      </>
-                    )}
-
-                    {order.status === 'processing' && (
-                      <>
-                        {/* Jika Kantin Sendiri (tanpa kurir luar), Kantin yang upload Bukti Pesanan */}
-                        {!order.courier_id && (!order.proof_of_purchase || order.proof_of_purchase.length === 0) && (
+                      )}
+                      {order.status === 'pending' && (
+                        <>
                           <button 
                             onClick={() => {
-                              setActiveOrderForReceipt(order);
-                              setShowReceiptModal(true);
-                            }}
-                            className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm"
-                          >
-                            <Upload className="w-4 h-4" /> Upload Bukti Pesanan
-                          </button>
-                        )}
-                        {!order.courier_id && (
-                          <button 
-                            onClick={() => {
-                              if(window.confirm('Yakin pesanan ini sudah selesai diantar ke santri?')) {
-                                updateStatusMutation.mutate({ id: order.id, status: 'completed', canteen_id: order.canteen_id });
+                              if(window.confirm('Yakin ingin MENOLAK pesanan ini? Pesanan akan dibatalkan.')) {
+                                cancelOrderMutation.mutate({ id: order.id, canteen_id: order.canteen_id });
                               }
                             }}
-                            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm"
+                            className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm"
                           >
-                            <CheckCircle className="w-4 h-4" /> Selesaikan
+                            <X className="w-4 h-4" /> Tolak Pesanan
                           </button>
-                        )}
-                        {order.courier_id && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-blue-700 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800 flex items-center gap-1">
-                              <Truck className="w-3.5 h-3.5" /> Ditangani Kurir: {order.courier?.name || 'Kurir'}
-                            </span>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ) : order.status === 'cancelled' ? (
-                  <div className="flex items-center justify-end">
+
+                          <button 
+                            disabled={updateStatusMutation.isPending || updatePaymentMutation.isPending}
+                            onClick={() => {
+                              if (order.payment_status !== 'paid') {
+                                setUnpaidProceedOrder(order);
+                              } else {
+                                updateStatusMutation.mutate({ id: order.id, status: 'processing', canteen_id: order.canteen_id });
+                              }
+                            }}
+                            className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm disabled:opacity-50"
+                          >
+                            <CheckCircle className="w-4 h-4" /> ✅ Lanjutkan Pesanan
+                          </button>
+                        </>
+                      )}
+
+                      {order.status === 'processing' && (
+                        <>
+                          {/* Jika Kantin Sendiri (tanpa kurir luar), Kantin yang upload Bukti Pesanan */}
+                          {!order.courier_id && (!order.proof_of_purchase || order.proof_of_purchase.length === 0) && (
+                            <button 
+                              onClick={() => {
+                                setActiveOrderForReceipt(order);
+                                setShowReceiptModal(true);
+                              }}
+                              className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm"
+                            >
+                              <Upload className="w-4 h-4" /> Upload Bukti Pesanan
+                            </button>
+                          )}
+                          {!order.courier_id && (
+                            <button 
+                              onClick={() => {
+                                if(window.confirm('Yakin pesanan ini sudah selesai diantar ke santri?')) {
+                                  updateStatusMutation.mutate({ id: order.id, status: 'completed', canteen_id: order.canteen_id });
+                                }
+                              }}
+                              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm"
+                            >
+                              <CheckCircle className="w-4 h-4" /> Selesaikan
+                            </button>
+                          )}
+                          {order.courier_id && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-blue-700 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800 flex items-center gap-1">
+                                <Truck className="w-3.5 h-3.5" /> Ditangani Kurir: {order.courier?.name || 'Kurir'}
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  ) : order.status === 'cancelled' ? (
                     <span className="text-sm font-semibold text-red-600 dark:text-red-400">Dibatalkan</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-end">
-                    <span className="font-bold text-green-600">Selesai</span>
-                  </div>
-                )}
+                  ) : (
+                    <span className="font-bold text-green-600 text-sm">Selesai</span>
+                  )}
+                </div>
               </div>
             </div>
             )}
@@ -850,6 +896,13 @@ export default function PesananToko() {
             </div>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+            <button
+              onClick={handlePrintBatchReceipt}
+              className="px-3.5 py-2 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+              title="Cetak Rekap Pesanan Toko ke Printer Thermal"
+            >
+              <Printer className="w-4 h-4 text-green-400" /> 🖨️ Cetak Rekap ({orders.length})
+            </button>
             <button
               onClick={() => setShowRecapModal(true)}
               className="px-3 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
@@ -1449,44 +1502,100 @@ export default function PesananToko() {
             
             <div className="p-6 overflow-y-auto">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Silakan unggah foto bukti serah terima pesanan ke Santri untuk menyelesaikan pesanan ini {activeOrderForProof.courier?.name ? <span>(Kurir: <strong>{activeOrderForProof.courier.name}</strong>)</span> : <span>(Pengiriman oleh <strong>Kantin</strong>)</span>}.
+                Silakan unggah foto/berkas bukti serah terima pesanan ke Santri untuk menyelesaikan pesanan ini {activeOrderForProof.courier?.name ? <span>(Kurir: <strong>{activeOrderForProof.courier.name}</strong>)</span> : <span>(Pengiriman oleh <strong>Kantin</strong>)</span>}.
               </p>
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Foto Bukti <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Foto Bukti Serah Terima <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-[11px] text-green-600 dark:text-green-400 font-medium">
+                      Semua format foto & bebas ukuran
+                    </span>
+                  </div>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.heic,.heif"
                     multiple
-                    onChange={(e) => {
+                    disabled={isCompressingProof}
+                    onChange={async (e) => {
                       const files = Array.from(e.target.files);
-                      const validFiles = files.filter(f => f.size <= 2 * 1024 * 1024);
-                      if (validFiles.length < files.length) {
-                        toast.error('Ukuran foto terlalu besar! Maksimal 2MB per foto.');
+                      if (files.length > 0) {
+                        setIsCompressingProof(true);
+                        const toastId = toast.loading('Mengompresi foto bukti...');
+                        try {
+                          const compressed = await compressImageFiles(files);
+                          setProofFiles(prev => [...prev, ...compressed]);
+                          toast.success('Foto bukti dikompresi otomatis', { id: toastId });
+                        } catch (err) {
+                          setProofFiles(prev => [...prev, ...files]);
+                          toast.dismiss(toastId);
+                        } finally {
+                          setIsCompressingProof(false);
+                        }
                       }
-                      setProofFiles(validFiles);
+                      e.target.value = '';
                     }}
-                    className="w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-green-900/30 dark:file:text-green-400 dark:text-gray-400"
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-green-900/30 dark:file:text-green-400 dark:text-gray-400 border border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-1 disabled:opacity-60"
                   />
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 flex items-center gap-1">
+                    <span>✨ Otomatis dikompresi agar hemat ukuran & cepat terunggah.</span>
+                  </p>
                 </div>
                 {proofFiles.length > 0 && (
-                  <div className="mt-4 grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-2">
-                    {proofFiles.map((file, idx) => (
-                      <div key={idx} className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 aspect-square group">
-                        <img src={URL.createObjectURL(file)} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => setProofFiles(prev => prev.filter((_, i) => i !== idx))}
-                          className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-transform active:scale-95 z-10"
-                          title="Hapus foto ini"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                  <div>
+                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">
+                      Berkas Dipilih ({proofFiles.length}):
+                    </p>
+                    <div className="grid grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
+                      {proofFiles.map((file, idx) => {
+                        const isImg = isImageFile(file);
+                        const isPdf = isPdfFile(file);
+                        const isHeif = isHeifFile(file);
+
+                        return (
+                          <div key={idx} className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-2 flex flex-col justify-between group">
+                            {isImg ? (
+                              <div className="aspect-video w-full rounded-lg overflow-hidden bg-black/5 mb-1.5">
+                                <img src={URL.createObjectURL(file)} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                              </div>
+                            ) : (
+                              <div className="aspect-video w-full rounded-lg bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800/40 flex flex-col items-center justify-center text-green-600 dark:text-green-400 mb-1.5">
+                                <FileText className="w-6 h-6" />
+                                <span className="text-[10px] font-mono font-bold mt-0.5 uppercase">
+                                  {isPdf ? 'PDF' : isHeif ? 'HEIF' : file.name.split('.').pop() || 'FILE'}
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="pr-6">
+                              <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate" title={file.name}>
+                                {file.name}
+                              </p>
+                              <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                                <span>{formatFileSize(file.size)}</span>
+                                {file.originalSize && file.originalSize > file.size && (
+                                  <span className="text-green-600 dark:text-green-400 font-bold">
+                                    (Hemat {Math.round((1 - file.size / file.originalSize) * 100)}%)
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setProofFiles(prev => prev.filter((_, i) => i !== idx))}
+                              className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-transform active:scale-95 z-10"
+                              title="Hapus berkas ini"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1538,62 +1647,130 @@ export default function PesananToko() {
             
             <div className="p-6 overflow-y-auto">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Unggah foto struk atau foto bukti makanan siap diantar untuk pesanan #{activeOrderForReceipt.id}.
+                Unggah berkas/foto struk atau bukti pesanan siap diantar untuk pesanan #{activeOrderForReceipt.id}.
               </p>
 
               {activeOrderForReceipt.proof_of_purchase && activeOrderForReceipt.proof_of_purchase.length > 0 && receiptFiles.length === 0 && (
                 <div className="mb-4 bg-purple-50 dark:bg-purple-950/40 p-3 rounded-xl border border-purple-100 dark:border-purple-900/50">
                   <p className="text-xs font-bold text-purple-800 dark:text-purple-300 mb-2">
-                    Foto Struk Terunggah Saat Ini ({Array.isArray(activeOrderForReceipt.proof_of_purchase) ? activeOrderForReceipt.proof_of_purchase.length : 1} Foto):
+                    Berkas Struk Terunggah Saat Ini ({Array.isArray(activeOrderForReceipt.proof_of_purchase) ? activeOrderForReceipt.proof_of_purchase.length : 1} Berkas):
                   </p>
                   <div className="grid grid-cols-3 gap-2">
-                    {(Array.isArray(activeOrderForReceipt.proof_of_purchase) ? activeOrderForReceipt.proof_of_purchase : [activeOrderForReceipt.proof_of_purchase]).map((path, idx) => (
-                      <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-purple-200 dark:border-purple-800">
-                        <img src={getStorageUrl(path)} alt={`Current ${idx + 1}`} className="w-full h-full object-cover" />
-                      </div>
-                    ))}
+                    {(Array.isArray(activeOrderForReceipt.proof_of_purchase) ? activeOrderForReceipt.proof_of_purchase : [activeOrderForReceipt.proof_of_purchase]).map((path, idx) => {
+                      const fileType = getFileType(path);
+                      const isImg = fileType === 'image';
+                      return (
+                        <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-purple-200 dark:border-purple-800 bg-black/10 flex items-center justify-center">
+                          {isImg ? (
+                            <img src={getStorageUrl(path)} alt={`Current ${idx + 1}`} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center p-1 text-center text-purple-600 dark:text-purple-300">
+                              <FileText className="w-6 h-6" />
+                              <span className="text-[9px] font-mono mt-1 uppercase truncate max-w-full px-1">{fileType}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                   <p className="text-[11px] text-purple-600 dark:text-purple-400 mt-2 italic">
-                    *Memilih foto baru di bawah akan menggantikan foto terunggah di atas.
+                    *Memilih berkas baru di bawah akan ditambahkan ke daftar bukti pesanan.
                   </p>
                 </div>
               )}
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Foto Struk / Bukti Pesanan <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Foto Struk / Bukti Pesanan <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-[11px] text-purple-600 dark:text-purple-400 font-medium">
+                      Semua format foto & bebas ukuran
+                    </span>
+                  </div>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.heic,.heif"
                     multiple
-                    onChange={(e) => {
+                    disabled={isCompressingReceipt}
+                    onChange={async (e) => {
                       const files = Array.from(e.target.files);
-                      const validFiles = files.filter(f => f.size <= 2 * 1024 * 1024);
-                      if (validFiles.length < files.length) {
-                        toast.error('Ukuran foto terlalu besar! Maksimal 2MB per foto.');
+                      if (files.length > 0) {
+                        setIsCompressingReceipt(true);
+                        const toastId = toast.loading('Mengompresi foto struk...');
+                        try {
+                          const compressed = await compressImageFiles(files);
+                          setReceiptFiles(prev => [...prev, ...compressed]);
+                          toast.success('Foto struk dikompresi otomatis', { id: toastId });
+                        } catch (err) {
+                          setReceiptFiles(prev => [...prev, ...files]);
+                          toast.dismiss(toastId);
+                        } finally {
+                          setIsCompressingReceipt(false);
+                        }
                       }
-                      setReceiptFiles(validFiles);
+                      e.target.value = '';
                     }}
-                    className="w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 dark:file:bg-purple-900/30 dark:file:text-purple-400 dark:text-gray-400"
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 dark:file:bg-purple-900/30 dark:file:text-purple-400 dark:text-gray-400 border border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-1 disabled:opacity-60"
                   />
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 flex items-center gap-1">
+                    <span>✨ Otomatis dikompresi agar hemat ukuran & cepat terunggah.</span>
+                  </p>
                 </div>
+
                 {receiptFiles.length > 0 && (
-                  <div className="mt-4 grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-2">
-                    {receiptFiles.map((file, idx) => (
-                      <div key={idx} className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 aspect-square group">
-                        <img src={URL.createObjectURL(file)} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => setReceiptFiles(prev => prev.filter((_, i) => i !== idx))}
-                          className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-transform active:scale-95 z-10"
-                          title="Hapus foto ini"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                  <div>
+                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">
+                      Berkas Dipilih ({receiptFiles.length}):
+                    </p>
+                    <div className="grid grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
+                      {receiptFiles.map((file, idx) => {
+                        const isImg = isImageFile(file);
+                        const isPdf = isPdfFile(file);
+                        const isHeif = isHeifFile(file);
+
+                        return (
+                          <div key={idx} className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-2 flex flex-col justify-between group">
+                            {isImg ? (
+                              <div className="aspect-video w-full rounded-lg overflow-hidden bg-black/5 mb-1.5">
+                                <img src={URL.createObjectURL(file)} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                              </div>
+                            ) : (
+                              <div className="aspect-video w-full rounded-lg bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/40 flex flex-col items-center justify-center text-purple-600 dark:text-purple-400 mb-1.5">
+                                <FileText className="w-6 h-6" />
+                                <span className="text-[10px] font-mono font-bold mt-0.5 uppercase">
+                                  {isPdf ? 'PDF' : isHeif ? 'HEIF' : file.name.split('.').pop() || 'FILE'}
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="pr-6">
+                              <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate" title={file.name}>
+                                {file.name}
+                              </p>
+                              <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                                <span>{formatFileSize(file.size)}</span>
+                                {file.originalSize && file.originalSize > file.size && (
+                                  <span className="text-purple-600 dark:text-purple-400 font-bold">
+                                    (Hemat {Math.round((1 - file.size / file.originalSize) * 100)}%)
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setReceiptFiles(prev => prev.filter((_, i) => i !== idx))}
+                              className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-transform active:scale-95 z-10"
+                              title="Hapus berkas ini"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1942,44 +2119,112 @@ export default function PesananToko() {
 
       {/* PROOF OF DELIVERY / PAYMENT FULL-SCREEN MODAL */}
       {selectedProofs.length > 0 && createPortal(
-        <div className="fixed inset-0 z-[110] bg-black flex flex-col animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[110] bg-black/90 backdrop-blur-xs flex flex-col animate-in fade-in duration-200">
           {/* Header */}
-          <div className="flex justify-between items-center px-4 py-3 bg-black/80 shrink-0">
-            <span className="text-white font-bold text-sm">{selectedProofs.length} Foto</span>
+          <div className="flex justify-between items-center px-4 py-3 bg-black/70 border-b border-white/10 shrink-0">
+            <span className="text-white font-bold text-sm flex items-center gap-2">
+              <FileText className="w-4 h-4 text-green-400" />
+              {selectedProofs.length} Berkas Bukti
+            </span>
             <button 
               onClick={() => setSelectedProofs([])}
-              className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
+              className="w-9 h-9 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white active:scale-95 transition-all"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
             </button>
           </div>
           
-          {/* Images */}
-          <div className="flex-1 overflow-y-auto flex flex-col items-center gap-4 p-4 pb-10">
-            {selectedProofs.map((proof, idx) => (
-              <div key={idx} className="w-full max-w-xl">
-                <p className="text-white/50 text-xs mb-1 text-center">Bukti {idx + 1}</p>
-                <img 
-                  src={proof}
-                  alt={`Bukti ${idx + 1}`}
-                  className="w-full rounded-xl shadow-2xl object-contain bg-gray-900"
-                  style={{ maxHeight: '80vh' }}
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'flex';
-                  }}
-                />
-                <div
-                  style={{ display: 'none' }}
-                  className="w-full h-48 rounded-xl bg-gray-800 flex flex-col items-center justify-center text-gray-400 text-sm gap-2"
-                >
-                  <ImageIcon className="w-10 h-10 opacity-40" />
-                  <span>Gambar tidak dapat dimuat</span>
-                  <a href={proof} target="_blank" rel="noreferrer" className="text-green-400 text-xs underline break-all px-4 text-center">{proof}</a>
+          {/* Images & Documents */}
+          <div className="flex-1 overflow-y-auto flex flex-col items-center gap-4 p-4 pb-12">
+            {selectedProofs.map((proof, idx) => {
+              const fileType = getFileType(proof);
+              const fileName = getFileNameFromPath(proof);
+
+              if (fileType === 'pdf') {
+                return (
+                  <div key={idx} className="w-full max-w-2xl bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col items-center gap-3 shadow-xl">
+                    <div className="w-full flex items-center justify-between text-xs text-gray-400 border-b border-gray-800 pb-2">
+                      <span className="font-semibold text-white flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-red-400" /> Bukti {idx + 1}: {fileName}
+                      </span>
+                      <span className="px-2 py-0.5 bg-red-900/40 text-red-300 rounded font-mono text-[10px]">PDF</span>
+                    </div>
+                    <iframe 
+                      src={proof} 
+                      title={`Bukti PDF ${idx + 1}`} 
+                      className="w-full h-[55vh] rounded-xl bg-white border border-gray-700" 
+                    />
+                    <a
+                      href={proof}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 active:scale-98 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md"
+                    >
+                      <ExternalLink className="w-4 h-4" /> Buka / Unduh Dokumen PDF
+                    </a>
+                  </div>
+                );
+              }
+
+              if (fileType === 'image') {
+                return (
+                  <div key={idx} className="w-full max-w-xl bg-gray-900/60 border border-white/5 rounded-2xl p-2.5 flex flex-col items-center gap-2">
+                    <div className="w-full flex items-center justify-between px-2 text-xs text-gray-400">
+                      <span>Bukti {idx + 1}</span>
+                      <a 
+                        href={proof} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="text-green-400 hover:text-green-300 flex items-center gap-1 text-[11px]"
+                      >
+                        Buka Gambar Penuh <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                    <img 
+                      src={proof}
+                      alt={`Bukti ${idx + 1}`}
+                      className="w-full rounded-xl shadow-2xl object-contain bg-black/40"
+                      style={{ maxHeight: '75vh' }}
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                    <div
+                      style={{ display: 'none' }}
+                      className="w-full h-48 rounded-xl bg-gray-800 flex flex-col items-center justify-center text-gray-400 text-sm gap-2"
+                    >
+                      <ImageIcon className="w-10 h-10 opacity-40" />
+                      <span>Gambar tidak dapat dimuat langsung</span>
+                      <a href={proof} target="_blank" rel="noreferrer" className="text-green-400 text-xs underline break-all px-4 text-center">Buka Berkas ({fileName})</a>
+                    </div>
+                  </div>
+                );
+              }
+
+              // HEIF / Document / Other
+              return (
+                <div key={idx} className="w-full max-w-xl bg-gray-900 border border-gray-800 rounded-2xl p-5 flex flex-col items-center gap-4 text-center shadow-xl">
+                  <div className="w-16 h-16 rounded-2xl bg-green-950/60 border border-green-800/50 flex items-center justify-center text-green-400">
+                    <FileText className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <p className="text-white font-bold text-sm break-all">{fileName}</p>
+                    <p className="text-gray-400 text-xs mt-1">Berkas Bukti #{idx + 1}</p>
+                  </div>
+                  <a
+                    href={proof}
+                    target="_blank"
+                    download
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 active:scale-98 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md"
+                  >
+                    <Download className="w-4 h-4" /> Unduh / Buka Berkas
+                  </a>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>,
         document.body
@@ -2060,6 +2305,16 @@ export default function PesananToko() {
         </div>,
         document.body
       )}
+      {/* MODAL CETAK STRUK THERMAL IWARE UNTUK KANTIN */}
+      <ThermalReceiptModal
+        isOpen={receiptModalConfig.isOpen}
+        onClose={() => setReceiptModalConfig(prev => ({ ...prev, isOpen: false }))}
+        mode={receiptModalConfig.mode}
+        order={receiptModalConfig.order}
+        orders={receiptModalConfig.orders}
+        courierName={receiptModalConfig.order?.courier?.name || 'Kantin Pondok'}
+        title={receiptModalConfig.title}
+      />
     </div>
   );
 }

@@ -15,11 +15,15 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
+            'email' => 'required|string',
+            'password' => 'required|string',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $loginInput = trim($request->email);
+        $user = User::where('email', $loginInput)
+            ->orWhere('phone', $loginInput)
+            ->orWhere('name', $loginInput)
+            ->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
@@ -143,9 +147,7 @@ class AuthController extends Controller
             if ($user->avatar) {
                 Storage::disk('public')->delete($user->avatar);
             }
-            $dir = $this->getUserUploadPath($user, 'avatars');
-            $fileName = time() . '_' . $request->file('avatar')->getClientOriginalName();
-            $path = $request->file('avatar')->storeAs($dir, $fileName, 'public');
+            $path = $this->storeOptimizedImage($request->file('avatar'), $user, 'avatars');
             $user->avatar = $path;
         }
         

@@ -286,12 +286,12 @@ class OrderController extends Controller
         if (!$order->courier_id) {
             $request->validate([
                 'proof_of_delivery' => 'required|array|min:1',
-                'proof_of_delivery.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
+                'proof_of_delivery.*' => 'file',
             ]);
         } else {
             $request->validate([
                 'proof_of_delivery' => 'nullable|array',
-                'proof_of_delivery.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
+                'proof_of_delivery.*' => 'file',
             ]);
         }
 
@@ -299,7 +299,7 @@ class OrderController extends Controller
         if ($request->hasFile('proof_of_delivery')) {
             $paths = [];
             foreach ($request->file('proof_of_delivery') as $file) {
-                $paths[] = $file->store($this->getUserUploadPath($request->user(), 'proofs'), 'public');
+                $paths[] = $this->storeOptimizedImage($file, $request->user(), 'proofs');
             }
         }
 
@@ -525,12 +525,12 @@ class OrderController extends Controller
 
         $request->validate([
             'proof_of_purchase' => 'required|array|min:1',
-            'proof_of_purchase.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
+            'proof_of_purchase.*' => 'file',
         ]);
 
         $newPaths = [];
         foreach ($request->file('proof_of_purchase') as $file) {
-            $newPaths[] = $file->store($this->getUserUploadPath($request->user(), 'proofs'), 'public');
+            $newPaths[] = $this->storeOptimizedImage($file, $request->user(), 'proofs');
         }
 
         $existing = is_array($order->proof_of_purchase) ? $order->proof_of_purchase : ($order->proof_of_purchase ? [$order->proof_of_purchase] : []);
@@ -565,12 +565,12 @@ class OrderController extends Controller
 
         $request->validate([
             'proof_of_delivery' => 'required|array|min:1',
-            'proof_of_delivery.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
+            'proof_of_delivery.*' => 'file',
         ]);
 
         $newPaths = [];
         foreach ($request->file('proof_of_delivery') as $file) {
-            $newPaths[] = $file->store($this->getUserUploadPath($request->user(), 'proofs'), 'public');
+            $newPaths[] = $this->storeOptimizedImage($file, $request->user(), 'proofs');
         }
 
         $existing = is_array($order->proof_of_delivery) ? $order->proof_of_delivery : ($order->proof_of_delivery ? [$order->proof_of_delivery] : []);
@@ -758,12 +758,12 @@ class OrderController extends Controller
 
         $request->validate([
             'proof_of_payment' => 'required|array|min:1',
-            'proof_of_payment.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
+            'proof_of_payment.*' => 'file',
         ]);
 
         $paths = [];
         foreach ($request->file('proof_of_payment') as $file) {
-            $paths[] = $file->store($this->getUserUploadPath($request->user(), 'proofs'), 'public');
+            $paths[] = $this->storeOptimizedImage($file, $request->user(), 'proofs');
         }
 
         $existingProofs = is_array($order->proof_of_payment) ? $order->proof_of_payment : [];

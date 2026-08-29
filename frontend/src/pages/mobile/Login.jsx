@@ -22,7 +22,10 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const response = await api.post('/login', { email, password });
+      const response = await api.post('/login', { 
+        email: email.trim(), 
+        password: password.trim() 
+      });
       setAuth(response.data.user, response.data.access_token);
       navigate({ to: '/dashboard' });
     } catch (err) {
@@ -67,14 +70,17 @@ export default function Login() {
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="email">Alamat Email / Username</Label>
+              <Label htmlFor="email">Alamat Email / No. HP / Username</Label>
               <Input
                 id="email"
                 type="text"
                 required
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck="false"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="nama@email.com"
+                placeholder="nama@email.com atau nomor HP"
                 className="mt-1"
               />
             </div>
@@ -88,6 +94,8 @@ export default function Login() {
                 id="password"
                 type="password"
                 required
+                autoCapitalize="none"
+                autoCorrect="off"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"

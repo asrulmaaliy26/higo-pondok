@@ -73,6 +73,31 @@ function getCurrentWeekIndex(year, month) {
   return idx >= 0 ? idx : 0;
 }
 
+function getOrderPriorityScore(order) {
+  // 1. Paling Bawah: Dibatalkan / Ditolak
+  if (order.status === 'cancelled') {
+    return 10;
+  }
+
+  // 2. Selesai
+  if (order.status === 'completed') {
+    return 30;
+  }
+
+  // 3. Sudah Lunas tapi masih aktif (pending / processing)
+  if (order.payment_status === 'paid') {
+    return 60;
+  }
+
+  // 4. Perlu Validasi Pembayaran (Pembeli sudah upload bukti transfer) -> Paling ATAS
+  if (order.payment_status === 'waiting_confirmation') {
+    return 100;
+  }
+
+  // 5. Belum Lunas (walaupun sudah dilanjutkan / processing / pending) -> Di atas yang sudah lunas
+  return 80;
+}
+
 export default function AdminPesanan() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -210,9 +235,29 @@ export default function AdminPesanan() {
     }
   });
 
-  const orders = Array.isArray(rawOrders)
+  const rawOrdersList = Array.isArray(rawOrders)
     ? rawOrders
     : (Array.isArray(rawOrders?.data) ? rawOrders.data : []);
+
+  const orders = React.useMemo(() => {
+    // Smart Priority Sorting:
+    // 1. Menunggu Validasi Bayar (Score 100) -> Paling Atas
+    // 2. Belum Lunas (Score 80) -> Di atas pesanan lunas
+    // 3. Sudah Lunas & Aktif (Score 60)
+    // 4. Selesai (Score 30)
+    // 5. Dibatalkan (Score 10) -> Paling Bawah
+    return [...rawOrdersList].sort((a, b) => {
+      const scoreA = getOrderPriorityScore(a);
+      const scoreB = getOrderPriorityScore(b);
+
+      if (scoreA !== scoreB) {
+        return scoreB - scoreA; // Skor tertinggi lebih dulu
+      }
+
+      // Jika skor prioritas sama, urutkan berdasarkan order terbaru
+      return (b.id || 0) - (a.id || 0);
+    });
+  }, [rawOrdersList]);
 
   // Query Recap Data (Uses the exact same date & store filter)
   const {

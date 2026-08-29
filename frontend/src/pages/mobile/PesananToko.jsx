@@ -56,6 +56,31 @@ const formatRupiah = (num) => {
   return Math.round(Number(num) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
 };
 
+function getOrderPriorityScore(order) {
+  // 1. Paling Bawah: Dibatalkan / Ditolak
+  if (order.status === 'cancelled') {
+    return 10;
+  }
+
+  // 2. Selesai
+  if (order.status === 'completed') {
+    return 30;
+  }
+
+  // 3. Sudah Lunas tapi masih aktif (pending / processing)
+  if (order.payment_status === 'paid') {
+    return 60;
+  }
+
+  // 4. Perlu Validasi Pembayaran (Pembeli sudah upload bukti transfer) -> Paling ATAS
+  if (order.payment_status === 'waiting_confirmation') {
+    return 100;
+  }
+
+  // 5. Belum Lunas (walaupun sudah dilanjutkan / processing / pending) -> Di atas yang sudah lunas
+  return 80;
+}
+
 export default function PesananToko() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -280,37 +305,57 @@ export default function PesananToko() {
   });
 
   const rawOrders = ordersRes || [];
-  const orders = rawOrders.filter(order => {
-    // 1. Status Filter
-    if (selectedStatusFilter !== 'all') {
-      if (selectedStatusFilter === 'waiting_confirmation') {
-        if (order.payment_status !== 'waiting_confirmation') return false;
-      } else if (selectedStatusFilter === 'paid') {
-        if (order.payment_status !== 'paid') return false;
-      } else if (selectedStatusFilter === 'unpaid') {
-        if (order.payment_status !== 'unpaid') return false;
-      } else {
-        if (order.status !== selectedStatusFilter) return false;
+  const orders = React.useMemo(() => {
+    const list = rawOrders.filter(order => {
+      // 1. Status Filter
+      if (selectedStatusFilter !== 'all') {
+        if (selectedStatusFilter === 'waiting_confirmation') {
+          if (order.payment_status !== 'waiting_confirmation') return false;
+        } else if (selectedStatusFilter === 'paid') {
+          if (order.payment_status !== 'paid') return false;
+        } else if (selectedStatusFilter === 'unpaid') {
+          if (order.payment_status !== 'unpaid') return false;
+        } else {
+          if (order.status !== selectedStatusFilter) return false;
+        }
       }
-    }
 
-    // 2. Search Query Filter
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const idMatch = order.id?.toString().includes(q);
-      const userMatch = order.user?.name?.toLowerCase().includes(q);
-      const santriMatch = order.user?.santri_name?.toLowerCase().includes(q);
-      const canteenMatch = order.canteen?.name?.toLowerCase().includes(q);
-      const notesMatch = order.custom_notes?.toLowerCase().includes(q);
-      const itemsMatch = order.items?.some(i => i.product?.name?.toLowerCase().includes(q));
+      // 2. Search Query Filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const idMatch = order.id?.toString().includes(q);
+        const userMatch = order.user?.name?.toLowerCase().includes(q);
+        const santriMatch = order.user?.santri_name?.toLowerCase().includes(q);
+        const canteenMatch = order.canteen?.name?.toLowerCase().includes(q);
+        const notesMatch = order.custom_notes?.toLowerCase().includes(q);
+        const itemsMatch = order.items?.some(i => i.product?.name?.toLowerCase().includes(q));
 
-      if (!idMatch && !userMatch && !santriMatch && !canteenMatch && !notesMatch && !itemsMatch) {
-        return false;
+        if (!idMatch && !userMatch && !santriMatch && !canteenMatch && !notesMatch && !itemsMatch) {
+          return false;
+        }
       }
-    }
 
-    return true;
-  });
+      return true;
+    });
+
+    // Smart Priority Sorting:
+    // 1. Menunggu Validasi Bayar (Score 100) -> Paling Atas
+    // 2. Belum Lunas (Score 80) -> Di atas pesanan lunas
+    // 3. Sudah Lunas & Aktif (Score 60)
+    // 4. Selesai (Score 30)
+    // 5. Dibatalkan (Score 10) -> Paling Bawah
+    return [...list].sort((a, b) => {
+      const scoreA = getOrderPriorityScore(a);
+      const scoreB = getOrderPriorityScore(b);
+
+      if (scoreA !== scoreB) {
+        return scoreB - scoreA; // Skor tertinggi lebih dulu
+      }
+
+      // Jika skor prioritas sama, urutkan berdasarkan order terbaru
+      return (b.id || 0) - (a.id || 0);
+    });
+  }, [rawOrders, selectedStatusFilter, searchQuery]);
 
   const updatePaymentMutation = useMutation({
     mutationFn: ({ id, status, canteen_id }) => api.put(`/canteen/orders/${id}/payment?canteen_id=${canteen_id}`, { payment_status: status }),

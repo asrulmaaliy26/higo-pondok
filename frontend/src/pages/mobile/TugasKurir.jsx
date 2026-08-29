@@ -197,16 +197,22 @@ export default function TugasKurir() {
   };
 
   const handlePrintBatchReceipt = () => {
-    if (filteredOrders.length === 0) {
-      toast.error('Tidak ada pesanan aktif pada filter saat ini.');
+    // Kurir default cetak hanya pesanan yang berstatus Sedang Diantar (processing)
+    const activeDelivering = orders.filter(o => o.status === 'processing');
+    const targetOrders = statusTab === 'completed' 
+      ? filteredOrders.filter(o => o.status === 'completed')
+      : activeDelivering.length > 0 ? activeDelivering : filteredOrders.filter(o => o.status === 'processing');
+
+    if (targetOrders.length === 0) {
+      toast.error('Tidak ada pesanan yang berstatus Sedang Diantar saat ini.');
       return;
     }
     setReceiptModalConfig({
       isOpen: true,
       mode: 'batch',
       order: null,
-      orders: filteredOrders,
-      title: `Rekap Antaran (${filteredOrders.length} Pesanan)`
+      orders: targetOrders,
+      title: `Rekap Antaran (${targetOrders.length} Sedang Diantar)`
     });
   };
 
@@ -913,10 +919,10 @@ export default function TugasKurir() {
               <button
                 onClick={handlePrintBatchReceipt}
                 className="py-1.5 px-3 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
-                title="Cetak Rekap / Manifest Seluruh Antaran Aktif"
+                title="Cetak Rekap Pesanan yang Sedang Diantar"
               >
                 <Printer className="w-3.5 h-3.5 text-green-400" />
-                <span>🖨️ Cetak Rekap ({filteredOrders.length})</span>
+                <span>🖨️ Cetak Rekap Antaran ({tabCounts.processing})</span>
               </button>
 
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs shadow-xs">

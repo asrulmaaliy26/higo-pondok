@@ -1,6 +1,6 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Printer, X, CheckCircle, FileText, ShoppingBag, Store, User, MapPin, Filter } from 'lucide-react';
+import { Printer, X, CheckCircle, FileText, ShoppingBag, Store, User, MapPin } from 'lucide-react';
 
 const formatRupiah = (num) => {
   return Math.round(Number(num) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
@@ -33,26 +33,15 @@ export default function ThermalReceiptModal({
 }) {
   const receiptRef = useRef(null);
   const [paperWidth, setPaperWidth] = useState('58mm'); // '58mm' | '80mm'
-  const [batchStatusFilter, setBatchStatusFilter] = useState('active'); // 'all' | 'active' | 'completed'
 
-  if (!isOpen) return null;
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  // Filter batch orders
+  // Filter batch orders: default to only orders in transit (processing / active), never cancelled
   const rawBatchOrders = Array.isArray(orders) ? orders : [];
   const filteredBatchOrders = useMemo(() => {
     if (mode !== 'batch') return [];
-    if (batchStatusFilter === 'active') {
-      return rawBatchOrders.filter(o => o.status === 'pending' || o.status === 'processing');
-    }
-    if (batchStatusFilter === 'completed') {
-      return rawBatchOrders.filter(o => o.status === 'completed');
-    }
-    return rawBatchOrders.filter(o => o.status !== 'cancelled'); // exclude cancelled by default in 'all' or show all non-cancelled
-  }, [rawBatchOrders, batchStatusFilter, mode]);
+    // Only include valid active / delivering orders
+    const active = rawBatchOrders.filter(o => o.status === 'processing');
+    return active.length > 0 ? active : rawBatchOrders.filter(o => o.status !== 'cancelled');
+  }, [rawBatchOrders, mode]);
 
   // Calculate batch summaries
   const batchSummary = useMemo(() => {
@@ -79,6 +68,13 @@ export default function ThermalReceiptModal({
       grandTotal: products + delivery
     };
   }, [filteredBatchOrders]);
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // Early return only after all hooks are declared
+  if (!isOpen) return null;
 
   return createPortal(
     <>
@@ -136,9 +132,11 @@ export default function ThermalReceiptModal({
               </div>
               <div>
                 <h3 className="font-bold text-gray-900 dark:text-white text-sm">
-                  {title || (mode === 'batch' ? `Rekap Cetak (${filteredBatchOrders.length} Antaran)` : `Cetak Struk #${order?.id}`)}
+                  {title || (mode === 'batch' ? `Rekap Antaran (${filteredBatchOrders.length} Pesanan)` : `Cetak Struk #${order?.id}`)}
                 </h3>
-                <p className="text-[11px] text-gray-500">Format Printer Thermal iWare</p>
+                <p className="text-[11px] text-gray-500">
+                  {mode === 'batch' ? 'Khusus Pesanan Sedang Diantar (Aktif)' : 'Format Printer Thermal iWare 58mm'}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -167,45 +165,6 @@ export default function ThermalReceiptModal({
               </button>
             </div>
           </div>
-
-          {/* BATCH FILTER TABS (FOR COURIER / CANTEEN BATCH PRINT) */}
-          {mode === 'batch' && (
-            <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2 no-print">
-              <span className="text-[11px] font-bold text-gray-600 dark:text-gray-300">Filter Cetak:</span>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setBatchStatusFilter('active')}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                    batchStatusFilter === 'active'
-                      ? 'bg-green-600 text-white shadow-xs'
-                      : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  Aktif / Antar
-                </button>
-                <button
-                  onClick={() => setBatchStatusFilter('all')}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                    batchStatusFilter === 'all'
-                      ? 'bg-green-600 text-white shadow-xs'
-                      : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  Semua ({rawBatchOrders.length})
-                </button>
-                <button
-                  onClick={() => setBatchStatusFilter('completed')}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                    batchStatusFilter === 'completed'
-                      ? 'bg-green-600 text-white shadow-xs'
-                      : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  Selesai
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* RECEIPT PREVIEW (SCROLLABLE - WRAPPED WITH FULL SOLID BACKGROUND) */}
           <div className="flex-1 overflow-y-auto p-4 bg-gray-200 dark:bg-gray-950 flex justify-center items-start">
@@ -345,7 +304,7 @@ export default function ThermalReceiptModal({
               )}
 
               {/* ======================================================== */}
-              {/* MODE 2: BATCH / COURIER MANIFEST RECAP RECEIPT */}
+              {/* MODE 2: BATCH / COURIER MANIFEST (SEDANG DIANTAR SAJA) */}
               {/* ======================================================== */}
               {mode === 'batch' && (
                 <div className="space-y-1.5 bg-white text-black">
@@ -353,6 +312,7 @@ export default function ThermalReceiptModal({
                   <div className="text-center pb-1.5 border-b border-dashed border-black">
                     <h2 className="text-xs font-black uppercase tracking-wider">REKAP ANTARAN KURIR</h2>
                     <p className="text-[9px] font-bold">HIGO PONDOK</p>
+                    <p className="text-[8.5px] text-gray-600">(Pesanan Sedang Diantar)</p>
                     
                     <div className="text-left text-[10px] mt-1.5 space-y-0.5 pt-1 border-t border-dotted border-gray-400">
                       <div className="flex justify-between items-start gap-1">
@@ -364,7 +324,7 @@ export default function ThermalReceiptModal({
                         <span className="text-right">{formatDateTime(new Date().toISOString())}</span>
                       </div>
                       <div className="flex justify-between items-start gap-1">
-                        <span className="shrink-0 text-gray-700">Total:</span>
+                        <span className="shrink-0 text-gray-700">Total Antaran:</span>
                         <span className="font-bold text-right">{filteredBatchOrders.length} Pesanan</span>
                       </div>
                     </div>
@@ -392,22 +352,28 @@ export default function ThermalReceiptModal({
                       RUTE ANTARAN SANTRI:
                     </p>
                     <div className="pt-1.5 space-y-2 text-[10px]">
-                      {filteredBatchOrders.map((o, idx) => (
-                        <div key={idx} className="border-b border-dotted border-gray-300 pb-1.5 space-y-0.5">
-                          <div className="flex items-start justify-between gap-1 font-bold">
-                            <span className="break-words">[ ] #{o.id} {o.user?.santri_name || o.user?.name}</span>
-                            <span className="shrink-0">{formatRupiah(o.total_price)}</span>
-                          </div>
-                          <div className="text-[9px] text-gray-700 pl-2 space-y-0.5">
-                            <div className="break-words">📍 {o.user?.santri_room || '-'}</div>
-                            <div className="break-words">🏪 {o.canteen?.name || 'Kantin'}</div>
-                            <div className="flex justify-between items-center pt-0.5 text-[8.5px]">
-                              <span>{o.payment_status === 'paid' ? 'LUNAS' : 'COD / TUNAI'}</span>
-                              <span className="font-mono">({o.status})</span>
+                      {filteredBatchOrders.length === 0 ? (
+                        <div className="text-center py-2 text-gray-500 text-[10px]">
+                          Tidak ada pesanan yang sedang diantar.
+                        </div>
+                      ) : (
+                        filteredBatchOrders.map((o, idx) => (
+                          <div key={idx} className="border-b border-dotted border-gray-300 pb-1.5 space-y-0.5">
+                            <div className="flex items-start justify-between gap-1 font-bold">
+                              <span className="break-words">[ ] #{o.id} {o.user?.santri_name || o.user?.name}</span>
+                              <span className="shrink-0">{formatRupiah(o.total_price)}</span>
+                            </div>
+                            <div className="text-[9px] text-gray-700 pl-2 space-y-0.5">
+                              <div className="break-words">📍 {o.user?.santri_room || '-'}</div>
+                              <div className="break-words">🏪 {o.canteen?.name || 'Kantin'}</div>
+                              <div className="flex justify-between items-center pt-0.5 text-[8.5px]">
+                                <span>{o.payment_status === 'paid' ? 'LUNAS' : 'COD / TUNAI'}</span>
+                                <span className="font-semibold text-green-700">(Sedang Diantar)</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </div>
 
@@ -432,7 +398,8 @@ export default function ThermalReceiptModal({
             </button>
             <button
               onClick={handlePrint}
-              className="flex-[2] py-3 bg-green-600 hover:bg-green-700 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-green-600/20 transition-all"
+              disabled={filteredBatchOrders.length === 0 && mode === 'batch'}
+              className="flex-[2] py-3 bg-green-600 hover:bg-green-700 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-green-600/20 transition-all disabled:opacity-50"
             >
               <Printer className="w-4 h-4" />
               Cetak ke Printer iWare (Print)

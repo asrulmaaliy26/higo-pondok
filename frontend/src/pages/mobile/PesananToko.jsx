@@ -67,18 +67,30 @@ function getOrderPriorityScore(order) {
     return 30;
   }
 
-  // 3. Sudah Lunas tapi masih aktif (pending / processing)
-  if (order.payment_status === 'paid') {
-    return 60;
+  // 3. SUDAH DILANJUTKAN (status === 'processing' - Sedang Diproses / Diantar Kurir)
+  // Pesanan ini baru turun ke bawah setelah diklik "Lanjutkan Pesanan"
+  if (order.status === 'processing') {
+    if (order.payment_status === 'waiting_confirmation') return 70; // jika pembeli upload bukti saat processing
+    if (order.payment_status === 'unpaid') return 65; // COD / belum bayar tapi sudah jalan
+    return 60; // processing & sudah lunas
   }
 
-  // 4. Perlu Validasi Pembayaran (Pembeli sudah upload bukti transfer) -> Paling ATAS
-  if (order.payment_status === 'waiting_confirmation') {
-    return 100;
+  // 4. BELUM DILANJUTKAN (status === 'pending' - PALING UTAMA DI ATAS!)
+  // Pesanan butuh tindakan toko: Validasi Bayar & Klik "Lanjutkan Pesanan"
+  if (order.status === 'pending') {
+    // 4a. Pembeli baru upload bukti -> Prioritas Teratas 1 (Skor 100)
+    if (order.payment_status === 'waiting_confirmation') {
+      return 100;
+    }
+    // 4b. Kantin baru klik "Konfirmasi Lunas", tapi BELUM klik "Lanjutkan Pesanan" -> TETAP DI ATAS! (Skor 95)
+    if (order.payment_status === 'paid') {
+      return 95;
+    }
+    // 4c. Belum Bayar / Belum Set Harga -> Tetap di atas sebelum dilanjutkan (Skor 90)
+    return 90;
   }
 
-  // 5. Belum Lunas (walaupun sudah dilanjutkan / processing / pending) -> Di atas yang sudah lunas
-  return 80;
+  return 50;
 }
 
 export default function PesananToko() {

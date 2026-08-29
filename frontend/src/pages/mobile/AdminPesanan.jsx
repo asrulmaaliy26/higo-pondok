@@ -137,6 +137,19 @@ export default function AdminPesanan() {
   const [restoreOrderId, setRestoreOrderId] = useState(null);
   const [forceDeleteOrderId, setForceDeleteOrderId] = useState(null);
 
+  // Cancel & Status Change Modal States
+  const [orderToCancel, setOrderToCancel] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [orderToChangeStatus, setOrderToChangeStatus] = useState(null);
+  const [selectedNewStatus, setSelectedNewStatus] = useState('pending');
+  const [selectedNewPaymentStatus, setSelectedNewPaymentStatus] = useState('unpaid');
+
+  const handleOpenChangeStatusModal = (order) => {
+    setOrderToChangeStatus(order);
+    setSelectedNewStatus(order.status || 'pending');
+    setSelectedNewPaymentStatus(order.payment_status || 'unpaid');
+  };
+
   // Receipt Modal State for Admin
   const [receiptModalConfig, setReceiptModalConfig] = useState({
     isOpen: false,
@@ -403,6 +416,45 @@ export default function AdminPesanan() {
     },
     onError: (err) => {
       toast.error(err.response?.data?.message || 'Gagal mengosongkan kotak sampah');
+    }
+  });
+
+  // Mutation Cancel Order (Admin can cancel ANY order, including completed ones)
+  const cancelOrderMutation = useMutation({
+    mutationFn: async ({ id, reason }) => {
+      const res = await api.put(`/admin/orders/${id}/cancel`, { reason });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Pesanan berhasil dibatalkan');
+      queryClient.invalidateQueries({ queryKey: ['admin_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['admin_orders_recap'] });
+      queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
+      queryClient.invalidateQueries({ queryKey: ['courier_orders'] });
+      setOrderToCancel(null);
+      setCancelReason('');
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal membatalkan pesanan');
+    }
+  });
+
+  // Mutation Update Order Status & Payment Status
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status, payment_status }) => {
+      const res = await api.put(`/admin/orders/${id}/status`, { status, payment_status });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Status pesanan berhasil diperbarui');
+      queryClient.invalidateQueries({ queryKey: ['admin_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['admin_orders_recap'] });
+      queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
+      queryClient.invalidateQueries({ queryKey: ['courier_orders'] });
+      setOrderToChangeStatus(null);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal mengubah status pesanan');
     }
   });
 
@@ -749,11 +801,14 @@ export default function AdminPesanan() {
                           </div>
                         </div>
 
-                        {/* Status Badges */}
+                        {/* Status Badges (Clickable) */}
                         <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
                           {/* Payment Status Badge */}
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                          <button
+                            type="button"
+                            onClick={() => handleOpenChangeStatusModal(order)}
+                            title="Klik untuk ubah status pembayaran / pesanan"
+                            className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs ${
                               isPaid
                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
                                 : isWaiting
@@ -762,11 +817,14 @@ export default function AdminPesanan() {
                             }`}
                           >
                             {isPaid ? '✅ Lunas' : isWaiting ? '⏳ Menunggu Validasi' : '⚠️ Belum Bayar'}
-                          </span>
+                          </button>
 
                           {/* Order Status Badge */}
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                          <button
+                            type="button"
+                            onClick={() => handleOpenChangeStatusModal(order)}
+                            title="Klik untuk ubah status pesanan"
+                            className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs ${
                               order.status === 'completed'
                                 ? 'bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300 border border-green-200'
                                 : order.status === 'processing'
@@ -783,7 +841,7 @@ export default function AdminPesanan() {
                               : order.status === 'cancelled'
                               ? 'Dibatalkan'
                               : 'Pending'}
-                          </span>
+                          </button>
                         </div>
                       </div>
 
@@ -894,23 +952,47 @@ export default function AdminPesanan() {
                         </span>
                       </div>
 
-                      {/* Actions: Cetak Struk & Delete Button */}
-                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                      {/* Actions: Batalkan, Ubah Status, Cetak Struk & Delete */}
+                      <div className="flex items-center gap-1.5 self-end sm:self-auto flex-wrap">
+                        {order.status !== 'cancelled' && (
+                          <button
+                            onClick={() => {
+                              setOrderToCancel(order);
+                              setCancelReason('');
+                            }}
+                            className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-900/50 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-xs border border-red-200 dark:border-red-800"
+                            title={order.status === 'completed' ? 'Batalkan pesanan yang sudah diselesaikan kurir' : 'Batalkan Pesanan'}
+                          >
+                            <X className="w-3.5 h-3.5 text-red-600" />
+                            <span>{order.status === 'completed' ? 'Batalkan Pesanan' : 'Batalkan'}</span>
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => handleOpenChangeStatusModal(order)}
+                          className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-xs"
+                          title="Ubah / Kembalikan Status Pesanan"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                          <span>Ubah Status</span>
+                        </button>
+
                         <button
                           onClick={() => handlePrintSingleReceipt(order)}
-                          className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+                          className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-xs"
                           title="Cetak Struk Thermal iWare"
                         >
                           <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                          <span>Cetak Struk</span>
+                          <span>Struk</span>
                         </button>
 
                         <button
                           onClick={() => setOrderToDelete(order)}
-                          className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-900/50 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs border border-red-200 dark:border-red-800"
+                          className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-xs border border-gray-200 dark:border-gray-700"
+                          title="Pindahkan ke Kotak Sampah"
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                          Hapus Pesanan
+                          <Trash2 className="w-3.5 h-3.5 text-gray-500" />
+                          <span>Hapus</span>
                         </button>
                       </div>
                     </div>
@@ -1460,6 +1542,209 @@ export default function AdminPesanan() {
         </div>,
         document.body
       )}
+      {/* MODAL KONFIRMASI BATALKAN PESANAN */}
+      {orderToCancel && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-100 dark:border-gray-800 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
+            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                Batalkan Pesanan #{orderToCancel.id}?
+              </h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                {orderToCancel.status === 'completed' ? (
+                  <>
+                    Pesanan ini <strong>sudah diselesaikan oleh kurir</strong>. Membatalkannya akan mengubah status menjadi <span className="text-red-600 font-bold">Dibatalkan</span> dan mengembalikan stok produk.
+                  </>
+                ) : (
+                  <>
+                    Status pesanan <strong>#{orderToCancel.id}</strong> ({orderToCancel.canteen?.name}) milik <strong>{orderToCancel.user?.santri_name || orderToCancel.user?.name}</strong> akan diubah menjadi <span className="text-red-600 font-bold">Dibatalkan</span>.
+                  </>
+                )}
+              </p>
+            </div>
+
+            {/* Input Alasan Pembatalan */}
+            <div className="space-y-1.5 text-left">
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                Alasan Pembatalan (Opsional):
+              </label>
+              <input
+                type="text"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Contoh: Kesalahan input kurir, salah tujuan, dll."
+                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-red-500 focus:outline-hidden"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderToCancel(null);
+                  setCancelReason('');
+                }}
+                disabled={cancelOrderMutation.isPending}
+                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+              >
+                Kembali
+              </button>
+              <button
+                type="button"
+                onClick={() => cancelOrderMutation.mutate({ id: orderToCancel.id, reason: cancelReason })}
+                disabled={cancelOrderMutation.isPending}
+                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                {cancelOrderMutation.isPending ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Membatalkan...
+                  </>
+                ) : (
+                  <>
+                    <X className="w-3.5 h-3.5" /> Ya, Batalkan
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL UBAH STATUS PESANAN & PEMBAYARAN */}
+      {orderToChangeStatus && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-100 dark:border-gray-800 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
+            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl flex items-center justify-center mx-auto">
+              <RotateCcw className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                Ubah Status Pesanan #{orderToChangeStatus.id}
+              </h3>
+              <p className="text-xs text-gray-500 font-medium">
+                {orderToChangeStatus.canteen?.name} • {orderToChangeStatus.user?.santri_name || orderToChangeStatus.user?.name}
+              </p>
+            </div>
+
+            {/* Kotak Ringkasan Status Saat Ini */}
+            <div className="bg-gray-50 dark:bg-gray-800/80 p-3 rounded-2xl border border-gray-100 dark:border-gray-700/60 flex items-center justify-between text-xs">
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold tracking-wider mb-0.5">Status Saat Ini:</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-bold text-[11px] ${
+                  orderToChangeStatus.status === 'completed'
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
+                    : orderToChangeStatus.status === 'processing'
+                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                    : orderToChangeStatus.status === 'cancelled'
+                    ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+                    : 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                }`}>
+                  {orderToChangeStatus.status === 'completed'
+                    ? '✅ Selesai'
+                    : orderToChangeStatus.status === 'processing'
+                    ? '🚚 Sedang Diproses'
+                    : orderToChangeStatus.status === 'cancelled'
+                    ? '❌ Dibatalkan'
+                    : '⏳ Pending'}
+                </span>
+              </div>
+
+              <div className="text-right">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold tracking-wider mb-0.5">Pembayaran:</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-bold text-[11px] ${
+                  orderToChangeStatus.payment_status === 'paid'
+                    ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                    : orderToChangeStatus.payment_status === 'waiting_confirmation'
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                    : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                }`}>
+                  {orderToChangeStatus.payment_status === 'paid'
+                    ? '💳 Lunas'
+                    : orderToChangeStatus.payment_status === 'waiting_confirmation'
+                    ? '⏳ Menunggu Validasi'
+                    : '⚠️ Belum Bayar'}
+                </span>
+              </div>
+            </div>
+
+            {/* 1. Dropdown Status Pesanan */}
+            <div className="space-y-1.5 text-left">
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                <span>Pilih Status Pesanan:</span>
+                <span className="text-[11px] font-normal text-gray-400">Default: status saat ini</span>
+              </label>
+              <select
+                value={selectedNewStatus}
+                onChange={(e) => setSelectedNewStatus(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+              >
+                <option value="pending">⏳ Belum Dikonfirmasi (Pending / Menunggu)</option>
+                <option value="processing">🚚 Sedang Diproses / Diantar (Processing)</option>
+                <option value="completed">✅ Selesai (Completed)</option>
+                <option value="cancelled">❌ Dibatalkan (Cancelled)</option>
+              </select>
+            </div>
+
+            {/* 2. Dropdown Status Pembayaran */}
+            <div className="space-y-1.5 text-left">
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                <span>Pilih Status Pembayaran:</span>
+                <span className="text-[11px] font-normal text-gray-400">Default: status bayar saat ini</span>
+              </label>
+              <select
+                value={selectedNewPaymentStatus}
+                onChange={(e) => setSelectedNewPaymentStatus(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+              >
+                <option value="unpaid">⚠️ Belum Bayar (Unpaid)</option>
+                <option value="waiting_confirmation">⏳ Menunggu Validasi (Waiting Confirmation)</option>
+                <option value="paid">💳 Sudah Bayar / Lunas (Paid)</option>
+              </select>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setOrderToChangeStatus(null)}
+                disabled={updateStatusMutation.isPending}
+                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => updateStatusMutation.mutate({
+                  id: orderToChangeStatus.id,
+                  status: selectedNewStatus,
+                  payment_status: selectedNewPaymentStatus
+                })}
+                disabled={updateStatusMutation.isPending}
+                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                {updateStatusMutation.isPending ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-3.5 h-3.5" /> Simpan Perubahan
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* MODAL CETAK STRUK THERMAL IWARE UNTUK ADMIN */}
       <ThermalReceiptModal
         isOpen={receiptModalConfig.isOpen}

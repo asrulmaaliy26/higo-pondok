@@ -51,6 +51,7 @@ Route::middleware(['auth:sanctum', 'impersonate'])->group(function () {
         Route::post('/courier/orders/{id}/upload-receipt', [\App\Domains\Canteen\Controllers\OrderController::class, 'uploadPurchaseProof']);
         Route::post('/courier/orders/{id}/upload-delivery', [\App\Domains\Canteen\Controllers\OrderController::class, 'uploadDeliveryProof']);
         Route::delete('/courier/orders/{id}/proof', [\App\Domains\Canteen\Controllers\OrderController::class, 'deleteProofPhoto']);
+        Route::put('/courier/orders/{id}/cancel', [\App\Domains\Canteen\Controllers\OrderController::class, 'courierCancelOrder']);
     });
 
     // User routes

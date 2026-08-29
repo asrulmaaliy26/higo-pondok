@@ -51,6 +51,8 @@ Route::middleware('auth:sanctum')->group(function () {
         // Admin Orders & Recap & Recycle Bin
         Route::get('/admin/orders', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'index']);
         Route::get('/admin/orders/recap', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'recap']);
+        Route::put('/admin/orders/{id}/cancel', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'cancel']);
+        Route::put('/admin/orders/{id}/status', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'updateStatus']);
         Route::get('/admin/orders/trash', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'trash']);
         Route::delete('/admin/orders/{id}', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'destroy']);
         Route::post('/admin/orders/{id}/restore', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'restore']);

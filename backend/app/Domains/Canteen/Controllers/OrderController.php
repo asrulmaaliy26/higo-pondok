@@ -433,6 +433,13 @@ class OrderController extends Controller
         $endDate = $request->query('end_date');
 
         $query = Order::with(['canteen', 'user', 'items.product', 'courier'])
+            ->orderByRaw("CASE 
+                WHEN status = 'processing' THEN 1 
+                WHEN status = 'pending' THEN 2 
+                WHEN status = 'completed' THEN 3 
+                WHEN status = 'cancelled' THEN 4 
+                ELSE 5 
+            END ASC")
             ->orderBy('created_at', 'desc');
 
         if ($scope === 'assigned') {
@@ -692,6 +699,34 @@ class OrderController extends Controller
             }
             
             return response()->json(['message' => 'Pesanan berhasil diselesaikan', 'order' => $order->load(['canteen', 'user', 'items.product', 'courier'])]);
+        });
+    }
+
+    // For Courier: Cancel or revert order (including completed ones)
+    public function courierCancelOrder(Request $request, $id)
+    {
+        return DB::transaction(function () use ($id, $request) {
+            $user = $request->user();
+            $order = Order::with('items.product')->where('id', $id)->lockForUpdate()->firstOrFail();
+            $prevStatus = $order->status;
+
+            // If order was completed, adjust stock/sold_count
+            if ($prevStatus === 'completed' || $prevStatus === 'processing') {
+                foreach ($order->items as $item) {
+                    if ($item->product) {
+                        $item->product->decrement('sold_count', $item->quantity);
+                        $item->product->increment('stock', $item->quantity);
+                    }
+                }
+            }
+
+            $order->status = 'cancelled';
+            $order->save();
+
+            return response()->json([
+                'message' => 'Pesanan berhasil dibatalkan',
+                'order' => $order->load(['canteen', 'user', 'items.product', 'courier'])
+            ]);
         });
     }
 

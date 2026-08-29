@@ -34,13 +34,23 @@ export default function ThermalReceiptModal({
   const receiptRef = useRef(null);
   const [paperWidth, setPaperWidth] = useState('58mm'); // '58mm' | '80mm'
 
-  // Filter batch orders: default to only orders in transit (processing / active), never cancelled
+  // Filter batch orders: include all passed orders (except cancelled), uncompleted first
   const rawBatchOrders = Array.isArray(orders) ? orders : [];
   const filteredBatchOrders = useMemo(() => {
     if (mode !== 'batch') return [];
-    // Only include valid active / delivering orders
-    const active = rawBatchOrders.filter(o => o.status === 'processing');
-    return active.length > 0 ? active : rawBatchOrders.filter(o => o.status !== 'cancelled');
+    const valid = rawBatchOrders.filter(o => o.status !== 'cancelled');
+    return valid.sort((a, b) => {
+      const getPriority = (status) => {
+        if (status === 'processing') return 1;
+        if (status === 'pending') return 2;
+        if (status === 'completed') return 3;
+        return 4;
+      };
+      const pA = getPriority(a.status);
+      const pB = getPriority(b.status);
+      if (pA !== pB) return pA - pB;
+      return (b.id || 0) - (a.id || 0);
+    });
   }, [rawBatchOrders, mode]);
 
   // Calculate batch summaries
@@ -132,10 +142,10 @@ export default function ThermalReceiptModal({
               </div>
               <div>
                 <h3 className="font-bold text-gray-900 dark:text-white text-sm">
-                  {title || (mode === 'batch' ? `Rekap Antaran (${filteredBatchOrders.length} Pesanan)` : `Cetak Struk #${order?.id}`)}
+                  {title || (mode === 'batch' ? `Rekap Pesanan (${filteredBatchOrders.length} Pesanan)` : `Cetak Struk #${order?.id}`)}
                 </h3>
                 <p className="text-[11px] text-gray-500">
-                  {mode === 'batch' ? 'Khusus Pesanan Sedang Diantar (Aktif)' : 'Format Printer Thermal iWare 58mm'}
+                  {mode === 'batch' ? (title || 'Rekap Daftar Pesanan') : 'Format Printer Thermal iWare 58mm'}
                 </p>
               </div>
             </div>
@@ -304,19 +314,19 @@ export default function ThermalReceiptModal({
               )}
 
               {/* ======================================================== */}
-              {/* MODE 2: BATCH / COURIER MANIFEST (SEDANG DIANTAR SAJA) */}
+              {/* ======================================================== */}
+              {/* MODE 2: BATCH / COURIER MANIFEST */}
               {/* ======================================================== */}
               {mode === 'batch' && (
                 <div className="space-y-1.5 bg-white text-black">
                   {/* HEADER */}
                   <div className="text-center pb-1.5 border-b border-dashed border-black">
-                    <h2 className="text-xs font-black uppercase tracking-wider">REKAP ANTARAN KURIR</h2>
+                    <h2 className="text-xs font-black uppercase tracking-wider">{title || 'REKAP DAFTAR PESANAN'}</h2>
                     <p className="text-[9px] font-bold">HIGO PONDOK</p>
-                    <p className="text-[8.5px] text-gray-600">(Pesanan Sedang Diantar)</p>
                     
                     <div className="text-left text-[10px] mt-1.5 space-y-0.5 pt-1 border-t border-dotted border-gray-400">
                       <div className="flex justify-between items-start gap-1">
-                        <span className="shrink-0 text-gray-700">Kurir:</span>
+                        <span className="shrink-0 text-gray-700">Petugas/Kurir:</span>
                         <span className="font-bold text-right break-words">{courierName || 'Petugas'}</span>
                       </div>
                       <div className="flex justify-between items-start gap-1">
@@ -324,7 +334,7 @@ export default function ThermalReceiptModal({
                         <span className="text-right">{formatDateTime(new Date().toISOString())}</span>
                       </div>
                       <div className="flex justify-between items-start gap-1">
-                        <span className="shrink-0 text-gray-700">Total Antaran:</span>
+                        <span className="shrink-0 text-gray-700">Total Pesanan:</span>
                         <span className="font-bold text-right">{filteredBatchOrders.length} Pesanan</span>
                       </div>
                     </div>
@@ -349,30 +359,33 @@ export default function ThermalReceiptModal({
                   {/* DAFTAR ANTARAN DETAIL */}
                   <div className="py-1 border-b border-dashed border-black">
                     <p className="font-bold text-[10px] pb-1 border-b border-dotted border-gray-400">
-                      RUTE ANTARAN SANTRI:
+                      DAFTAR PESANAN SANTRI:
                     </p>
                     <div className="pt-1.5 space-y-2 text-[10px]">
                       {filteredBatchOrders.length === 0 ? (
                         <div className="text-center py-2 text-gray-500 text-[10px]">
-                          Tidak ada pesanan yang sedang diantar.
+                          Tidak ada pesanan aktif pada daftar ini.
                         </div>
                       ) : (
-                        filteredBatchOrders.map((o, idx) => (
-                          <div key={idx} className="border-b border-dotted border-gray-300 pb-1.5 space-y-0.5">
-                            <div className="flex items-start justify-between gap-1 font-bold">
-                              <span className="break-words">[ ] #{o.id} {o.user?.santri_name || o.user?.name}</span>
-                              <span className="shrink-0">{formatRupiah(o.total_price)}</span>
-                            </div>
-                            <div className="text-[9px] text-gray-700 pl-2 space-y-0.5">
-                              <div className="break-words">📍 {o.user?.santri_room || '-'}</div>
-                              <div className="break-words">🏪 {o.canteen?.name || 'Kantin'}</div>
-                              <div className="flex justify-between items-center pt-0.5 text-[8.5px]">
-                                <span>{o.payment_status === 'paid' ? 'LUNAS' : 'COD / TUNAI'}</span>
-                                <span className="font-semibold text-green-700">(Sedang Diantar)</span>
+                        filteredBatchOrders.map((o, idx) => {
+                          const statusLabel = o.status === 'pending' ? 'Menunggu' : o.status === 'processing' ? 'Sedang Diantar' : o.status === 'completed' ? 'Selesai' : o.status;
+                          return (
+                            <div key={idx} className="border-b border-dotted border-gray-300 pb-1.5 space-y-0.5">
+                              <div className="flex items-start justify-between gap-1 font-bold">
+                                <span className="break-words">[ ] #{o.id} {o.user?.santri_name || o.user?.name}</span>
+                                <span className="shrink-0">{formatRupiah(o.total_price)}</span>
+                              </div>
+                              <div className="text-[9px] text-gray-700 pl-2 space-y-0.5">
+                                <div className="break-words">📍 {o.user?.santri_room || '-'}</div>
+                                <div className="break-words">🏪 {o.canteen?.name || 'Kantin'}</div>
+                                <div className="flex justify-between items-center pt-0.5 text-[8.5px]">
+                                  <span>{o.payment_status === 'paid' ? 'LUNAS' : 'COD / TUNAI'}</span>
+                                  <span className="font-semibold text-gray-800">({statusLabel})</span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </div>

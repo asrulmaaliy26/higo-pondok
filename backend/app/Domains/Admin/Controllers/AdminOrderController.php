@@ -389,4 +389,114 @@ class AdminOrderController extends Controller
             ]);
         });
     }
+
+    /**
+     * Cancel an order (Admin can cancel ANY order, including completed ones)
+     */
+    public function cancel(Request $request, $id)
+    {
+        return DB::transaction(function () use ($request, $id) {
+            $order = Order::with(['items.product', 'canteen', 'user'])->findOrFail($id);
+            $orderId = $order->id;
+            $prevStatus = $order->status;
+            $canteenName = $order->canteen ? $order->canteen->name : "Kantin #{$order->canteen_id}";
+            $customerName = $order->user ? $order->user->name : "User #{$order->user_id}";
+
+            $reason = $request->input('reason', 'Dibatalkan oleh Admin');
+
+            // If order was completed or processing, restore stock and decrement sold_count
+            if ($prevStatus === 'completed' || $prevStatus === 'processing') {
+                foreach ($order->items as $item) {
+                    if ($item->product) {
+                        $item->product->increment('stock', $item->quantity);
+                        $item->product->decrement('sold_count', $item->quantity);
+                    }
+                }
+            }
+
+            $order->status = 'cancelled';
+            $order->save();
+
+            ActivityLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'cancel_order',
+                'model_type' => Order::class,
+                'model_id' => $orderId,
+                'description' => "Admin {$request->user()->name} membatalkan pesanan #{$orderId} ({$canteenName} - {$customerName}). Status sebelumnya: {$prevStatus}. Alasan: {$reason}",
+            ]);
+
+            return response()->json([
+                'message' => "Pesanan #{$orderId} berhasil dibatalkan.",
+                'order' => $order->load(['user', 'canteen', 'courier', 'items.product'])
+            ]);
+        });
+    }
+
+    /**
+     * Update order status (Admin can change status or revert completed orders & update payment status)
+     */
+    public function updateStatus(Request $request, $id)
+    {
+        $request->validate([
+            'status' => 'nullable|in:pending,processing,completed,cancelled',
+            'payment_status' => 'nullable|in:unpaid,waiting_confirmation,paid'
+        ]);
+
+        return DB::transaction(function () use ($request, $id) {
+            $order = Order::with(['items.product', 'canteen', 'user'])->findOrFail($id);
+            $orderId = $order->id;
+            $prevStatus = $order->status;
+            $prevPaymentStatus = $order->payment_status;
+            $newStatus = $request->input('status', $prevStatus);
+            $newPaymentStatus = $request->input('payment_status', $prevPaymentStatus);
+            $canteenName = $order->canteen ? $order->canteen->name : "Kantin #{$order->canteen_id}";
+            $customerName = $order->user ? $order->user->name : "User #{$order->user_id}";
+
+            if ($prevStatus === $newStatus && $prevPaymentStatus === $newPaymentStatus) {
+                return response()->json([
+                    'message' => 'Status pesanan tidak berubah',
+                    'order' => $order
+                ]);
+            }
+
+            // Adjust product sold_count and stock if transitioning from/to completed or cancelled
+            if ($newStatus && $prevStatus !== $newStatus) {
+                if ($newStatus === 'completed' && $prevStatus !== 'completed') {
+                    foreach ($order->items as $item) {
+                        if ($item->product) {
+                            $item->product->increment('sold_count', $item->quantity);
+                            $item->product->decrement('stock', $item->quantity);
+                        }
+                    }
+                } elseif ($prevStatus === 'completed' && $newStatus !== 'completed') {
+                    foreach ($order->items as $item) {
+                        if ($item->product) {
+                            $item->product->decrement('sold_count', $item->quantity);
+                            $item->product->increment('stock', $item->quantity);
+                        }
+                    }
+                }
+                $order->status = $newStatus;
+            }
+
+            if ($newPaymentStatus && $prevPaymentStatus !== $newPaymentStatus) {
+                $order->payment_status = $newPaymentStatus;
+            }
+
+            $order->save();
+
+            ActivityLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'update_order_status',
+                'model_type' => Order::class,
+                'model_id' => $orderId,
+                'description' => "Admin {$request->user()->name} memperbarui pesanan #{$orderId} ({$canteenName} - {$customerName}): Status [{$prevStatus} -> {$newStatus}], Bayar [{$prevPaymentStatus} -> {$newPaymentStatus}]",
+            ]);
+
+            return response()->json([
+                'message' => "Status pesanan #{$orderId} berhasil diperbarui.",
+                'order' => $order->load(['user', 'canteen', 'courier', 'items.product'])
+            ]);
+        });
+    }
 }

@@ -166,7 +166,7 @@ export default function TugasKurir() {
 
   // View & Filter States
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'canteen'
-  const [statusTab, setStatusTab] = useState('all'); // 'all' | 'my_tasks' | 'pending' | 'processing' | 'completed'
+  const [statusTab, setStatusTab] = useState('processing'); // Default: 'processing' (Sedang Diantar)
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCanteenFilter, setSelectedCanteenFilter] = useState('all');
   const [expandedCanteen, setExpandedCanteen] = useState({});
@@ -178,6 +178,7 @@ export default function TugasKurir() {
   const [photoFiles, setPhotoFiles] = useState([]);
   const [selectedProofs, setSelectedProofs] = useState([]);
   const [confirmCompleteOrder, setConfirmCompleteOrder] = useState(null);
+  const [confirmCancelOrder, setConfirmCancelOrder] = useState(null);
   const [receiptModalConfig, setReceiptModalConfig] = useState({
     isOpen: false,
     mode: 'single', // 'single' | 'batch'
@@ -197,22 +198,27 @@ export default function TugasKurir() {
   };
 
   const handlePrintBatchReceipt = () => {
-    // Kurir default cetak hanya pesanan yang berstatus Sedang Diantar (processing)
-    const activeDelivering = orders.filter(o => o.status === 'processing');
-    const targetOrders = statusTab === 'completed' 
-      ? filteredOrders.filter(o => o.status === 'completed')
-      : activeDelivering.length > 0 ? activeDelivering : filteredOrders.filter(o => o.status === 'processing');
+    // Cetak pesanan aktif sesuai filter & tab status yang sedang dibuka (kecuali dibatalkan)
+    const targetOrders = filteredOrders.filter(o => o.status !== 'cancelled');
 
     if (targetOrders.length === 0) {
-      toast.error('Tidak ada pesanan yang berstatus Sedang Diantar saat ini.');
+      toast.error('Tidak ada pesanan aktif pada filter saat ini.');
       return;
     }
+
+    let tabLabel = 'Pesanan';
+    if (statusTab === 'all') tabLabel = 'Semua Pesanan';
+    else if (statusTab === 'my_tasks') tabLabel = 'Tugas Saya';
+    else if (statusTab === 'pending') tabLabel = 'Pesanan Menunggu';
+    else if (statusTab === 'processing') tabLabel = 'Pesanan Sedang Diantar';
+    else if (statusTab === 'completed') tabLabel = 'Pesanan Selesai';
+
     setReceiptModalConfig({
       isOpen: true,
       mode: 'batch',
       order: null,
       orders: targetOrders,
-      title: `Rekap Antaran (${targetOrders.length} Sedang Diantar)`
+      title: `Rekap ${tabLabel} (${targetOrders.length} Pesanan)`
     });
   };
 
@@ -328,6 +334,22 @@ export default function TugasKurir() {
     }
   });
 
+  // Cancel Order Mutation (Courier)
+  const courierCancelOrderMutation = useMutation({
+    mutationFn: async (id) => {
+      const res = await api.put(`/courier/orders/${id}/cancel`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['courier_orders'] });
+      toast.success('Pesanan berhasil dibatalkan!');
+      setConfirmCancelOrder(null);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal membatalkan pesanan');
+    }
+  });
+
   const [isCompressing, setIsCompressing] = useState(false);
 
   const handleFileChange = async (e) => {
@@ -395,9 +417,19 @@ export default function TugasKurir() {
     }));
   };
 
-  // Filter Orders
+  const getStatusPriority = (status) => {
+    switch (status) {
+      case 'processing': return 1; // Sedang Diantar (paling atas / prioritas utama kurir)
+      case 'pending': return 2;    // Menunggu Diambil
+      case 'completed': return 3;  // Selesai
+      case 'cancelled': return 4;  // Dibatalkan
+      default: return 5;
+    }
+  };
+
+  // Filter & Sort Orders (Yang belum diselesaikan tampil paling atas)
   const filteredOrders = useMemo(() => {
-    return orders.filter(order => {
+    const list = orders.filter(order => {
       // 1. Status / Tab Filter
       if (statusTab === 'my_tasks') {
         if (order.courier_id !== currentUser?.id) return false;
@@ -433,6 +465,22 @@ export default function TugasKurir() {
       }
 
       return true;
+    });
+
+    return [...list].sort((a, b) => {
+      const priorityA = getStatusPriority(a.status);
+      const priorityB = getStatusPriority(b.status);
+
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+
+      // If same status priority: sort newest first
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      if (dateB !== dateA) return dateB - dateA;
+
+      return (b.id || 0) - (a.id || 0);
     });
   }, [orders, statusTab, selectedCanteenFilter, searchQuery, currentUser?.id]);
 
@@ -574,6 +622,12 @@ export default function TugasKurir() {
           ...c.itemRecap[k]
         })).sort((a, b) => b.quantity - a.quantity)
       };
+    }).sort((a, b) => {
+      // Prioritaskan toko yang masih memiliki antaran aktif (Sedang Diantar > Menunggu > Selesai)
+      const scoreA = (a.hasProcessing ? 2 : 0) + (a.hasPending ? 1 : 0);
+      const scoreB = (b.hasProcessing ? 2 : 0) + (b.hasPending ? 1 : 0);
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      return b.orders.length - a.orders.length;
     });
   }, [filteredOrders]);
 
@@ -587,6 +641,11 @@ export default function TugasKurir() {
       completed: orders.filter(o => o.status === 'completed').length,
     };
   }, [orders, currentUser?.id]);
+
+  // Printable orders count for current filter
+  const printableOrdersCount = useMemo(() => {
+    return filteredOrders.filter(o => o.status !== 'cancelled').length;
+  }, [filteredOrders]);
 
   // Financial summary for filtered orders (without admin fee)
   const filteredSummary = useMemo(() => {
@@ -919,10 +978,10 @@ export default function TugasKurir() {
               <button
                 onClick={handlePrintBatchReceipt}
                 className="py-1.5 px-3 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
-                title="Cetak Rekap Pesanan yang Sedang Diantar"
+                title={`Cetak Rekap Pesanan (${printableOrdersCount} Pesanan)`}
               >
                 <Printer className="w-3.5 h-3.5 text-green-400" />
-                <span>🖨️ Cetak Rekap Antaran ({tabCounts.processing})</span>
+                <span>🖨️ Cetak Rekap ({printableOrdersCount})</span>
               </button>
 
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs shadow-xs">
@@ -1215,9 +1274,18 @@ export default function TugasKurir() {
                       </div>
                     )}
 
-                    {/* Jika pesanan sudah selesai tapi ingin cetak ulang struk */}
+                    {/* Jika pesanan sudah selesai */}
                     {isCompleted && (
-                      <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex justify-end">
+                      <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-end gap-2 flex-wrap">
+                        <button
+                          onClick={() => setConfirmCancelOrder(order)}
+                          className="py-1.5 px-3 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+                          title="Batalkan Pesanan yang Sudah Selesai Ini"
+                        >
+                          <X className="w-3.5 h-3.5 text-red-600" />
+                          <span>Batalkan Pesanan</span>
+                        </button>
+
                         <button
                           onClick={() => handlePrintSingleReceipt(order)}
                           className="py-1.5 px-3 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
@@ -1375,6 +1443,30 @@ export default function TugasKurir() {
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
+                        {/* Print Canteen Manifest */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const canteenOrders = canteen.orders.filter(o => o.status !== 'cancelled');
+                            if (canteenOrders.length === 0) {
+                              toast.error('Tidak ada pesanan aktif untuk toko ini.');
+                              return;
+                            }
+                            setReceiptModalConfig({
+                              isOpen: true,
+                              mode: 'batch',
+                              order: null,
+                              orders: canteenOrders,
+                              title: `Rekap ${canteen.canteenName} (${canteenOrders.length} Pesanan)`
+                            });
+                          }}
+                          className="p-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl transition-colors"
+                          title={`Cetak Rekap Toko ${canteen.canteenName}`}
+                        >
+                          <Printer className="w-4 h-4 text-green-600 dark:text-green-400" />
+                        </button>
+
                         {canteen.canteenPhone && (
                           <button
                             type="button"
@@ -2089,6 +2181,62 @@ export default function TugasKurir() {
                 className="flex-1 py-2.5 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 transition-colors text-xs shadow-xs"
               >
                 Ya, Selesaikan!
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ======================================================== */}
+      {/* CONFIRMATION MODAL FOR CANCELLING ORDER (COURIER) */}
+      {/* ======================================================== */}
+      {confirmCancelOrder && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl p-5 text-center space-y-3 my-auto">
+            <div className="w-14 h-14 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-full flex items-center justify-center mx-auto">
+              <AlertCircle className="w-7 h-7" />
+            </div>
+            
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">
+              Batalkan Pesanan #{confirmCancelOrder.id}?
+            </h3>
+            
+            <p className="text-xs text-gray-600 dark:text-gray-300">
+              {confirmCancelOrder.status === 'completed' ? (
+                <>
+                  Pesanan atas nama <strong>{confirmCancelOrder.user?.santri_name || confirmCancelOrder.user?.name}</strong> yang sudah selesai ini akan diubah statusnya menjadi <strong className="text-red-600">Dibatalkan</strong> dan stok toko akan dipulihkan.
+                </>
+              ) : (
+                <>
+                  Pesanan atas nama <strong>{confirmCancelOrder.user?.santri_name || confirmCancelOrder.user?.name}</strong> akan diubah statusnya menjadi <strong className="text-red-600">Dibatalkan</strong>.
+                </>
+              )}
+            </p>
+
+            <div className="flex gap-2.5 pt-2">
+              <button 
+                onClick={() => setConfirmCancelOrder(null)}
+                disabled={courierCancelOrderMutation.isPending}
+                className="flex-1 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 transition-colors text-xs"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={() => courierCancelOrderMutation.mutate(confirmCancelOrder.id)}
+                disabled={courierCancelOrderMutation.isPending}
+                className="flex-1 py-2.5 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 transition-colors text-xs shadow-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {courierCancelOrderMutation.isPending ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Membatalkan...
+                  </>
+                ) : (
+                  <>
+                    <X className="w-3.5 h-3.5" /> Ya, Batalkan!
+                  </>
+                )}
               </button>
             </div>
           </div>

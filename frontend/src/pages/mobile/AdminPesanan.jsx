@@ -110,6 +110,57 @@ function getOrderPriorityScore(order) {
   return 50;
 }
 
+// Optimistic Update Helper for React Query caches
+const mutateOrderInCaches = async (queryClient, queryKeyPrefix, targetId, updateFn) => {
+  await queryClient.cancelQueries({ queryKey: [queryKeyPrefix] });
+  const previousQueries = queryClient.getQueriesData({ queryKey: [queryKeyPrefix] });
+
+  queryClient.setQueriesData({ queryKey: [queryKeyPrefix] }, (oldData) => {
+    if (!oldData) return oldData;
+    if (Array.isArray(oldData)) {
+      return oldData.map(item => item.id === targetId ? updateFn(item) : item);
+    }
+    if (Array.isArray(oldData?.data)) {
+      return {
+        ...oldData,
+        data: oldData.data.map(item => item.id === targetId ? updateFn(item) : item)
+      };
+    }
+    return oldData;
+  });
+
+  return { previousQueries };
+};
+
+const removeOrderFromCaches = async (queryClient, queryKeyPrefix, targetId) => {
+  await queryClient.cancelQueries({ queryKey: [queryKeyPrefix] });
+  const previousQueries = queryClient.getQueriesData({ queryKey: [queryKeyPrefix] });
+
+  queryClient.setQueriesData({ queryKey: [queryKeyPrefix] }, (oldData) => {
+    if (!oldData) return oldData;
+    if (Array.isArray(oldData)) {
+      return oldData.filter(item => item.id !== targetId);
+    }
+    if (Array.isArray(oldData?.data)) {
+      return {
+        ...oldData,
+        data: oldData.data.filter(item => item.id !== targetId)
+      };
+    }
+    return oldData;
+  });
+
+  return { previousQueries };
+};
+
+const rollbackCaches = (queryClient, context) => {
+  if (context?.previousQueries) {
+    context.previousQueries.forEach(([queryKey, previousData]) => {
+      queryClient.setQueryData(queryKey, previousData);
+    });
+  }
+};
+
 export default function AdminPesanan() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -356,16 +407,23 @@ export default function AdminPesanan() {
       const res = await api.delete(`/admin/orders/${id}`);
       return res.data;
     },
+    onMutate: async (id) => {
+      const context = await removeOrderFromCaches(queryClient, 'admin_orders', id);
+      setOrderToDelete(null);
+      return context;
+    },
+    onError: (err, id, context) => {
+      rollbackCaches(queryClient, context);
+      toast.error(err.response?.data?.message || 'Gagal menghapus pesanan');
+    },
     onSuccess: (data) => {
       toast.success(data.message || 'Pesanan dipindahkan ke Kotak Sampah');
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['admin_orders'] });
       queryClient.invalidateQueries({ queryKey: ['admin_orders_trash'] });
       queryClient.invalidateQueries({ queryKey: ['admin_orders_recap'] });
       queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
-      setOrderToDelete(null);
-    },
-    onError: (err) => {
-      toast.error(err.response?.data?.message || 'Gagal menghapus pesanan');
     }
   });
 
@@ -375,15 +433,21 @@ export default function AdminPesanan() {
       const res = await api.post(`/admin/orders/${id}/restore`);
       return res.data;
     },
+    onMutate: async (id) => {
+      return await removeOrderFromCaches(queryClient, 'admin_orders_trash', id);
+    },
+    onError: (err, id, context) => {
+      rollbackCaches(queryClient, context);
+      toast.error(err.response?.data?.message || 'Gagal memulihkan pesanan');
+    },
     onSuccess: (data) => {
       toast.success(data.message || 'Pesanan berhasil dipulihkan!');
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['admin_orders'] });
       queryClient.invalidateQueries({ queryKey: ['admin_orders_trash'] });
       queryClient.invalidateQueries({ queryKey: ['admin_orders_recap'] });
       queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
-    },
-    onError: (err) => {
-      toast.error(err.response?.data?.message || 'Gagal memulihkan pesanan');
     }
   });
 
@@ -393,13 +457,20 @@ export default function AdminPesanan() {
       const res = await api.delete(`/admin/orders/${id}/force`);
       return res.data;
     },
+    onMutate: async (id) => {
+      const context = await removeOrderFromCaches(queryClient, 'admin_orders_trash', id);
+      setOrderToForceDelete(null);
+      return context;
+    },
+    onError: (err, id, context) => {
+      rollbackCaches(queryClient, context);
+      toast.error(err.response?.data?.message || 'Gagal menghapus permanen');
+    },
     onSuccess: (data) => {
       toast.success(data.message || 'Pesanan berhasil dihapus permanen');
-      queryClient.invalidateQueries({ queryKey: ['admin_orders_trash'] });
-      setOrderToForceDelete(null);
     },
-    onError: (err) => {
-      toast.error(err.response?.data?.message || 'Gagal menghapus permanen');
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin_orders_trash'] });
     }
   });
 
@@ -425,17 +496,26 @@ export default function AdminPesanan() {
       const res = await api.put(`/admin/orders/${id}/cancel`, { reason });
       return res.data;
     },
+    onMutate: async (variables) => {
+      setOrderToCancel(null);
+      setCancelReason('');
+      return await mutateOrderInCaches(queryClient, 'admin_orders', variables.id, (order) => ({
+        ...order,
+        status: 'cancelled'
+      }));
+    },
+    onError: (err, variables, context) => {
+      rollbackCaches(queryClient, context);
+      toast.error(err.response?.data?.message || 'Gagal membatalkan pesanan');
+    },
     onSuccess: (data) => {
       toast.success(data.message || 'Pesanan berhasil dibatalkan');
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['admin_orders'] });
       queryClient.invalidateQueries({ queryKey: ['admin_orders_recap'] });
       queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
       queryClient.invalidateQueries({ queryKey: ['courier_orders'] });
-      setOrderToCancel(null);
-      setCancelReason('');
-    },
-    onError: (err) => {
-      toast.error(err.response?.data?.message || 'Gagal membatalkan pesanan');
     }
   });
 
@@ -445,16 +525,26 @@ export default function AdminPesanan() {
       const res = await api.put(`/admin/orders/${id}/status`, { status, payment_status });
       return res.data;
     },
+    onMutate: async (variables) => {
+      setOrderToChangeStatus(null);
+      return await mutateOrderInCaches(queryClient, 'admin_orders', variables.id, (order) => ({
+        ...order,
+        ...(variables.status ? { status: variables.status } : {}),
+        ...(variables.payment_status ? { payment_status: variables.payment_status } : {})
+      }));
+    },
+    onError: (err, variables, context) => {
+      rollbackCaches(queryClient, context);
+      toast.error(err.response?.data?.message || 'Gagal mengubah status pesanan');
+    },
     onSuccess: (data) => {
       toast.success(data.message || 'Status pesanan berhasil diperbarui');
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['admin_orders'] });
       queryClient.invalidateQueries({ queryKey: ['admin_orders_recap'] });
       queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
       queryClient.invalidateQueries({ queryKey: ['courier_orders'] });
-      setOrderToChangeStatus(null);
-    },
-    onError: (err) => {
-      toast.error(err.response?.data?.message || 'Gagal mengubah status pesanan');
     }
   });
 
@@ -772,7 +862,7 @@ export default function AdminPesanan() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
               {orders.map((order) => {
                 const isPaid = order.payment_status === 'paid';
                 const isWaiting = order.payment_status === 'waiting_confirmation';
@@ -780,35 +870,30 @@ export default function AdminPesanan() {
                 return (
                   <div
                     key={order.id}
-                    className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden p-4 sm:p-5 transition-all hover:border-gray-200 dark:hover:border-gray-700 flex flex-col justify-between"
+                    className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs hover:shadow-md transition-all hover:border-gray-200 dark:hover:border-gray-700 p-3.5 flex flex-col justify-between gap-2.5"
                   >
-                    {/* Header: Toko, Status, ID, Tanggal */}
-                    <div>
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-gray-100 dark:border-gray-800">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                              🏪 {order.canteen?.name || `Kantin #${order.canteen_id}`}
-                            </span>
-                            {order.is_custom && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200">
-                                ✨ Pesanan Khusus
-                              </span>
-                            )}
-                            <span className="text-xs text-gray-500 font-medium">
-                              Order #{order.id} • {new Date(order.created_at).toLocaleString('id-ID')}
-                            </span>
-                          </div>
+                    {/* 1. Header: Toko, ID, Jam & Status Badges */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-800/80 pb-2">
+                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate max-w-[140px]">
+                            🏪 {order.canteen?.name || `Kantin #${order.canteen_id}`}
+                          </span>
+                          <span className="text-[11px] font-bold text-gray-800 dark:text-gray-200">
+                            #{order.id}
+                          </span>
+                          <span className="text-[10px] text-gray-400">
+                            • {new Date(order.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
                         </div>
 
                         {/* Status Badges (Clickable) */}
-                        <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
-                          {/* Payment Status Badge */}
+                        <div className="flex items-center gap-1 shrink-0">
                           <button
                             type="button"
                             onClick={() => handleOpenChangeStatusModal(order)}
                             title="Klik untuk ubah status pembayaran / pesanan"
-                            className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs ${
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                               isPaid
                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
                                 : isWaiting
@@ -816,87 +901,86 @@ export default function AdminPesanan() {
                                 : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
                             }`}
                           >
-                            {isPaid ? '✅ Lunas' : isWaiting ? '⏳ Menunggu Validasi' : '⚠️ Belum Bayar'}
+                            {isPaid ? 'Lunas' : isWaiting ? 'Verifikasi' : 'Belum Bayar'}
                           </button>
 
-                          {/* Order Status Badge */}
                           <button
                             type="button"
                             onClick={() => handleOpenChangeStatusModal(order)}
                             title="Klik untuk ubah status pesanan"
-                            className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs ${
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                               order.status === 'completed'
-                                ? 'bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300 border border-green-200'
+                                ? 'bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800'
                                 : order.status === 'processing'
-                                ? 'bg-blue-50 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200'
+                                ? 'bg-blue-50 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
                                 : order.status === 'cancelled'
-                                ? 'bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-300 border border-red-200'
-                                : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+                                ? 'bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800'
+                                : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
                             }`}
                           >
                             {order.status === 'completed'
                               ? 'Selesai'
                               : order.status === 'processing'
-                              ? 'Sedang Diproses'
+                              ? 'Proses'
                               : order.status === 'cancelled'
-                              ? 'Dibatalkan'
+                              ? 'Batal'
                               : 'Pending'}
                           </button>
                         </div>
                       </div>
 
-                      {/* Body: Customer info & Items */}
-                      <div className="py-3 grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {/* Pemesan & Pengantaran */}
-                        <div className="space-y-1">
-                          <p className="text-xs text-gray-400 font-medium">Data Pemesan:</p>
-                          <p className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
-                            <User className="w-3.5 h-3.5 text-gray-400" />
+                      {/* 2. Customer & Room Info (Compact 1-2 lines) */}
+                      <div className="text-xs">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-bold text-gray-900 dark:text-white truncate flex items-center gap-1">
+                            <User className="w-3 h-3 text-gray-400 shrink-0" />
                             {order.user?.santri_name || order.user?.name || 'Santri'}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Wali: {order.user?.name || '-'} {order.user?.santri_room ? `• Asrama: ${order.user.santri_room}` : ''}
-                          </p>
-                          {order.delivery_location && (
-                            <p className="text-xs text-gray-500">📍 Lokasi: {order.delivery_location}</p>
-                          )}
-                          {order.courier && (
-                            <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 mt-1">
-                              <Truck className="w-3.5 h-3.5" /> Kurir: {order.courier.name}
-                            </p>
-                          )}
+                          </span>
+                          <span className="text-[11px] text-gray-500 font-medium shrink-0">
+                            📍 {order.user?.santri_room || order.delivery_location || '-'}
+                          </span>
                         </div>
-
-                        {/* Detail Barang */}
-                        <div className="md:col-span-2 space-y-1.5">
-                          <p className="text-xs text-gray-400 font-medium">Daftar Item / Catatan:</p>
-                          {order.custom_notes && (
-                            <div className="bg-purple-50 dark:bg-purple-950/30 p-2.5 rounded-lg border border-purple-100 dark:border-purple-900/50 text-xs text-purple-900 dark:text-purple-300">
-                              <strong>Catatan Khusus:</strong> {order.custom_notes}
-                            </div>
-                          )}
-
-                          <div className="space-y-1">
-                            {order.items?.map((item) => (
-                              <div key={item.id} className="flex justify-between text-xs text-gray-700 dark:text-gray-300">
-                                <span>
-                                  {item.quantity}x {item.product?.name || 'Produk'}
-                                  {item.notes ? ` (${item.notes})` : ''}
-                                </span>
-                                <span className="font-semibold text-gray-900 dark:text-white">
-                                  Rp {parseFloat(item.subtotal).toLocaleString('id-ID')}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                        {order.courier?.name && (
+                          <p className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 mt-0.5">
+                            <Truck className="w-3 h-3" /> Kurir: {order.courier.name}
+                          </p>
+                        )}
                       </div>
 
-                      {/* Proof Buttons (If Available) */}
+                      {/* 3. Items List Box (Minimalist & Clean) */}
+                      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-2.5 space-y-1 text-xs border border-gray-100 dark:border-gray-800">
+                        {order.custom_notes && (
+                          <div className="text-[11px] font-medium text-purple-800 dark:text-purple-300 pb-0.5 border-b border-purple-100 dark:border-purple-900/40">
+                            ✨ {order.custom_notes}
+                          </div>
+                        )}
+                        {order.items && order.items.length > 0 ? (
+                          order.items.map((item) => (
+                            <div key={item.id} className="flex justify-between items-center text-[11px]">
+                              <span className="text-gray-700 dark:text-gray-300 truncate pr-2">
+                                <strong className="text-gray-900 dark:text-white font-bold">{item.quantity}x</strong> {item.product?.name || 'Produk'}
+                                {item.notes && <span className="text-gray-400 italic text-[10px]"> ({item.notes})</span>}
+                              </span>
+                              <span className="font-bold text-gray-900 dark:text-white shrink-0">
+                                Rp {parseFloat(item.subtotal).toLocaleString('id-ID')}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="flex justify-between items-center text-[11px] text-gray-500">
+                            <span>1x Pesanan Khusus</span>
+                            <span className="font-bold text-gray-900 dark:text-white">
+                              Rp {parseFloat(order.total_price || 0).toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 4. Proof Buttons (Only if available - compact chips) */}
                       {((order.proof_of_payment && order.proof_of_payment.length > 0) ||
                         (order.proof_of_purchase && order.proof_of_purchase.length > 0) ||
                         (order.proof_of_delivery && order.proof_of_delivery.length > 0)) && (
-                        <div className="flex gap-2 py-2 flex-wrap border-t border-gray-100 dark:border-gray-800">
+                        <div className="flex gap-1.5 flex-wrap pt-0.5">
                           {order.proof_of_payment && order.proof_of_payment.length > 0 && (
                             <button
                               onClick={() => {
@@ -905,9 +989,9 @@ export default function AdminPesanan() {
                                   : [getStorageUrl(order.proof_of_payment)];
                                 setSelectedProofs(proofs);
                               }}
-                              className="px-2.5 py-1.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-100 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                              className="px-2 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-indigo-200 dark:border-indigo-800"
                             >
-                              <ImageIcon className="w-3.5 h-3.5" /> Bukti Bayar
+                              <ImageIcon className="w-3 h-3" /> Bayar
                             </button>
                           )}
                           {order.proof_of_purchase && order.proof_of_purchase.length > 0 && (
@@ -916,83 +1000,79 @@ export default function AdminPesanan() {
                                 const proofs = Array.isArray(order.proof_of_purchase)
                                   ? order.proof_of_purchase.map((p) => getStorageUrl(p))
                                   : [getStorageUrl(order.proof_of_purchase)];
-                              setSelectedProofs(proofs);
-                            }}
-                            className="px-2.5 py-1.5 bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 hover:bg-purple-100 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                          >
-                            <ImageIcon className="w-3.5 h-3.5" /> Struk Pembelian
-                          </button>
-                        )}
-                        {order.proof_of_delivery && order.proof_of_delivery.length > 0 && (
-                          <button
-                            onClick={() => {
-                              const proofs = Array.isArray(order.proof_of_delivery)
-                                ? order.proof_of_delivery.map((p) => getStorageUrl(p))
-                                : [getStorageUrl(order.proof_of_delivery)];
-                              setSelectedProofs(proofs);
-                            }}
-                            className="px-2.5 py-1.5 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                          >
-                            <ImageIcon className="w-3.5 h-3.5" /> Bukti Antar
-                          </button>
-                        )}
-                      </div>
-                    )}
+                                setSelectedProofs(proofs);
+                              }}
+                              className="px-2 py-0.5 bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 hover:bg-purple-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-800"
+                            >
+                              <ImageIcon className="w-3 h-3" /> Struk
+                            </button>
+                          )}
+                          {order.proof_of_delivery && order.proof_of_delivery.length > 0 && (
+                            <button
+                              onClick={() => {
+                                const proofs = Array.isArray(order.proof_of_delivery)
+                                  ? order.proof_of_delivery.map((p) => getStorageUrl(p))
+                                  : [getStorageUrl(order.proof_of_delivery)];
+                                setSelectedProofs(proofs);
+                              }}
+                              className="px-2 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-blue-200 dark:border-blue-800"
+                            >
+                              <ImageIcon className="w-3 h-3" /> Antar
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Footer: Breakdown Ongkir/Admin + Total Price + Delete Button */}
-                    <div className="pt-3 border-t border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mt-2">
-                      <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
-                        <span>Ongkir: Rp {parseFloat(order.delivery_fee || 0).toLocaleString('id-ID')}</span>
-                        <span>•</span>
-                        <span>Admin: Rp {parseFloat(order.admin_fee || 0).toLocaleString('id-ID')}</span>
-                        <span>•</span>
-                        <span className="text-sm font-black text-green-700 dark:text-green-400">
-                          Total: Rp {parseFloat(order.total_price || 0).toLocaleString('id-ID')}
+                    {/* 5. Footer: Total Price & Minimalist Actions */}
+                    <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-sm font-black text-green-700 dark:text-green-400 block leading-tight">
+                          Rp {parseFloat(order.total_price || 0).toLocaleString('id-ID')}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-medium truncate block">
+                          Ongkir: Rp {parseFloat(order.delivery_fee || 0).toLocaleString('id-ID')}
                         </span>
                       </div>
 
-                      {/* Actions: Batalkan, Ubah Status, Cetak Struk & Delete */}
-                      <div className="flex items-center gap-1.5 self-end sm:self-auto flex-wrap">
+                      {/* Minimalist Action Buttons */}
+                      <div className="flex items-center gap-1 shrink-0">
                         {order.status !== 'cancelled' && (
                           <button
                             onClick={() => {
                               setOrderToCancel(order);
                               setCancelReason('');
                             }}
-                            className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-900/50 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-xs border border-red-200 dark:border-red-800"
-                            title={order.status === 'completed' ? 'Batalkan pesanan yang sudah diselesaikan kurir' : 'Batalkan Pesanan'}
+                            className="p-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800"
+                            title={order.status === 'completed' ? 'Batalkan pesanan yang sudah selesai' : 'Batalkan Pesanan'}
                           >
-                            <X className="w-3.5 h-3.5 text-red-600" />
-                            <span>{order.status === 'completed' ? 'Batalkan Pesanan' : 'Batalkan'}</span>
+                            <X className="w-3.5 h-3.5" />
                           </button>
                         )}
 
                         <button
                           onClick={() => handleOpenChangeStatusModal(order)}
-                          className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-xs"
-                          title="Ubah / Kembalikan Status Pesanan"
+                          className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1 shadow-2xs"
+                          title="Ubah Status Pesanan"
                         >
-                          <RotateCcw className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                          <span>Ubah Status</span>
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Status</span>
                         </button>
 
                         <button
                           onClick={() => handlePrintSingleReceipt(order)}
-                          className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-xs"
-                          title="Cetak Struk Thermal iWare"
+                          className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold transition-colors"
+                          title="Cetak Struk Thermal / A4"
                         >
                           <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                          <span>Struk</span>
                         </button>
 
                         <button
                           onClick={() => setOrderToDelete(order)}
-                          className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-xs border border-gray-200 dark:border-gray-700"
-                          title="Pindahkan ke Kotak Sampah"
+                          className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-400 hover:text-red-600 rounded-lg text-xs font-bold transition-colors border border-gray-200 dark:border-gray-700"
+                          title="Hapus / Pindahkan ke Kotak Sampah"
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-gray-500" />
-                          <span>Hapus</span>
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>

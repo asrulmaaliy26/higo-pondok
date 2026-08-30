@@ -743,10 +743,10 @@ class OrderController extends Controller
             $order->status = 'cancelled';
             $order->save();
 
-            // Restore sold_count, and decrement active order counter
+            // Restore sold_count, and restore stock
             foreach ($order->items as $item) {
                 if ($item->product) {
-                    $item->product->decrement('stock', $item->quantity);
+                    $item->product->increment('stock', $item->quantity);
                     $item->product->decrement('sold_count', $item->quantity);
                 }
             }

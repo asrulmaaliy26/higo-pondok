@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { ChevronLeft, ShoppingBag, CheckCircle, Clock, Truck, MessageCircle, X, Image as ImageIcon, ChevronDown, ChevronRight, Store, Upload, Trash2, RotateCcw, FileText, Filter, Search, AlertTriangle, AlertCircle, Download, ExternalLink, Printer } from 'lucide-react';
+import { ChevronLeft, ShoppingBag, CheckCircle, Clock, Truck, MessageCircle, X, Image as ImageIcon, ChevronDown, ChevronRight, Store, Upload, Trash2, RotateCcw, FileText, Filter, Search, AlertTriangle, AlertCircle, Download, ExternalLink, Printer, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
 import { useCanteenStore } from '../../store/canteenStore';
@@ -92,6 +92,36 @@ function getOrderPriorityScore(order) {
 
   return 50;
 }
+
+// Optimistic Update Helper for React Query caches
+const mutateOrderInCaches = async (queryClient, queryKeyPrefix, targetId, updateFn) => {
+  await queryClient.cancelQueries({ queryKey: [queryKeyPrefix] });
+  const previousQueries = queryClient.getQueriesData({ queryKey: [queryKeyPrefix] });
+
+  queryClient.setQueriesData({ queryKey: [queryKeyPrefix] }, (oldData) => {
+    if (!oldData) return oldData;
+    if (Array.isArray(oldData)) {
+      return oldData.map(item => item.id === targetId ? updateFn(item) : item);
+    }
+    if (Array.isArray(oldData?.data)) {
+      return {
+        ...oldData,
+        data: oldData.data.map(item => item.id === targetId ? updateFn(item) : item)
+      };
+    }
+    return oldData;
+  });
+
+  return { previousQueries };
+};
+
+const rollbackCaches = (queryClient, context) => {
+  if (context?.previousQueries) {
+    context.previousQueries.forEach(([queryKey, previousData]) => {
+      queryClient.setQueryData(queryKey, previousData);
+    });
+  }
+};
 
 export default function PesananToko() {
   const navigate = useNavigate();
@@ -200,16 +230,28 @@ export default function PesananToko() {
 
   const setCustomPriceMutation = useMutation({
     mutationFn: ({ id, price, canteen_id }) => api.put(`/canteen/orders/${id}/custom-price?canteen_id=${canteen_id || ''}`, { total_price: price }),
+    onMutate: async (variables) => {
+      const deliveryFee = parseFloat(activeOrderForSetPrice?.delivery_fee || 0);
+      const adminFee = parseFloat(activeOrderForSetPrice?.admin_fee || 0);
+      const total = parseFloat(variables.price || 0) + deliveryFee + adminFee;
+      return await mutateOrderInCaches(queryClient, 'canteen_orders', variables.id, (order) => ({
+        ...order,
+        total_price: total
+      }));
+    },
+    onError: (err, variables, context) => {
+      rollbackCaches(queryClient, context);
+      toast.error(err.response?.data?.message || 'Gagal memperbarui harga');
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
-      queryClient.invalidateQueries({ queryKey: ['canteen_recap'] });
       toast.success('Harga pesanan khusus berhasil diperbarui!');
       setShowSetPriceModal(false);
       setActiveOrderForSetPrice(null);
       setNewPriceInput('');
     },
-    onError: (err) => {
-      toast.error(err.response?.data?.message || 'Gagal memperbarui harga');
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['canteen_recap'] });
     }
   });
 
@@ -371,25 +413,43 @@ export default function PesananToko() {
 
   const updatePaymentMutation = useMutation({
     mutationFn: ({ id, status, canteen_id }) => api.put(`/canteen/orders/${id}/payment?canteen_id=${canteen_id}`, { payment_status: status }),
+    onMutate: async (variables) => {
+      return await mutateOrderInCaches(queryClient, 'canteen_orders', variables.id, (order) => ({
+        ...order,
+        payment_status: variables.status
+      }));
+    },
+    onError: (err, variables, context) => {
+      rollbackCaches(queryClient, context);
+      toast.error('Gagal memperbarui status pembayaran');
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
-      queryClient.invalidateQueries({ queryKey: ['canteen_recap'] });
       toast.success('Status pembayaran berhasil diperbarui!');
     },
-    onError: () => {
-      toast.error('Gagal memperbarui status');
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['canteen_recap'] });
     }
   });
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status, canteen_id }) => api.put(`/canteen/orders/${id}/status?canteen_id=${canteen_id}`, { status }),
+    onMutate: async (variables) => {
+      return await mutateOrderInCaches(queryClient, 'canteen_orders', variables.id, (order) => ({
+        ...order,
+        status: variables.status
+      }));
+    },
+    onError: (err, variables, context) => {
+      rollbackCaches(queryClient, context);
+      toast.error(err.response?.data?.message || 'Gagal memperbarui status');
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
-      queryClient.invalidateQueries({ queryKey: ['canteen_recap'] });
       toast.success('Status pesanan berhasil diperbarui!');
     },
-    onError: (err) => {
-      toast.error(err.response?.data?.message || 'Gagal memperbarui status');
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['canteen_recap'] });
     }
   });
 
@@ -397,14 +457,25 @@ export default function PesananToko() {
     mutationFn: ({ id, formData, canteen_id }) => api.post(`/canteen/orders/${id}/complete?canteen_id=${canteen_id}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     }),
+    onMutate: async (variables) => {
+      return await mutateOrderInCaches(queryClient, 'canteen_orders', variables.id, (order) => ({
+        ...order,
+        status: 'completed',
+        payment_status: 'paid'
+      }));
+    },
+    onError: (err, variables, context) => {
+      rollbackCaches(queryClient, context);
+      toast.error(err.response?.data?.message || 'Gagal menyelesaikan pesanan');
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
       toast.success('Pesanan berhasil diselesaikan dan Lunas!');
       setShowProofModal(false);
       setProofFiles([]);
     },
-    onError: (err) => {
-      toast.error(err.response?.data?.message || 'Gagal menyelesaikan pesanan');
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['canteen_recap'] });
     }
   });
 
@@ -434,8 +505,20 @@ export default function PesananToko() {
       const res = await api.put(`/canteen/orders/${id}/courier?canteen_id=${canteen_id}`, { courier_id });
       return res.data;
     },
+    onMutate: async (variables) => {
+      const selectedCourier = couriers.find(c => c.id === variables.courier_id);
+      return await mutateOrderInCaches(queryClient, 'canteen_orders', variables.id, (order) => ({
+        ...order,
+        courier_id: variables.courier_id === 'self' ? null : variables.courier_id,
+        courier: selectedCourier || order.courier,
+        status: 'processing'
+      }));
+    },
+    onError: (err, variables, context) => {
+      rollbackCaches(queryClient, context);
+      toast.error('Gagal menugaskan kurir');
+    },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
       toast.success('Berhasil menugaskan kurir!');
       setShowCourierModal(false);
       
@@ -449,7 +532,10 @@ export default function PesananToko() {
       
       setActiveOrderForCourier(null);
     },
-    onError: () => toast.error('Gagal menugaskan kurir')
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['canteen_recap'] });
+    }
   });
 
   const cancelOrderMutation = useMutation({
@@ -457,11 +543,23 @@ export default function PesananToko() {
       const res = await api.put(`/canteen/orders/${id}/cancel?canteen_id=${canteen_id}`);
       return res.data;
     },
+    onMutate: async (variables) => {
+      return await mutateOrderInCaches(queryClient, 'canteen_orders', variables.id, (order) => ({
+        ...order,
+        status: 'cancelled'
+      }));
+    },
+    onError: (err, variables, context) => {
+      rollbackCaches(queryClient, context);
+      toast.error('Gagal membatalkan pesanan');
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
       toast.success('Pesanan berhasil dibatalkan');
     },
-    onError: () => toast.error('Gagal membatalkan pesanan')
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['canteen_recap'] });
+    }
   });
 
   const handleContact = (phone, name) => {
@@ -540,395 +638,318 @@ export default function PesananToko() {
 
   const renderOrderCard = (order) => {
     const isCompleted = order.status === 'completed';
-    const isExpanded = isCompleted ? !!expandedOrders[order.id] : true;
-    
-    const toggleExpand = () => {
-      setExpandedOrders(prev => ({ ...prev, [order.id]: !prev[order.id] }));
-    };
+    const isPending = order.status === 'pending';
+    const isProcessing = order.status === 'processing';
+    const isCancelled = order.status === 'cancelled';
+    const isPaid = order.payment_status === 'paid';
+    const isWaiting = order.payment_status === 'waiting_confirmation';
 
     return (
-      <div key={order.id} className={`rounded-xl border shadow-sm overflow-hidden transition-all duration-300 ${isCompleted ? 'bg-gray-50/80 dark:bg-gray-900/40 border-gray-200 dark:border-gray-800' : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800'}`}>
-        {/* Header (Always Visible) */}
-        <div 
-          className={`p-4 md:px-6 md:pt-6 ${isCompleted ? 'cursor-pointer hover:bg-gray-100/50 dark:hover:bg-gray-800/50' : ''}`}
-          onClick={isCompleted ? toggleExpand : undefined}
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-                  {order.canteen?.name || 'Toko'}
-                </span>
-                {order.is_custom && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
-                    ✨ Pesanan Khusus
-                  </span>
-                )}
-                <p className="text-xs text-gray-500">
-                  Order #{order.id} • {new Date(order.created_at).toLocaleString('id-ID')}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex flex-col">
-                  <h3 className="font-bold text-gray-900 dark:text-white">{order.user?.name || 'User'}</h3>
-                  {order.user?.santri_name && (
-                    <span className="text-[10px] text-gray-500 font-medium bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded max-w-fit mt-0.5">
-                      Keluarga Santri: {order.user.santri_name}
-                    </span>
-                  )}
-                </div>
-                <button onClick={(e) => { e.stopPropagation(); handleContact(order.user?.phone, order.user?.name); }} className="text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 p-1.5 rounded-full" title="Hubungi Pembeli">
-                  <MessageCircle className="w-4 h-4" />
-                </button>
-              </div>
+      <div 
+        key={order.id} 
+        className={`rounded-2xl border shadow-xs hover:shadow-md transition-all p-3.5 flex flex-col justify-between gap-2.5 ${
+          isCompleted 
+            ? 'bg-gray-50/70 dark:bg-gray-900/40 border-gray-200 dark:border-gray-800' 
+            : isProcessing
+            ? 'bg-white dark:bg-gray-900 border-green-300 dark:border-green-800/80 ring-1 ring-green-500/10'
+            : isPending
+            ? 'bg-white dark:bg-gray-900 border-amber-200 dark:border-amber-900/60'
+            : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800'
+        }`}
+      >
+        {/* 1. Header: Toko, ID, Jam & Status Badges */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-800/80 pb-2">
+            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate max-w-[130px]">
+                🏪 {order.canteen?.name || 'Toko'}
+              </span>
+              <span className="text-[11px] font-bold text-gray-800 dark:text-gray-200">
+                #{order.id}
+              </span>
+              <span className="text-[10px] text-gray-400">
+                • {new Date(order.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+              </span>
             </div>
-            <div className="flex flex-col items-end gap-2">
-              <div className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                order.payment_status === 'paid' 
-                  ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' 
-                  : order.payment_status === 'waiting_confirmation'
-                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 ring-2 ring-amber-400 animate-pulse'
-                    : !order.proof_of_payment 
-                      ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border border-red-500' 
-                      : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+
+            {/* Status Badges */}
+            <div className="flex items-center gap-1 shrink-0">
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                isPaid
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                  : isWaiting
+                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 ring-1 ring-amber-300 animate-pulse'
+                  : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
               }`}>
-                {order.payment_status === 'paid' ? '✅ Lunas' : order.payment_status === 'waiting_confirmation' ? '⏳ Perlu Validasi' : '⚠️ Belum Bayar'}
+                {isPaid ? 'Lunas' : isWaiting ? 'Verifikasi' : 'Belum Bayar'}
+              </span>
+
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                isCompleted
+                  ? 'bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800'
+                  : isProcessing
+                  ? 'bg-blue-50 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                  : isCancelled
+                  ? 'bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800'
+                  : 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+              }`}>
+                {isCompleted ? 'Selesai' : isProcessing ? 'Diproses' : isCancelled ? 'Batal' : 'Pending'}
+              </span>
+            </div>
+          </div>
+
+          {/* 2. Customer, Santri & WhatsApp Contact Info */}
+          <div className="text-xs space-y-0.5">
+            <div className="flex items-center justify-between gap-1">
+              <span className="font-bold text-gray-900 dark:text-white truncate flex items-center gap-1">
+                <User className="w-3 h-3 text-gray-400 shrink-0" />
+                {order.user?.santri_name || order.user?.name || 'Pembeli'}
+              </span>
+              <span className="text-[11px] text-gray-500 font-medium shrink-0">
+                📍 {order.user?.santri_room || order.delivery_location || '-'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
+              <span className="truncate">Wali: {order.user?.name || '-'}</span>
+              {order.user?.phone && (
+                <button
+                  type="button"
+                  onClick={() => handleContact(order.user?.phone, order.user?.name)}
+                  className="text-green-600 dark:text-green-400 font-bold hover:underline flex items-center gap-0.5 shrink-0"
+                >
+                  <MessageCircle className="w-3 h-3" /> WA Pembeli
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 3. Items List Box (Minimalist & Clean) */}
+          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-2.5 space-y-1 text-xs border border-gray-100 dark:border-gray-800">
+            {order.custom_notes && (
+              <div className="text-[11px] font-medium text-purple-800 dark:text-purple-300 pb-0.5 border-b border-purple-100 dark:border-purple-900/40">
+                ✨ {order.custom_notes}
               </div>
-              
-              {isCompleted && (
-                <span className="text-xs text-gray-400 flex items-center gap-1">
-                  {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                  {isExpanded ? 'Tutup Detail' : 'Lihat Detail'}
+            )}
+            {order.items && order.items.length > 0 ? (
+              order.items.map(item => (
+                <div key={item.id} className="flex justify-between items-center text-[11px]">
+                  <span className="text-gray-800 dark:text-gray-200 truncate pr-2">
+                    <strong className="text-gray-900 dark:text-white font-bold">{item.quantity}x</strong> {item.product?.name || 'Produk'}
+                    {item.notes && <span className="text-gray-400 italic text-[10px]"> ({item.notes})</span>}
+                  </span>
+                  <span className="font-bold text-gray-900 dark:text-white shrink-0">
+                    Rp {formatRupiah(item.subtotal || (parseFloat(item.price) * item.quantity))}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="flex justify-between items-center text-[11px] text-gray-500">
+                <span>1x Pesanan Khusus</span>
+                <span className="font-bold text-gray-900 dark:text-white">
+                  Rp {formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}
                 </span>
+              </div>
+            )}
+          </div>
+
+          {/* 4. Proof Buttons (If uploaded) */}
+          {((order.proof_of_payment && order.proof_of_payment.length !== 0) || 
+            (order.proof_of_purchase && order.proof_of_purchase.length !== 0) || 
+            (order.proof_of_delivery && order.proof_of_delivery.length !== 0)) && (
+            <div className="flex gap-1.5 flex-wrap pt-0.5">
+              {order.proof_of_payment && order.proof_of_payment.length !== 0 && (
+                <button 
+                  onClick={() => {
+                    let proofs = [];
+                    if (Array.isArray(order.proof_of_payment)) {
+                      proofs = order.proof_of_payment.map(path => getStorageUrl(path));
+                    } else {
+                      proofs = [getStorageUrl(order.proof_of_payment)];
+                    }
+                    setSelectedProofs(proofs);
+                  }}
+                  className="px-2 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-indigo-200 dark:border-indigo-800"
+                >
+                  <ImageIcon className="w-3 h-3" /> Bukti Transfer ({Array.isArray(order.proof_of_payment) ? order.proof_of_payment.length : 1})
+                </button>
+              )}
+              {order.proof_of_purchase && order.proof_of_purchase.length !== 0 && (
+                <button 
+                  onClick={() => {
+                    let proofs = [];
+                    if (Array.isArray(order.proof_of_purchase)) {
+                      proofs = order.proof_of_purchase.map(path => getStorageUrl(path));
+                    } else {
+                      proofs = [getStorageUrl(order.proof_of_purchase)];
+                    }
+                    setSelectedProofs(proofs);
+                  }}
+                  className="px-2 py-0.5 bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 hover:bg-purple-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-800"
+                >
+                  <ImageIcon className="w-3 h-3" /> Struk ({Array.isArray(order.proof_of_purchase) ? order.proof_of_purchase.length : 1})
+                </button>
+              )}
+              {order.proof_of_delivery && order.proof_of_delivery.length !== 0 && (
+                <button 
+                  onClick={() => {
+                    let proofs = [];
+                    if (Array.isArray(order.proof_of_delivery)) {
+                      proofs = order.proof_of_delivery.map(path => getStorageUrl(path));
+                    } else {
+                      proofs = [getStorageUrl(order.proof_of_delivery)];
+                    }
+                    setSelectedProofs(proofs);
+                  }}
+                  className="px-2 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-blue-200 dark:border-blue-800"
+                >
+                  <ImageIcon className="w-3 h-3" /> Serah Terima ({Array.isArray(order.proof_of_delivery) ? order.proof_of_delivery.length : 1})
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* 5. Payment Validation Bar (Compact) */}
+          <div className="flex items-center justify-between gap-1.5 p-2 bg-gray-50/80 dark:bg-gray-800/40 rounded-xl border border-gray-200/80 dark:border-gray-700/80 flex-wrap">
+            <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300">
+              💳 Pembayaran:
+            </span>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {!isPaid ? (
+                <button
+                  type="button"
+                  disabled={updatePaymentMutation.isPending}
+                  onClick={() => updatePaymentMutation.mutate({ id: order.id, status: 'paid', canteen_id: order.canteen_id })}
+                  className="py-1 px-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center gap-1 shadow-2xs disabled:opacity-50"
+                >
+                  <CheckCircle className="w-3 h-3" /> Konfirmasi Lunas
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={updatePaymentMutation.isPending}
+                  onClick={() => {
+                    if (window.confirm('Batalkan status lunas dan kembalikan ke Belum Bayar?')) {
+                      updatePaymentMutation.mutate({ id: order.id, status: 'unpaid', canteen_id: order.canteen_id });
+                    }
+                  }}
+                  className="py-0.5 px-2 bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-[10px] font-semibold transition-colors flex items-center gap-1"
+                >
+                  <X className="w-2.5 h-2.5" /> Batal Lunas
+                </button>
               )}
             </div>
           </div>
         </div>
 
-        {/* Order Body (Collapsible) */}
-        {isExpanded && (
-          <div className="p-4 md:px-6 md:pb-6 border-t border-gray-100 dark:border-gray-800 animate-in slide-in-from-top-2 fade-in duration-200">
-            <div className="space-y-2 mb-4">
-              {order.custom_notes && (
-                <div className="bg-purple-50 dark:bg-purple-900/20 p-2.5 rounded-lg border border-purple-100 dark:border-purple-900/50 mb-2">
-                  <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase block mb-0.5">Catatan Pesanan:</span>
-                  <p className="text-xs font-medium text-purple-900 dark:text-purple-200 whitespace-pre-wrap">
-                    {order.custom_notes}
-                  </p>
-                </div>
-              )}
-
-              {order.is_custom && parseFloat(order.total_price) > 0 && (
-                <div className="text-sm pb-1">
-                  <div className="flex justify-between items-center">
-                    <span className="text-purple-700 dark:text-purple-300 font-semibold flex items-center gap-1.5">
-                      <span className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 font-bold px-1.5 py-0.5 rounded text-xs">1x</span>
-                      <span>Pesanan Khusus / Titip Beli</span>
-                    </span>
-                    <span className="font-bold text-gray-900 dark:text-white">
-                      Rp {formatRupiah(Math.max(0, parseFloat(order.total_price) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}
-                    </span>
-                  </div>
-                  {order.canteen?.name && (
-                    <div className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5 pl-6">
-                      <Store className="w-3 h-3" />
-                      <span>{order.canteen.name}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {order.items?.map(item => (
-                <div key={item.id} className="text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-700 dark:text-gray-300 font-medium">
-                      {item.quantity}x {item.product?.name}
-                    </span>
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      Rp {formatRupiah(item.subtotal || (parseFloat(item.price) * item.quantity))}
-                    </span>
-                  </div>
-                  {item.notes && (
-                    <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded mt-0.5 inline-block font-medium">
-                      📝 Catatan Produk: {item.notes}
-                    </p>
-                  )}
-                </div>
-              ))}
-
-                {/* Calculate Additional Fees (Ongkir + Admin) */}
-                {(() => {
-                  const deliveryFee = parseFloat(order.delivery_fee || 0);
-                  const adminFee = parseFloat(order.admin_fee || 0);
-                  const totalFees = deliveryFee + adminFee;
-                  
-                  if (totalFees > 0 && parseFloat(order.total_price) > 0) {
-                    return (
-                      <div className="space-y-1 pt-2 mt-2 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400">
-                        {deliveryFee > 0 && (
-                          <div className="flex justify-between">
-                            <span>Ongkos Kirim</span>
-                            <span>Rp {formatRupiah(deliveryFee)}</span>
-                          </div>
-                        )}
-                        {adminFee > 0 && (
-                          <div className="flex justify-between">
-                            <span>Biaya Admin</span>
-                            <span>Rp {formatRupiah(adminFee)}</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
-
-              {((order.proof_of_payment && order.proof_of_payment.length !== 0) || 
-                (order.proof_of_purchase && order.proof_of_purchase.length !== 0) || 
-                (order.proof_of_delivery && order.proof_of_delivery.length !== 0) || 
-                order.proof_courier_paid) && (
-                <div className="flex gap-2 mb-3 flex-wrap">
-                  {order.proof_of_payment && order.proof_of_payment.length !== 0 && (
-                    <button 
-                      onClick={() => {
-                        let proofs = [];
-                        if (Array.isArray(order.proof_of_payment)) {
-                          proofs = order.proof_of_payment.map(path => getStorageUrl(path));
-                        } else {
-                          proofs = [getStorageUrl(order.proof_of_payment)];
-                        }
-                        setSelectedProofs(proofs);
-                      }}
-                      className="flex-1 py-2 px-3 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <ImageIcon className="w-3.5 h-3.5" /> Bukti Transfer
-                    </button>
-                  )}
-                  {order.proof_of_purchase && order.proof_of_purchase.length !== 0 && (
-                    <button 
-                      onClick={() => {
-                        let proofs = [];
-                        if (Array.isArray(order.proof_of_purchase)) {
-                          proofs = order.proof_of_purchase.map(path => getStorageUrl(path));
-                        } else {
-                          proofs = [getStorageUrl(order.proof_of_purchase)];
-                        }
-                        setSelectedProofs(proofs);
-                      }}
-                      className="flex-1 py-2 px-3 bg-purple-50 text-purple-600 hover:bg-purple-100 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <ImageIcon className="w-3.5 h-3.5" /> Struk / Bukti Pesanan
-                    </button>
-                  )}
-                  {order.proof_of_delivery && order.proof_of_delivery.length !== 0 && (
-                    <button 
-                      onClick={() => {
-                        let proofs = [];
-                        if (Array.isArray(order.proof_of_delivery)) {
-                          proofs = order.proof_of_delivery.map(path => getStorageUrl(path));
-                        } else {
-                          proofs = [getStorageUrl(order.proof_of_delivery)];
-                        }
-                        setSelectedProofs(proofs);
-                      }}
-                      className="flex-1 py-2 px-3 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <ImageIcon className="w-3.5 h-3.5" /> Bukti Serah Terima
-                    </button>
-                  )}
-
-                </div>
-              )}
-
-              {/* PAYMENT VALIDATION PANEL FOR CANTEEN */}
-              <div className={`p-3 rounded-xl border mb-3 space-y-2 ${
-                order.payment_status === 'paid'
-                  ? 'bg-green-50/70 border-green-200 dark:bg-green-950/30 dark:border-green-900'
-                  : order.payment_status === 'waiting_confirmation'
-                    ? 'bg-amber-50 border-amber-300 dark:bg-amber-950/40 dark:border-amber-700 ring-1 ring-amber-300'
-                    : 'bg-gray-50 border-gray-200 dark:bg-gray-800/60 dark:border-gray-700'
-              }`}>
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-gray-800 dark:text-gray-200">
-                    <span>💳 Validasi Pembayaran:</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
-                      order.payment_status === 'paid'
-                        ? 'bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-200'
-                        : order.payment_status === 'waiting_confirmation'
-                          ? 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-200 animate-pulse'
-                          : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
-                    }`}>
-                      {order.payment_status === 'paid' 
-                        ? 'Lunas (Terverifikasi)' 
-                        : order.payment_status === 'waiting_confirmation' 
-                          ? 'Menunggu Validasi Toko' 
-                          : 'Belum Bayar'}
-                    </span>
-                  </div>
-
-                  {order.payment_status === 'waiting_confirmation' && (
-                    <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">
-                      🔔 Pembeli sudah upload bukti transfer!
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap pt-1">
-                  {order.proof_of_payment && order.proof_of_payment.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        let proofs = Array.isArray(order.proof_of_payment)
-                          ? order.proof_of_payment.map(path => getStorageUrl(path))
-                          : [getStorageUrl(order.proof_of_payment)];
-                        setSelectedProofs(proofs);
-                      }}
-                      className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
-                    >
-                      <ImageIcon className="w-3.5 h-3.5" /> 👁️ Cek Bukti Transfer ({Array.isArray(order.proof_of_payment) ? order.proof_of_payment.length : 1})
-                    </button>
-                  )}
-
-                  {order.payment_status !== 'paid' ? (
-                    <button
-                      type="button"
-                      disabled={updatePaymentMutation.isPending}
-                      onClick={() => updatePaymentMutation.mutate({ id: order.id, status: 'paid', canteen_id: order.canteen_id })}
-                      className="py-1.5 px-3.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs disabled:opacity-50"
-                    >
-                      <CheckCircle className="w-3.5 h-3.5" /> Konfirmasi Lunas
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={updatePaymentMutation.isPending}
-                      onClick={() => {
-                        if (window.confirm('Batalkan status lunas dan kembalikan ke Belum Bayar?')) {
-                          updatePaymentMutation.mutate({ id: order.id, status: 'unpaid', canteen_id: order.canteen_id });
-                        }
-                      }}
-                      className="py-1.5 px-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
-                    >
-                      <X className="w-3.5 h-3.5" /> Batalkan Lunas
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center pt-3 border-t border-gray-100 dark:border-gray-800 flex-wrap gap-2">
-                <p className="font-bold text-gray-900 dark:text-white flex flex-col">
-                  <span>Total: Rp {formatRupiah(order.total_price)}</span>
-                  {order.is_custom && parseFloat(order.total_price) === 0 && (
-                    <span className="text-[10px] text-amber-600 font-semibold">(Harga belum ditentukan)</span>
-                  )}
-                </p>
-
-                <div className="flex items-center gap-2 flex-wrap justify-end">
-                  {/* TOMBOL CETAK STRUK UNTUK KANTIN */}
-                  <button 
-                    onClick={() => handlePrintSingleReceipt(order)}
-                    className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
-                    title="Cetak Struk Thermal iWare"
-                  >
-                    <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                    <span>Cetak Struk</span>
-                  </button>
-
-                  {order.status === 'pending' || order.status === 'processing' ? (
-                    <>
-                      {order.is_custom && order.payment_status !== 'paid' && (
-                        <button 
-                          onClick={() => {
-                            setActiveOrderForSetPrice(order);
-                            const deliveryFee = parseFloat(order.delivery_fee || 0);
-                            const adminFee = parseFloat(order.admin_fee || 0);
-                            const curProductPrice = Math.max(0, parseFloat(order.total_price || 0) - deliveryFee - adminFee);
-                            setNewPriceInput(curProductPrice > 0 ? Math.round(curProductPrice).toString() : '');
-                            setShowSetPriceModal(true);
-                          }}
-                          className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm"
-                        >
-                          🏷️ {parseFloat(order.total_price) === 0 ? 'Set Harga Toko' : 'Edit Harga'}
-                        </button>
-                      )}
-                      {order.status === 'pending' && (
-                        <>
-                          <button 
-                            onClick={() => {
-                              if(window.confirm('Yakin ingin MENOLAK pesanan ini? Pesanan akan dibatalkan.')) {
-                                cancelOrderMutation.mutate({ id: order.id, canteen_id: order.canteen_id });
-                              }
-                            }}
-                            className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm"
-                          >
-                            <X className="w-4 h-4" /> Tolak Pesanan
-                          </button>
-
-                          <button 
-                            disabled={updateStatusMutation.isPending || updatePaymentMutation.isPending}
-                            onClick={() => {
-                              if (order.payment_status !== 'paid') {
-                                setUnpaidProceedOrder(order);
-                              } else {
-                                updateStatusMutation.mutate({ id: order.id, status: 'processing', canteen_id: order.canteen_id });
-                              }
-                            }}
-                            className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm disabled:opacity-50"
-                          >
-                            <CheckCircle className="w-4 h-4" /> ✅ Lanjutkan Pesanan
-                          </button>
-                        </>
-                      )}
-
-                      {order.status === 'processing' && (
-                        <>
-                          {/* Jika Kantin Sendiri (tanpa kurir luar), Kantin yang upload Bukti Pesanan */}
-                          {!order.courier_id && (!order.proof_of_purchase || order.proof_of_purchase.length === 0) && (
-                            <button 
-                              onClick={() => {
-                                setActiveOrderForReceipt(order);
-                                setShowReceiptModal(true);
-                              }}
-                              className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm"
-                            >
-                              <Upload className="w-4 h-4" /> Upload Bukti Pesanan
-                            </button>
-                          )}
-                          {!order.courier_id && (
-                            <button 
-                              onClick={() => {
-                                if(window.confirm('Yakin pesanan ini sudah selesai diantar ke santri?')) {
-                                  updateStatusMutation.mutate({ id: order.id, status: 'completed', canteen_id: order.canteen_id });
-                                }
-                              }}
-                              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 shadow-sm"
-                            >
-                              <CheckCircle className="w-4 h-4" /> Selesaikan
-                            </button>
-                          )}
-                          {order.courier_id && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-semibold text-blue-700 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800 flex items-center gap-1">
-                                <Truck className="w-3.5 h-3.5" /> Ditangani Kurir: {order.courier?.name || 'Kurir'}
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </>
-                  ) : order.status === 'cancelled' ? (
-                    <span className="text-sm font-semibold text-red-600 dark:text-red-400">Dibatalkan</span>
-                  ) : (
-                    <span className="font-bold text-green-600 text-sm">Selesai</span>
-                  )}
-                </div>
-              </div>
-            </div>
+        {/* 6. Footer: Total Price & Canteen Operational Actions */}
+        <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between gap-2 flex-wrap">
+          <div className="min-w-0">
+            <span className="text-sm font-black text-green-700 dark:text-green-400 block leading-tight">
+              Rp {formatRupiah(order.total_price)}
+            </span>
+            {Boolean(order.is_custom) && parseFloat(order.total_price) === 0 && (
+              <span className="text-[10px] text-amber-600 font-semibold block">Harga belum diset</span>
             )}
           </div>
-              );
-            };
+
+          <div className="flex items-center gap-1 shrink-0 flex-wrap">
+            {/* Tombol Cetak Struk */}
+            <button 
+              onClick={() => handlePrintSingleReceipt(order)}
+              className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold transition-colors"
+              title="Cetak Struk Thermal / A4"
+            >
+              <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            </button>
+
+            {/* Set Harga Khusus */}
+            {Boolean(order.is_custom) && order.payment_status !== 'paid' && (isPending || isProcessing) && (
+              <button 
+                onClick={() => {
+                  setActiveOrderForSetPrice(order);
+                  const deliveryFee = parseFloat(order.delivery_fee || 0);
+                  const adminFee = parseFloat(order.admin_fee || 0);
+                  const curProductPrice = Math.max(0, parseFloat(order.total_price || 0) - deliveryFee - adminFee);
+                  setNewPriceInput(curProductPrice > 0 ? Math.round(curProductPrice).toString() : '');
+                  setShowSetPriceModal(true);
+                }}
+                className="py-1 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold transition-colors shadow-2xs"
+              >
+                🏷️ {parseFloat(order.total_price) === 0 ? 'Set Harga' : 'Edit'}
+              </button>
+            )}
+
+            {/* Pending Actions: Tolak / Lanjutkan */}
+            {isPending && (
+              <>
+                <button 
+                  onClick={() => {
+                    if(window.confirm('Yakin ingin MENOLAK pesanan ini? Pesanan akan dibatalkan.')) {
+                      cancelOrderMutation.mutate({ id: order.id, canteen_id: order.canteen_id });
+                    }
+                  }}
+                  className="p-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800"
+                  title="Tolak Pesanan"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+
+                <button 
+                  disabled={updateStatusMutation.isPending || updatePaymentMutation.isPending}
+                  onClick={() => {
+                    if (order.payment_status !== 'paid') {
+                      setUnpaidProceedOrder(order);
+                    } else {
+                      updateStatusMutation.mutate({ id: order.id, status: 'processing', canteen_id: order.canteen_id });
+                    }
+                  }}
+                  className="py-1 px-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1 shadow-2xs disabled:opacity-50"
+                >
+                  <CheckCircle className="w-3 h-3" /> Lanjutkan
+                </button>
+              </>
+            )}
+
+            {/* Processing Actions */}
+            {isProcessing && (
+              <>
+                {!order.courier_id && (!order.proof_of_purchase || order.proof_of_purchase.length === 0) && (
+                  <button 
+                    onClick={() => {
+                      setActiveOrderForReceipt(order);
+                      setShowReceiptModal(true);
+                    }}
+                    className="py-1 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1 shadow-2xs"
+                  >
+                    <Upload className="w-3 h-3" /> + Struk
+                  </button>
+                )}
+                {!order.courier_id && (
+                  <button 
+                    onClick={() => {
+                      if(window.confirm('Yakin pesanan ini sudah selesai diantar ke santri?')) {
+                        updateStatusMutation.mutate({ id: order.id, status: 'completed', canteen_id: order.canteen_id });
+                      }
+                    }}
+                    className="py-1 px-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1 shadow-2xs"
+                  >
+                    <CheckCircle className="w-3 h-3" /> Selesaikan
+                  </button>
+                )}
+                {order.courier_id && (
+                  <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                    <Truck className="w-3 h-3" /> Kurir: {order.courier?.name || 'Kurir'}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="bg-gray-50 min-h-screen pb-28 dark:bg-gray-950 font-sans animate-fade-in-up">
@@ -1386,20 +1407,22 @@ export default function PesananToko() {
                 const completedOrders = orders.filter(o => o.status === 'completed');
                 
                 return (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     {activeOrders.length === 0 && completedOrders.length > 0 && (
                       <div className="p-4 bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 rounded-2xl border border-green-200 dark:border-green-800/50 text-xs font-semibold text-center">
                         Semua pesanan aktif di periode ini telah selesai diproses! 🎉
                       </div>
                     )}
-                    {activeOrders.map(renderOrderCard)}
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {activeOrders.map(renderOrderCard)}
+                    </div>
                     
                     {completedOrders.length > 0 && (
-                      <div className="mt-8 border-t border-gray-200 dark:border-gray-800 pt-6">
-                        <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 px-1">
+                      <div className="mt-6 border-t border-gray-200 dark:border-gray-800 pt-5">
+                        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">
                           Riwayat Selesai ({completedOrders.length})
                         </h2>
-                        <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                           {completedOrders.map(renderOrderCard)}
                         </div>
                       </div>
@@ -1408,7 +1431,7 @@ export default function PesananToko() {
                 );
               })()
             ) : (
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {orders.map(renderOrderCard)}
               </div>
             )}

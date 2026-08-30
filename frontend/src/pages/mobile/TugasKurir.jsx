@@ -93,6 +93,36 @@ const formatRupiah = (val) => {
   return num.toLocaleString('id-ID');
 };
 
+// Optimistic Update Helper for React Query caches
+const mutateOrderInCaches = async (queryClient, queryKeyPrefix, targetId, updateFn) => {
+  await queryClient.cancelQueries({ queryKey: [queryKeyPrefix] });
+  const previousQueries = queryClient.getQueriesData({ queryKey: [queryKeyPrefix] });
+
+  queryClient.setQueriesData({ queryKey: [queryKeyPrefix] }, (oldData) => {
+    if (!oldData) return oldData;
+    if (Array.isArray(oldData)) {
+      return oldData.map(item => item.id === targetId ? updateFn(item) : item);
+    }
+    if (Array.isArray(oldData?.data)) {
+      return {
+        ...oldData,
+        data: oldData.data.map(item => item.id === targetId ? updateFn(item) : item)
+      };
+    }
+    return oldData;
+  });
+
+  return { previousQueries };
+};
+
+const rollbackCaches = (queryClient, context) => {
+  if (context?.previousQueries) {
+    context.previousQueries.forEach(([queryKey, previousData]) => {
+      queryClient.setQueryData(queryKey, previousData);
+    });
+  }
+};
+
 export default function TugasKurir() {
   const queryClient = useQueryClient();
   const currentUser = useAuthStore(state => state.user);
@@ -262,12 +292,23 @@ export default function TugasKurir() {
       const res = await api.post(`/courier/orders/${id}/take`);
       return res.data;
     },
+    onMutate: async (id) => {
+      return await mutateOrderInCaches(queryClient, 'courier_orders', id, (order) => ({
+        ...order,
+        courier_id: currentUser?.id,
+        courier: currentUser || order.courier,
+        status: 'processing'
+      }));
+    },
+    onError: (err, id, context) => {
+      rollbackCaches(queryClient, context);
+      toast.error(err.response?.data?.message || 'Gagal mengambil pesanan');
+    },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['courier_orders'] });
       toast.success(data.message || 'Pesanan berhasil diambil!');
     },
-    onError: (err) => {
-      toast.error(err.response?.data?.message || 'Gagal mengambil pesanan');
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['courier_orders'] });
     }
   });
 
@@ -325,12 +366,21 @@ export default function TugasKurir() {
       const res = await api.post(`/courier/orders/${id}/complete`);
       return res.data;
     },
+    onMutate: async (id) => {
+      return await mutateOrderInCaches(queryClient, 'courier_orders', id, (order) => ({
+        ...order,
+        status: 'completed'
+      }));
+    },
+    onError: (err, id, context) => {
+      rollbackCaches(queryClient, context);
+      toast.error('Gagal menyelesaikan pesanan');
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['courier_orders'] });
       toast.success('Pesanan berhasil diselesaikan!');
     },
-    onError: () => {
-      toast.error('Gagal menyelesaikan pesanan');
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['courier_orders'] });
     }
   });
 
@@ -340,13 +390,22 @@ export default function TugasKurir() {
       const res = await api.put(`/courier/orders/${id}/cancel`);
       return res.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['courier_orders'] });
-      toast.success('Pesanan berhasil dibatalkan!');
+    onMutate: async (id) => {
       setConfirmCancelOrder(null);
+      return await mutateOrderInCaches(queryClient, 'courier_orders', id, (order) => ({
+        ...order,
+        status: 'cancelled'
+      }));
     },
-    onError: (err) => {
+    onError: (err, id, context) => {
+      rollbackCaches(queryClient, context);
       toast.error(err.response?.data?.message || 'Gagal membatalkan pesanan');
+    },
+    onSuccess: () => {
+      toast.success('Pesanan berhasil dibatalkan!');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['courier_orders'] });
     }
   });
 
@@ -1012,7 +1071,7 @@ export default function TugasKurir() {
         {/* MODE 1: DAFTAR PESANAN LENGKAP (LIST MODE) */}
         {/* ======================================================== */}
         {viewMode === 'list' && (
-          <div className="space-y-3.5">
+          <div>
             {filteredOrders.length === 0 ? (
               <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 text-center border border-gray-100 dark:border-gray-800 shadow-xs">
                 <Package className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
@@ -1020,350 +1079,291 @@ export default function TugasKurir() {
                 <p className="text-xs text-gray-400 mt-1">Coba ganti filter tab status atau ubah kata kunci pencarian.</p>
               </div>
             ) : (
-              filteredOrders.map(order => {
-                const isProcessing = order.status === 'processing';
-                const isPending = order.status === 'pending';
-                const isCompleted = order.status === 'completed';
-                const isCancelled = order.status === 'cancelled';
-                const isMyTask = order.courier_id === currentUser?.id;
-                const santriName = order.user?.santri_name || order.user?.name || 'Santri';
-                const waliName = order.user?.name || 'Wali';
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {filteredOrders.map(order => {
+                  const isProcessing = order.status === 'processing';
+                  const isPending = order.status === 'pending';
+                  const isCompleted = order.status === 'completed';
+                  const isCancelled = order.status === 'cancelled';
+                  const isMyTask = order.courier_id === currentUser?.id;
+                  const santriName = order.user?.santri_name || order.user?.name || 'Santri';
+                  const waliName = order.user?.name || 'Wali';
 
-                return (
-                  <div 
-                    key={order.id} 
-                    className={`bg-white dark:bg-gray-900 rounded-2xl border shadow-xs overflow-hidden transition-all space-y-3.5 p-3.5 sm:p-4 ${
-                      isProcessing 
-                        ? 'border-green-300 dark:border-green-800/80 ring-1 ring-green-500/10' 
-                        : isPending 
-                        ? 'border-amber-200 dark:border-amber-900/60' 
-                        : 'border-gray-200 dark:border-gray-800'
-                    }`}
-                  >
-                    {/* CARD HEADER: ID, DATE, STATUS BADGES */}
-                    <div className="flex items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-800 pb-2.5">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold text-xs rounded-md">
-                          #{order.id}
-                        </span>
-                        <span className="text-[11px] text-gray-400">
-                          {new Date(order.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} • {new Date(order.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        {isPending && (
-                          <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-[10px] font-bold rounded-full flex items-center gap-1">
-                            <Clock className="w-3 h-3" /> Menunggu Diambil
-                          </span>
-                        )}
-                        {isProcessing && (
-                          <span className="px-2 py-0.5 bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 text-[10px] font-bold rounded-full flex items-center gap-1">
-                            <Truck className="w-3 h-3" /> Sedang Diantar
-                          </span>
-                        )}
-                        {isCompleted && (
-                          <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-bold rounded-full flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3" /> Selesai
-                          </span>
-                        )}
-                        {isCancelled && (
-                          <span className="px-2 py-0.5 bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 text-[10px] font-bold rounded-full">
-                            Dibatalkan
-                          </span>
-                        )}
-
-                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
-                          order.payment_status === 'paid'
-                            ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300'
-                            : order.payment_status === 'waiting_confirmation'
-                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 ring-1 ring-amber-300'
-                              : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-                        }`}>
-                          {order.payment_status === 'paid' 
-                            ? '💳 Lunas' 
-                            : order.payment_status === 'waiting_confirmation' 
-                              ? '⏳ Menunggu Validasi Kantin' 
-                              : '💵 Belum Bayar'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* SANTRI & WALI INFO */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
-                        <div className="flex items-start justify-between gap-1">
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[11px] font-bold text-green-700 dark:text-green-400 uppercase tracking-wider">Santri:</span>
-                              <span className="text-sm font-bold text-gray-900 dark:text-white">{santriName}</span>
-                            </div>
-                            <p className="text-xs text-gray-600 dark:text-gray-300 font-medium mt-0.5 flex items-center gap-1">
-                              🏠 {order.user?.santri_room || 'Kamar Santri'} 
-                              {order.user?.santri_class ? ` (${order.user?.santri_class}/${order.user?.santri_level || ''})` : ''}
-                            </p>
-                            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                              👨‍👩‍👧 Wali: <span className="font-semibold text-gray-700 dark:text-gray-300">{waliName}</span>
-                            </p>
-                          </div>
-                        </div>
-
-                        {order.delivery_location && (
-                          <div className="mt-2 pt-1.5 border-t border-gray-200/60 dark:border-gray-700/60 flex items-start gap-1 text-[11px] text-gray-600 dark:text-gray-300 font-medium">
-                            <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
-                            <span>Lokasi: {order.delivery_location}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* KANTIN INFO */}
-                      <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800 flex flex-col justify-between">
-                        <div className="flex items-start justify-between gap-1">
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <Store className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                              <span className="text-xs font-bold text-gray-900 dark:text-white truncate">{order.canteen?.name}</span>
-                            </div>
-                            <span className="text-[10px] text-gray-500 bg-gray-200/70 dark:bg-gray-700 px-1.5 py-0.2 rounded mt-1 inline-block">
-                              {order.canteen?.category === 'kota' ? 'Kantin Luar / Kota' : 'Kantin Kauman'}
+                  return (
+                    <div 
+                      key={order.id} 
+                      className={`bg-white dark:bg-gray-900 rounded-2xl border shadow-xs hover:shadow-md transition-all p-3.5 flex flex-col justify-between gap-2.5 ${
+                        isProcessing 
+                          ? 'border-green-300 dark:border-green-800/80 ring-1 ring-green-500/10' 
+                          : isPending 
+                          ? 'border-amber-200 dark:border-amber-900/60' 
+                          : 'border-gray-100 dark:border-gray-800'
+                      }`}
+                    >
+                      {/* 1. CARD HEADER: TOKO, ID, TIME & STATUS BADGES */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-800/80 pb-2">
+                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate max-w-[130px]">
+                              🏪 {order.canteen?.name || 'Kantin'}
+                            </span>
+                            <span className="text-[11px] font-bold text-gray-800 dark:text-gray-200">
+                              #{order.id}
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              • {new Date(order.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
-                          <button
-                            onClick={() => handleContact(order.canteen?.whatsapp_number, order.canteen?.name)}
-                            className="p-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-transform active:scale-95 shadow-xs shrink-0 flex items-center gap-1 text-[11px] font-bold"
-                            title="Hubungi Kantin"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5" /> WA Kantin
-                          </button>
-                        </div>
 
-                        <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-2">
-                          🛵 Ditangani: <span className="font-semibold text-gray-700 dark:text-gray-300">{order.courier?.name || (order.courier_id ? 'Kurir' : 'Belum Diambil')}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* DAFTAR LENGKAP MAKANAN (LIST MAKANANNYA) */}
-                    <div className="bg-green-50/40 dark:bg-gray-800/60 p-3 rounded-xl border border-green-100 dark:border-gray-700/60 space-y-2">
-                      <div className="flex items-center justify-between border-b border-green-100/80 dark:border-gray-700 pb-1.5">
-                        <span className="text-xs font-bold text-green-900 dark:text-green-300 flex items-center gap-1.5">
-                          🍽️ Daftar Makanan & Pesanan:
-                        </span>
-                        <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
-                          {order.items?.reduce((s, i) => s + (i.quantity || 1), 0) || (order.is_custom ? 1 : 0)} Item
-                        </span>
-                      </div>
-
-                      {/* Regular Items List */}
-                      {order.items && order.items.length > 0 ? (
-                        <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
-                          {order.items.map(item => (
-                            <div key={item.id} className="py-2 first:pt-1 last:pb-0 flex items-start justify-between gap-2">
-                              <div className="flex items-start gap-2 flex-1">
-                                <span className="w-6 h-6 rounded-lg bg-green-600 text-white text-xs font-bold flex items-center justify-center shrink-0 shadow-xs">
-                                  {item.quantity}x
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white leading-tight">
-                                    {item.product?.name || 'Produk'}
-                                  </p>
-                                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                                    @ Rp {formatRupiah(item.price || 0)}
-                                  </p>
-                                  {item.notes && (
-                                    <p className="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md mt-1 font-medium inline-block border border-amber-200/60 dark:border-amber-800/40">
-                                      📝 Catatan: {item.notes}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                              <span className="text-xs font-bold text-gray-900 dark:text-white shrink-0">
-                                Rp {formatRupiah(item.subtotal || 0)}
+                          {/* Status Badges */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {isPending && (
+                              <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-[10px] font-bold rounded-full flex items-center gap-1">
+                                <Clock className="w-2.5 h-2.5" /> Menunggu
                               </span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
+                            )}
+                            {isProcessing && (
+                              <span className="px-2 py-0.5 bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 text-[10px] font-bold rounded-full flex items-center gap-1">
+                                <Truck className="w-2.5 h-2.5" /> Diantar
+                              </span>
+                            )}
+                            {isCompleted && (
+                              <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-bold rounded-full flex items-center gap-1">
+                                <CheckCircle className="w-2.5 h-2.5" /> Selesai
+                              </span>
+                            )}
+                            {isCancelled && (
+                              <span className="px-2 py-0.5 bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 text-[10px] font-bold rounded-full">
+                                Batal
+                              </span>
+                            )}
 
-                      {/* Custom Order Box */}
-                      {(order.is_custom || order.custom_notes) && (
-                        <div className="p-2.5 bg-amber-50/80 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-800 text-xs">
-                          <p className="font-bold text-amber-900 dark:text-amber-300 mb-0.5">📝 Rincian Pesanan Khusus:</p>
-                          <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{order.custom_notes}</p>
-                          {order.is_custom && parseFloat(order.total_price) > 0 && (
-                            <div className="mt-2 pt-1.5 border-t border-amber-200/60 dark:border-amber-800/60 flex justify-between font-semibold">
-                              <span>Harga Produk Titipan:</span>
+                            <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                              order.payment_status === 'paid'
+                                ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300'
+                                : order.payment_status === 'waiting_confirmation'
+                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 ring-1 ring-amber-300'
+                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                            }`}>
+                              {order.payment_status === 'paid' 
+                                ? 'Lunas' 
+                                : order.payment_status === 'waiting_confirmation' 
+                                  ? 'Verifikasi' 
+                                  : 'COD'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 2. SANTRI, ROOM & CANTEEN WA INFO */}
+                        <div className="text-xs space-y-0.5">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-bold text-gray-900 dark:text-white truncate flex items-center gap-1">
+                              <User className="w-3 h-3 text-gray-400 shrink-0" />
+                              {santriName}
+                            </span>
+                            <span className="text-[11px] text-gray-500 font-medium shrink-0">
+                              📍 {order.user?.santri_room || order.delivery_location || 'Kamar Santri'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
+                            <span className="truncate">Wali: {waliName}</span>
+                            {order.canteen?.whatsapp_number && (
+                              <button
+                                onClick={() => handleContact(order.canteen?.whatsapp_number, order.canteen?.name)}
+                                className="text-green-600 dark:text-green-400 font-bold hover:underline flex items-center gap-0.5 shrink-0"
+                              >
+                                <MessageCircle className="w-3 h-3" /> WA Kantin
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 3. COMPACT FOOD ITEMS BOX */}
+                        <div className="bg-green-50/30 dark:bg-gray-800/50 rounded-xl p-2.5 space-y-1 text-xs border border-green-100/60 dark:border-gray-800">
+                          {order.custom_notes && (
+                            <div className="text-[11px] font-medium text-amber-800 dark:text-amber-300 pb-0.5 border-b border-amber-100 dark:border-amber-900/40">
+                              ✨ {order.custom_notes}
+                            </div>
+                          )}
+                          {order.items && order.items.length > 0 ? (
+                            order.items.map(item => (
+                              <div key={item.id} className="flex justify-between items-center text-[11px]">
+                                <span className="text-gray-800 dark:text-gray-200 truncate pr-2">
+                                  <strong className="text-gray-900 dark:text-white font-bold">{item.quantity}x</strong> {item.product?.name || 'Produk'}
+                                  {item.notes && <span className="text-gray-400 italic text-[10px]"> ({item.notes})</span>}
+                                </span>
+                                <span className="font-bold text-gray-900 dark:text-white shrink-0">
+                                  Rp {formatRupiah(item.subtotal || 0)}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="flex justify-between items-center text-[11px] text-gray-500">
+                              <span>1x Pesanan Khusus</span>
                               <span className="font-bold text-gray-900 dark:text-white">
-                                Rp {formatRupiah(Math.max(0, parseFloat(order.total_price) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}
+                                Rp {formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}
                               </span>
                             </div>
                           )}
                         </div>
-                      )}
 
-                      {/* Financial Breakdown */}
-                      <div className="pt-2 border-t border-green-100/80 dark:border-gray-700/80 flex items-center justify-between text-xs flex-wrap gap-2">
-                        <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400 text-[11px]">
-                          <span>Ongkir: <strong className="text-gray-700 dark:text-gray-200">Rp {formatRupiah(order.delivery_fee || 0)}</strong></span>
+                        {/* 4. PROOF CHIPS (ONLY IF UPLOADED) */}
+                        {((order.proof_of_purchase && order.proof_of_purchase.length > 0) ||
+                          (order.proof_of_delivery && order.proof_of_delivery.length > 0) ||
+                          (order.proof_of_payment && order.proof_of_payment.length > 0)) && (
+                          <div className="flex gap-1.5 flex-wrap pt-0.5">
+                            {order.proof_of_purchase && order.proof_of_purchase.length > 0 && (
+                              <button
+                                onClick={() => {
+                                  const proofs = Array.isArray(order.proof_of_purchase)
+                                    ? order.proof_of_purchase.map(p => getStorageUrl(p))
+                                    : [getStorageUrl(order.proof_of_purchase)];
+                                  setSelectedProofs(proofs);
+                                }}
+                                className="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-800"
+                              >
+                                📄 Struk ({Array.isArray(order.proof_of_purchase) ? order.proof_of_purchase.length : 1})
+                              </button>
+                            )}
+
+                            {order.proof_of_delivery && order.proof_of_delivery.length > 0 && (
+                              <button
+                                onClick={() => {
+                                  const proofs = Array.isArray(order.proof_of_delivery)
+                                    ? order.proof_of_delivery.map(p => getStorageUrl(p))
+                                    : [getStorageUrl(order.proof_of_delivery)];
+                                  setSelectedProofs(proofs);
+                                }}
+                                className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-blue-200 dark:border-blue-800"
+                              >
+                                📷 Antar ({Array.isArray(order.proof_of_delivery) ? order.proof_of_delivery.length : 1})
+                              </button>
+                            )}
+
+                            {order.proof_of_payment && order.proof_of_payment.length > 0 && (
+                              <button
+                                onClick={() => {
+                                  const proofs = Array.isArray(order.proof_of_payment)
+                                    ? order.proof_of_payment.map(p => getStorageUrl(p))
+                                    : [getStorageUrl(order.proof_of_payment)];
+                                  setSelectedProofs(proofs);
+                                }}
+                                className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-gray-200 dark:border-gray-700"
+                              >
+                                💳 Transfer
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 5. FOOTER: TOTAL BILL & COURIER ACTIONS */}
+                      <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-sm font-black text-green-700 dark:text-green-400 block leading-tight">
+                              Rp {formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.admin_fee || 0)))}
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-medium truncate block">
+                              Ongkir: Rp {formatRupiah(order.delivery_fee || 0)}
+                            </span>
+                          </div>
+
+                          {/* Mini Actions (Struk & Cancel) */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => handlePrintSingleReceipt(order)}
+                              className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold transition-colors"
+                              title="Cetak Struk Thermal / A4"
+                            >
+                              <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                            </button>
+
+                            {isCompleted && (
+                              <button
+                                onClick={() => setConfirmCancelOrder(order)}
+                                className="p-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800"
+                                title="Batalkan Pesanan yang Sudah Selesai Ini"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right ml-auto">
-                          <span className="text-[11px] text-gray-500 mr-1">Total Tagihan:</span>
-                          <span className="text-sm font-extrabold text-green-700 dark:text-green-400">
-                            Rp {formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.admin_fee || 0)))}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* PROOF PHOTOS BUTTONS (IF ALREADY UPLOADED) */}
-                    {((order.proof_of_purchase && order.proof_of_purchase.length > 0) ||
-                      (order.proof_of_delivery && order.proof_of_delivery.length > 0) ||
-                      (order.proof_of_payment && order.proof_of_payment.length > 0)) && (
-                      <div className="flex gap-2 flex-wrap pt-1">
-                        {order.proof_of_purchase && order.proof_of_purchase.length > 0 && (
-                          <button
-                            onClick={() => {
-                              const proofs = Array.isArray(order.proof_of_purchase)
-                                ? order.proof_of_purchase.map(p => getStorageUrl(p))
-                                : [getStorageUrl(order.proof_of_purchase)];
-                              setSelectedProofs(proofs);
-                            }}
-                            className="flex-1 py-1.5 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
-                          >
-                            📄 Struk Kantin ({Array.isArray(order.proof_of_purchase) ? order.proof_of_purchase.length : 1})
-                          </button>
-                        )}
-
-                        {order.proof_of_delivery && order.proof_of_delivery.length > 0 && (
-                          <button
-                            onClick={() => {
-                              const proofs = Array.isArray(order.proof_of_delivery)
-                                ? order.proof_of_delivery.map(p => getStorageUrl(p))
-                                : [getStorageUrl(order.proof_of_delivery)];
-                              setSelectedProofs(proofs);
-                            }}
-                            className="flex-1 py-1.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
-                          >
-                            📷 Bukti Antar ({Array.isArray(order.proof_of_delivery) ? order.proof_of_delivery.length : 1})
-                          </button>
-                        )}
-
-                        {order.proof_of_payment && order.proof_of_payment.length > 0 && (
-                          <button
-                            onClick={() => {
-                              const proofs = Array.isArray(order.proof_of_payment)
-                                ? order.proof_of_payment.map(p => getStorageUrl(p))
-                                : [getStorageUrl(order.proof_of_payment)];
-                              setSelectedProofs(proofs);
-                            }}
-                            className="py-1.5 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
-                          >
-                            💳 Bukti Transfer
-                          </button>
-                        )}
-
-                        {/* TOMBOL CETAK STRUK SATUAN */}
-                        <button
-                          onClick={() => handlePrintSingleReceipt(order)}
-                          className="py-1.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
-                          title="Cetak Struk Thermal iWare"
-                        >
-                          <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                          <span>Cetak Struk</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Jika pesanan sudah selesai */}
-                    {isCompleted && (
-                      <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-end gap-2 flex-wrap">
-                        <button
-                          onClick={() => setConfirmCancelOrder(order)}
-                          className="py-1.5 px-3 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
-                          title="Batalkan Pesanan yang Sudah Selesai Ini"
-                        >
-                          <X className="w-3.5 h-3.5 text-red-600" />
-                          <span>Batalkan Pesanan</span>
-                        </button>
-
-                        <button
-                          onClick={() => handlePrintSingleReceipt(order)}
-                          className="py-1.5 px-3 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
-                          title="Cetak Ulang Struk"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                          <span>Cetak Ulang Struk</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* COURIER ACTIONS */}
-                    {!isCompleted && !isCancelled && (
-                      <div className="pt-2 border-t border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-2">
-                        {/* If order is pending or not yet assigned to this courier */}
-                        {(!order.courier_id || (isPending && !isMyTask)) ? (
-                          <button
-                            onClick={() => takeOrderMutation.mutate(order.id)}
-                            disabled={takeOrderMutation.isPending}
-                            className="col-span-2 py-2.5 px-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
-                          >
-                            {takeOrderMutation.isPending ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                        {/* Courier Operational Action Buttons */}
+                        {!isCompleted && !isCancelled && (
+                          <div className="space-y-1.5 pt-0.5">
+                            {/* If order is pending or not yet assigned to this courier */}
+                            {(!order.courier_id || (isPending && !isMyTask)) ? (
+                              <button
+                                onClick={() => takeOrderMutation.mutate(order.id)}
+                                disabled={takeOrderMutation.isPending}
+                                className="w-full py-2 px-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-50"
+                              >
+                                {takeOrderMutation.isPending ? (
+                                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent"></div>
+                                ) : (
+                                  <>
+                                    <Truck className="w-3.5 h-3.5" />
+                                    Ambil & Antar Pesanan Ini
+                                  </>
+                                )}
+                              </button>
                             ) : (
                               <>
-                                <Truck className="w-4 h-4" />
-                                Ambil & Antar Pesanan Ini
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <button 
+                                    onClick={() => {
+                                      setSelectedOrder(order);
+                                      setUploadType('purchase');
+                                      setPhotoFiles([]);
+                                      setPhotoPreviews([]);
+                                    }}
+                                    className="py-1.5 px-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center gap-1 shadow-2xs"
+                                  >
+                                    <Camera className="w-3 h-3" />
+                                    + Struk Toko
+                                  </button>
+
+                                  <button 
+                                    onClick={() => {
+                                      setSelectedOrder(order);
+                                      setUploadType('delivery');
+                                      setPhotoFiles([]);
+                                      setPhotoPreviews([]);
+                                    }}
+                                    className="py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center gap-1 shadow-2xs"
+                                  >
+                                    <Upload className="w-3 h-3" />
+                                    + Bukti Antar
+                                  </button>
+                                </div>
+
+                                <button 
+                                  onClick={() => setConfirmCompleteOrder(order)}
+                                  disabled={markCompleteMutation.isPending}
+                                  className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-50"
+                                >
+                                  {markCompleteMutation.isPending ? (
+                                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent"></div>
+                                  ) : (
+                                    <>
+                                      <CheckCircle className="w-3.5 h-3.5" /> 
+                                      Selesaikan Pesanan #{order.id}
+                                    </>
+                                  )}
+                                </button>
                               </>
                             )}
-                          </button>
-                        ) : null}
-
-                        {/* Upload buttons (available for active orders) */}
-                        <button 
-                          onClick={() => {
-                            setSelectedOrder(order);
-                            setUploadType('purchase');
-                            setPhotoFiles([]);
-                            setPhotoPreviews([]);
-                          }}
-                          className="py-2 px-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs"
-                        >
-                          <Camera className="w-3.5 h-3.5" />
-                          + Upload Struk
-                        </button>
-
-                        <button 
-                          onClick={() => {
-                            setSelectedOrder(order);
-                            setUploadType('delivery');
-                            setPhotoFiles([]);
-                            setPhotoPreviews([]);
-                          }}
-                          className="py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs"
-                        >
-                          <Upload className="w-3.5 h-3.5" />
-                          + Upload Bukti Antar
-                        </button>
-
-                        <button 
-                          onClick={() => setConfirmCompleteOrder(order)}
-                          disabled={markCompleteMutation.isPending}
-                          className="col-span-2 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-50"
-                        >
-                          {markCompleteMutation.isPending ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                          ) : (
-                            <>
-                              <CheckCircle className="w-4 h-4" /> 
-                              Selesaikan Pesanan #{order.id}
-                            </>
-                          )}
-                        </button>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}

@@ -1700,8 +1700,16 @@ export default function PesananToko() {
                 }}
                 className="flex-[2] py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:bg-gray-400 flex items-center justify-center gap-2 shadow-sm"
               >
-                {completeOrderMutation.isPending ? 'Memproses...' : (
-                  <>Selesaikan Pesanan <CheckCircle className="w-5 h-5"/></>
+                {completeOrderMutation.isPending ? (
+                  <span className="flex items-center gap-2">
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent inline-block"></span>
+                    <span>Memproses...</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <span>Selesaikan Pesanan</span>
+                    <CheckCircle className="w-5 h-5" />
+                  </span>
                 )}
               </button>
             </div>
@@ -1874,8 +1882,16 @@ export default function PesananToko() {
                 }}
                 className="flex-[2] py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:bg-gray-400 flex items-center justify-center gap-2 shadow-sm"
               >
-                {uploadReceiptMutation.isPending ? 'Memproses...' : (
-                  <>Unggah Bukti <CheckCircle className="w-5 h-5"/></>
+                {uploadReceiptMutation.isPending ? (
+                  <span className="flex items-center gap-2">
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent inline-block"></span>
+                    <span>Memproses...</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <span>Unggah Bukti</span>
+                    <CheckCircle className="w-5 h-5" />
+                  </span>
                 )}
               </button>
             </div>

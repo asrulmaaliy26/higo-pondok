@@ -2015,6 +2015,7 @@ export default function TugasKurir() {
                 Batal
               </button>
               <button 
+                type="button"
                 onClick={handleSubmitProof}
                 disabled={photoFiles.length === 0 || uploadProofMutation.isPending || isCompressing}
                 className={`flex-[2] py-2.5 rounded-xl font-bold text-white disabled:opacity-50 transition-colors flex justify-center items-center gap-1.5 text-xs ${
@@ -2022,12 +2023,15 @@ export default function TugasKurir() {
                 }`}
               >
                 {uploadProofMutation.isPending || isCompressing ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  <span className="flex items-center gap-1.5">
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent inline-block"></span>
+                    <span>{isCompressing ? 'Mengompresi...' : 'Mengunggah...'}</span>
+                  </span>
                 ) : (
-                  <>
+                  <span className="flex items-center gap-1.5">
                     <Upload className="w-3.5 h-3.5" />
-                    {isCompressing ? 'Mengompresi...' : `Simpan Berkas (${photoFiles.length})`}
-                  </>
+                    <span>{`Simpan Berkas (${photoFiles.length})`}</span>
+                  </span>
                 )}
               </button>
             </div>

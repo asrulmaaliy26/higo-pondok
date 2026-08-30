@@ -794,6 +794,7 @@ export default function Pembayaran() {
                 Batal
               </button>
               <button 
+                type="button"
                 disabled={paymentProofFiles.length === 0 || uploadPaymentProofMutation.isPending || isCompressing}
                 onClick={() => {
                   const formData = new FormData();
@@ -805,17 +806,20 @@ export default function Pembayaran() {
                 className="flex-[2] py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm text-sm"
               >
                 {uploadPaymentProofMutation.isPending ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  <span className="flex items-center gap-2">
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent inline-block"></span>
                     <span>Mengunggah ({paymentProofFiles.length} berkas)...</span>
-                  </div>
+                  </span>
                 ) : isCompressing ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  <span className="flex items-center gap-2">
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent inline-block"></span>
                     <span>Mengompresi...</span>
-                  </div>
+                  </span>
                 ) : (
-                  <>Unggah {paymentProofFiles.length > 0 ? `(${paymentProofFiles.length}) Bukti` : 'Bukti'} <CheckCircle className="w-4 h-4"/></>
+                  <span className="flex items-center gap-2">
+                    <span>{paymentProofFiles.length > 0 ? `Unggah (${paymentProofFiles.length}) Bukti` : 'Unggah Bukti'}</span>
+                    <CheckCircle className="w-4 h-4" />
+                  </span>
                 )}
               </button>
             </div>

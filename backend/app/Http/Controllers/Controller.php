@@ -31,9 +31,12 @@ abstract class Controller
             $nameToUse = $user->santri_name ?: $user->name;
             if ($nameToUse) {
                 $userName = strtolower(str_replace(' ', '_', $nameToUse));
+                $userName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $userName);
+                $userName = trim(preg_replace('/_+/', '_', $userName), '_') ?: 'user';
             }
         }
 
+        $rolesStr = preg_replace('/[^a-zA-Z0-9_-]/', '_', $rolesStr);
         $basePath = $rolesStr . '_' . $userName;
 
         return $subFolder ? $basePath . '/' . $subFolder : $basePath;

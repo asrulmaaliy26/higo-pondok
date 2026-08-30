@@ -138,4 +138,23 @@ class CanteenController extends Controller
             'canteen' => new CanteenResource($canteen)
         ]);
     }
+
+    public function balanceLedgers(Request $request)
+    {
+        $canteen = $this->getActiveCanteen($request);
+        if (!$canteen) {
+            return response()->json(['message' => 'Kantin tidak ditemukan'], 404);
+        }
+
+        $ledgers = \App\Domains\Canteen\CanteenBalanceLedger::where('canteen_id', $canteen->id)
+            ->with(['order:id,total_price,status,created_at'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(20);
+
+        return response()->json([
+            'canteen_name' => $canteen->name,
+            'current_balance' => (float)$canteen->balance,
+            'ledgers' => $ledgers
+        ]);
+    }
 }

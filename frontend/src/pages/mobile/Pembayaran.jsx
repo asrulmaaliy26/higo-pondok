@@ -68,10 +68,20 @@ export default function Pembayaran() {
   const uploadPaymentProofMutation = useMutation({
     mutationFn: async ({ id, formData }) => {
       const res = await api.post(`/orders/${id}/payment-proof`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000, // 30s timeout for high traffic resilience
       });
       return res.data;
     },
+    retry: (failureCount, error) => {
+      // Auto retry 2x for network drop, timeout, or 503/429 server high load
+      const status = error?.response?.status;
+      if (failureCount < 2 && (!status || status === 429 || status >= 500)) {
+        return true;
+      }
+      return false;
+    },
+    retryDelay: (attemptIndex) => Math.min(1500 * (attemptIndex + 1), 6000),
     onSuccess: () => {
       queryClient.invalidateQueries(['user_orders']);
       toast.success('Bukti transfer berhasil diunggah!');
@@ -79,8 +89,8 @@ export default function Pembayaran() {
       setPaymentProofFiles([]);
       setActiveOrderForPaymentProof(null);
     },
-    onError: () => {
-      toast.error('Gagal mengunggah bukti transfer');
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal mengunggah bukti transfer. Silakan periksa koneksi dan coba lagi.');
     }
   });
 
@@ -90,7 +100,14 @@ export default function Pembayaran() {
       const res = await api.get('/orders');
       return res.data;
     },
-    refetchInterval: 5000 // auto refresh every 5s for near real-time
+    staleTime: 5000,
+    refetchIntervalInBackground: false,
+    refetchInterval: (query) => {
+      const data = query?.state?.data;
+      if (!Array.isArray(data) || data.length === 0) return 30000;
+      const hasActive = data.some(o => ['pending', 'processing'].includes(o.status) || o.payment_status === 'waiting_confirmation');
+      return hasActive ? 12000 : 30000;
+    }
   });
 
   if (isLoading) {
@@ -114,7 +131,9 @@ export default function Pembayaran() {
   const formatPhoneWA = (phone) => {
     if (!phone) return '';
     let p = phone.toString().replace(/\D/g, '');
-    if (p.startsWith('0')) p = '62' + p.substring(1);
+    if (p.startsWith('08')) p = '628' + p.substring(2);
+    else if (p.startsWith('8')) p = '628' + p.substring(1);
+    else if (p.startsWith('0')) p = '62' + p.substring(1);
     return `https://wa.me/${p}`;
   };
 

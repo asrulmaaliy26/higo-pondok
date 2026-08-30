@@ -8,8 +8,22 @@ Route::get('/storage/{path}', function ($path) {
     if (!file_exists($filePath)) {
         abort(404, 'File not found');
     }
+    
+    $lastModified = filemtime($filePath);
+    $etag = md5($lastModified . filesize($filePath));
+    
+    $ifModifiedSince = request()->header('If-Modified-Since');
+    $ifNoneMatch = request()->header('If-None-Match');
+    
+    if (($ifNoneMatch && trim($ifNoneMatch, '"') === $etag) || 
+        ($ifModifiedSince && strtotime($ifModifiedSince) >= $lastModified)) {
+        return response('', 304);
+    }
+
     return response()->file($filePath, [
-        'Cache-Control' => 'public, max-age=86400',
+        'Cache-Control' => 'public, max-age=31536000, immutable',
+        'ETag' => '"' . $etag . '"',
+        'Last-Modified' => gmdate('D, d M Y H:i:s', $lastModified) . ' GMT',
     ]);
 })->where('path', '.*');
 

@@ -37,6 +37,11 @@ class Order extends Model
         'proof_of_delivery' => 'array',
         'proof_of_purchase' => 'array',
         'proof_of_payment' => 'array',
+        'total_price' => 'float',
+        'admin_fee' => 'float',
+        'delivery_fee' => 'float',
+        'is_courier_paid_by_canteen' => 'boolean',
+        'is_custom' => 'boolean',
     ];
 
     public function user()

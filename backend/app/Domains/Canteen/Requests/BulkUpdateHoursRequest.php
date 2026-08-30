@@ -22,8 +22,8 @@ class BulkUpdateHoursRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'open_time' => 'required|date_format:H:i',
-            'close_time' => 'required|date_format:H:i',
+            'open_time' => ['required', 'regex:/^\d{1,2}:\d{2}(:\d{2})?$/'],
+            'close_time' => ['required', 'regex:/^\d{1,2}:\d{2}(:\d{2})?$/'],
             'category' => 'nullable|string|in:all,kauman,kota',
             'reopen_force_closed' => 'nullable|boolean'
         ];

@@ -567,7 +567,10 @@ export default function PesananToko() {
       toast.error(`Nomor telepon ${name} tidak tersedia`);
       return;
     }
-    const formatted = phone.replace(/^0/, '62');
+    let formatted = phone.toString().replace(/\D/g, '');
+    if (formatted.startsWith('08')) formatted = '628' + formatted.substring(2);
+    else if (formatted.startsWith('8')) formatted = '628' + formatted.substring(1);
+    else if (formatted.startsWith('0')) formatted = '62' + formatted.substring(1);
     window.open(`https://wa.me/${formatted}`, '_blank');
   };
 

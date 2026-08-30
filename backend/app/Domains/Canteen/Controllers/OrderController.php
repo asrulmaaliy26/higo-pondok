@@ -331,12 +331,20 @@ class OrderController extends Controller
             if ($order->courier_id) {
                 // System holds all money.
                 if ($canteen) {
-                    $canteen->increment('balance', $subtotal - $admin_fee);
+                    $canteenNet = $subtotal - $admin_fee;
+                    \App\Domains\Canteen\CanteenBalanceLedger::record(
+                        $canteen,
+                        'in',
+                        $canteenNet,
+                        "Penerimaan hasil pesanan #" . $order->id,
+                        $order->id
+                    );
+                    $canteen->increment('balance', $canteenNet);
                     
                     \App\Domains\Admin\PaymentLog::create([
                         'user_id' => $canteen->user_id,
                         'order_id' => $order->id,
-                        'amount' => $subtotal - $admin_fee,
+                        'amount' => $canteenNet,
                         'type' => 'order_payment',
                         'description' => "Penerimaan hasil pesanan #" . $order->id,
                     ]);
@@ -356,12 +364,20 @@ class OrderController extends Controller
                 }
             } else {
                 if ($canteen) {
-                    $canteen->increment('balance', $subtotal - $admin_fee + $delivery_fee);
+                    $canteenNet = $subtotal - $admin_fee + $delivery_fee;
+                    \App\Domains\Canteen\CanteenBalanceLedger::record(
+                        $canteen,
+                        'in',
+                        $canteenNet,
+                        "Penerimaan hasil pesanan #" . $order->id . " (Tanpa Kurir)",
+                        $order->id
+                    );
+                    $canteen->increment('balance', $canteenNet);
                     
                     \App\Domains\Admin\PaymentLog::create([
                         'user_id' => $canteen->user_id,
                         'order_id' => $order->id,
-                        'amount' => $subtotal - $admin_fee + $delivery_fee,
+                        'amount' => $canteenNet,
                         'type' => 'order_payment',
                         'description' => "Penerimaan hasil pesanan #" . $order->id . " (Tanpa Kurir)",
                     ]);
@@ -672,12 +688,20 @@ class OrderController extends Controller
 
             if ($order->canteen) {
                 $canteen = $order->canteen;
-                $canteen->increment('balance', $subtotal - $admin_fee);
+                $canteenNet = $subtotal - $admin_fee;
+                \App\Domains\Canteen\CanteenBalanceLedger::record(
+                    $canteen,
+                    'in',
+                    $canteenNet,
+                    "Penerimaan hasil pesanan #" . $order->id,
+                    $order->id
+                );
+                $canteen->increment('balance', $canteenNet);
                 
                 \App\Domains\Admin\PaymentLog::create([
                     'user_id' => $canteen->user_id,
                     'order_id' => $order->id,
-                    'amount' => $subtotal - $admin_fee,
+                    'amount' => $canteenNet,
                     'type' => 'order_payment',
                     'description' => "Penerimaan hasil pesanan #" . $order->id,
                 ]);
@@ -789,25 +813,31 @@ class OrderController extends Controller
     // For User: Upload Payment Proof
     public function uploadPaymentProof(Request $request, $id)
     {
-        $order = Order::where('user_id', $request->user()->id)->findOrFail($id);
-
         $request->validate([
-            'proof_of_payment' => 'required|array|min:1',
-            'proof_of_payment.*' => 'file',
+            'proof_of_payment' => 'required|array|min:1|max:5',
+            'proof_of_payment.*' => 'required|file|mimes:jpeg,png,jpg,webp,heic,heif,pdf|max:10240',
         ]);
 
-        $paths = [];
-        foreach ($request->file('proof_of_payment') as $file) {
-            $paths[] = $this->storeOptimizedImage($file, $request->user(), 'proofs');
-        }
+        $order = DB::transaction(function () use ($request, $id) {
+            $order = Order::where('user_id', $request->user()->id)
+                ->lockForUpdate()
+                ->findOrFail($id);
 
-        $existingProofs = is_array($order->proof_of_payment) ? $order->proof_of_payment : [];
-        $mergedPaths = array_merge($existingProofs, $paths);
+            $paths = [];
+            foreach ($request->file('proof_of_payment') as $file) {
+                $paths[] = $this->storeOptimizedImage($file, $request->user(), 'proofs');
+            }
 
-        $order->update([
-            'proof_of_payment' => $mergedPaths,
-            'payment_status' => 'waiting_confirmation',
-        ]);
+            $existingProofs = is_array($order->proof_of_payment) ? $order->proof_of_payment : [];
+            $mergedPaths = array_merge($existingProofs, $paths);
+
+            $order->update([
+                'proof_of_payment' => $mergedPaths,
+                'payment_status' => 'waiting_confirmation',
+            ]);
+
+            return $order;
+        });
 
         return response()->json([
             'message' => 'Bukti transfer berhasil diunggah! Menunggu konfirmasi & validasi pembayaran dari kantin.',

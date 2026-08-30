@@ -452,8 +452,12 @@ export default function TugasKurir() {
       toast.error(`Nomor WhatsApp ${name} tidak tersedia`);
       return;
     }
-    let cleaned = phone.replace(/\D/g, '');
-    if (cleaned.startsWith('0')) {
+    let cleaned = phone.toString().replace(/\D/g, '');
+    if (cleaned.startsWith('08')) {
+      cleaned = '628' + cleaned.substring(2);
+    } else if (cleaned.startsWith('8')) {
+      cleaned = '628' + cleaned.substring(1);
+    } else if (cleaned.startsWith('0')) {
       cleaned = '62' + cleaned.substring(1);
     } else if (!cleaned.startsWith('62') && cleaned.length > 5) {
       cleaned = '62' + cleaned;

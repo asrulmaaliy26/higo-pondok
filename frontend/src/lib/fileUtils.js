@@ -78,9 +78,9 @@ export const compressImageFile = async (file, options = {}) => {
     return file;
   }
 
-  const maxWidth = options.maxWidth || 1600;
-  const maxHeight = options.maxHeight || 1600;
-  const quality = options.quality !== undefined ? options.quality : 0.8;
+  const maxWidth = options.maxWidth || 1400;
+  const maxHeight = options.maxHeight || 1400;
+  const quality = options.quality !== undefined ? options.quality : 0.75;
   const outputType = options.outputType || 'image/jpeg';
 
   return new Promise((resolve) => {
@@ -110,8 +110,14 @@ export const compressImageFile = async (file, options = {}) => {
             canvas.width = width;
             canvas.height = height;
 
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(image, 0, 0, width, height);
+            const ctx = canvas.getContext('2d', { alpha: false });
+            if (ctx) {
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.fillStyle = '#FFFFFF';
+              ctx.fillRect(0, 0, width, height);
+              ctx.drawImage(image, 0, 0, width, height);
+            }
 
             canvas.toBlob(
               (blob) => {
@@ -120,8 +126,7 @@ export const compressImageFile = async (file, options = {}) => {
                   return;
                 }
 
-                // Create a new compressed File object
-                const originalName = file.name || 'image.jpg';
+                const originalName = file.name || 'proof.jpg';
                 const baseName = originalName.replace(/\.[^/.]+$/, "");
                 const newFileName = `${baseName}.jpg`;
 
@@ -130,7 +135,7 @@ export const compressImageFile = async (file, options = {}) => {
                   lastModified: Date.now(),
                 });
 
-                // Attach original size info for UI display
+                // Attach size metadata
                 compressedFile.originalSize = file.size;
                 compressedFile.isCompressed = true;
 

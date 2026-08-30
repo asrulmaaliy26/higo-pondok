@@ -108,11 +108,16 @@ class AdminController extends Controller
     public function updateHours(UpdateCanteenHoursRequest $request, $id)
     {
         $canteen = Canteen::findOrFail($id);
+        $openTime = strlen($request->open_time) === 5 ? $request->open_time . ':00' : $request->open_time;
+        $closeTime = strlen($request->close_time) === 5 ? $request->close_time . ':00' : $request->close_time;
         
         $canteen->update([
-            'open_time' => $request->open_time,
-            'close_time' => $request->close_time,
+            'open_time' => $openTime,
+            'close_time' => $closeTime,
         ]);
+
+        // Hapus force close cache jika ada
+        Cache::forget('canteen_force_closed_' . $canteen->id);
         
         return response()->json([
             'message' => 'Jam operasional berhasil diperbarui', 
@@ -128,15 +133,18 @@ class AdminController extends Controller
             $query->where('category', $request->category);
         }
 
+        $openTime = strlen($request->open_time) === 5 ? $request->open_time . ':00' : $request->open_time;
+        $closeTime = strlen($request->close_time) === 5 ? $request->close_time . ':00' : $request->close_time;
+
         $count = $query->count();
         $query->update([
-            'open_time' => $request->open_time,
-            'close_time' => $request->close_time,
+            'open_time' => $openTime,
+            'close_time' => $closeTime,
         ]);
 
-        if ($request->input('reopen_force_closed', false)) {
+        if ($request->input('reopen_force_closed', true)) {
             Cache::forget('admin_global_canteen_force_closed');
-            $affectedCanteens = $query->get();
+            $affectedCanteens = Canteen::where('status', 'approved')->get();
             foreach ($affectedCanteens as $c) {
                 Cache::forget('canteen_force_closed_' . $c->id);
             }
@@ -149,7 +157,7 @@ class AdminController extends Controller
         };
 
         return response()->json([
-            'message' => "Jam operasional {$categoryLabel} ({$count} toko) berhasil diatur ke {$request->open_time} - {$request->close_time}.",
+            'message' => "Jam operasional {$categoryLabel} ({$count} toko) berhasil diatur ke {$openTime} - {$closeTime}.",
             'affected_count' => $count
         ]);
     }
@@ -282,18 +290,27 @@ class AdminController extends Controller
             ], 400);
         }
 
-        $canteen->decrement('balance', $data['amount']);
+        $withdrawalAmount = (float)$data['amount'];
+
+        \App\Domains\Canteen\CanteenBalanceLedger::record(
+            $canteen,
+            'out',
+            $withdrawalAmount,
+            "Pencairan dana kantin ({$canteen->name}) oleh admin: " . ($data['notes'] ?? '-')
+        );
+
+        $canteen->decrement('balance', $withdrawalAmount);
 
         \App\Domains\Canteen\CanteenWithdrawal::create([
             'canteen_id' => $canteen->id,
             'admin_id' => $request->user()->id,
-            'amount' => $data['amount'],
+            'amount' => $withdrawalAmount,
             'notes' => $data['notes']
         ]);
 
         \App\Domains\Admin\PaymentLog::create([
             'user_id' => $canteen->user_id,
-            'amount' => $data['amount'],
+            'amount' => $withdrawalAmount,
             'type' => 'withdraw',
             'description' => "Pencairan dana kantin ({$canteen->name}) oleh admin: " . ($data['notes'] ?? '-'),
         ]);

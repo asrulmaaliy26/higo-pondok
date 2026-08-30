@@ -17,6 +17,7 @@ Route::middleware(['auth:sanctum', 'impersonate'])->group(function () {
         Route::post('/my-canteens', [CanteenController::class, 'storeMyCanteen']);
         Route::get('/my-canteen', [CanteenController::class, 'myCanteen']);
         Route::get('/my-canteen/stats', [CanteenController::class, 'dashboardStats']);
+        Route::get('/my-canteen/ledgers', [CanteenController::class, 'balanceLedgers']);
         Route::match(['put', 'post'], '/my-canteen', [CanteenController::class, 'updateMyCanteen']);
         
         Route::apiResource('my-products', ProductController::class)->except(['show']);

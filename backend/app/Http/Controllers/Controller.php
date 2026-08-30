@@ -56,10 +56,24 @@ abstract class Controller
     protected function storeOptimizedImage($file, $user, $subFolder = null, $disk = 'public')
     {
         $dir = $this->getUserUploadPath($user, $subFolder);
+        $mime = $file->getMimeType() ?: '';
+        $isImage = str_starts_with($mime, 'image/');
         
         // If not an image or GD is not available, store directly
-        if (!extension_loaded('gd') || !str_starts_with($file->getMimeType(), 'image/')) {
+        if (!extension_loaded('gd') || !$isImage) {
             return $file->store($dir, $disk);
+        }
+
+        // High-Concurrency Fast-Path:
+        // If image is already lightweight (<= 512 KB, pre-compressed by client Canvas),
+        // store directly with random name to save 90%+ server CPU & memory.
+        if ($file->getSize() <= 512 * 1024) {
+            $ext = strtolower($file->getClientOriginalExtension()) ?: 'jpg';
+            if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                $ext = 'jpg';
+            }
+            $filename = \Illuminate\Support\Str::random(40) . '.' . $ext;
+            return $file->storeAs($dir, $filename, $disk);
         }
 
         try {

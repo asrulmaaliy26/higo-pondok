@@ -13,7 +13,9 @@ use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use App\Traits\LogsActivity;
 
-#[Fillable(['name', 'email', 'phone', 'password', 'santri_name', 'santri_room', 'santri_class', 'santri_level', 'penalty_points', 'google_id', 'avatar'])]
+use Illuminate\Database\Eloquent\Casts\Attribute;
+
+#[Fillable(['name', 'email', 'phone', 'password', 'santri_name', 'santri_room', 'santri_class', 'santri_level', 'penalty_points', 'google_id', 'avatar', 'balance', 'is_working'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -30,7 +32,29 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'balance' => 'float',
+            'penalty_points' => 'integer',
+            'is_working' => 'boolean',
         ];
+    }
+
+    /**
+     * Otomatis normalisasi format nomor HP / WhatsApp ke 628...
+     */
+    protected function phone(): Attribute
+    {
+        return Attribute::make(
+            set: function ($value) {
+                if (!$value) return null;
+                $clean = preg_replace('/[^0-9]/', '', (string)$value);
+                if (str_starts_with($clean, '08')) {
+                    $clean = '628' . substr($clean, 2);
+                } elseif (str_starts_with($clean, '8')) {
+                    $clean = '628' . substr($clean, 1);
+                }
+                return $clean ?: null;
+            }
+        );
     }
 
     public function canteens()

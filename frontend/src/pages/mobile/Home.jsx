@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from '@tanstack/react-router';
 import { Shield, Zap, Users, ChevronRight, BookOpen } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import ThemeToggle from '../../components/ui/ThemeToggle';
 
 export default function Home() {
   const token = useAuthStore((state) => state.token);
@@ -27,9 +28,11 @@ export default function Home() {
                 <BookOpen className="w-4 h-4" /> Dokumentasi
               </Link>
             </div>
-            <div className="flex space-x-4 items-center">
+            <div className="flex space-x-3 sm:space-x-4 items-center">
+              <ThemeToggle size="md" />
+
               {token ? (
-                <Link to="/dashboard" className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-full text-sm font-medium transition-all shadow-md shadow-green-500/20 hover:shadow-lg hover:-translate-y-0.5">
+                <Link to="/dashboard" className="bg-green-600 hover:bg-green-700 text-white px-4 sm:px-5 py-2 rounded-full text-sm font-medium transition-all shadow-md shadow-green-500/20 hover:shadow-lg hover:-translate-y-0.5">
                   Dashboard
                 </Link>
               ) : (
@@ -37,7 +40,7 @@ export default function Home() {
                   <Link to="/login" className="text-gray-700 hover:text-green-600 dark:text-gray-300 dark:hover:text-green-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">
                     Masuk
                   </Link>
-                  <Link to="/register" className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-full text-sm font-medium transition-all shadow-md shadow-green-500/20 hover:shadow-lg hover:-translate-y-0.5">
+                  <Link to="/register" className="bg-green-600 hover:bg-green-700 text-white px-4 sm:px-5 py-2 rounded-full text-sm font-medium transition-all shadow-md shadow-green-500/20 hover:shadow-lg hover:-translate-y-0.5">
                     Daftar Sekarang
                   </Link>
                 </>
@@ -112,7 +115,7 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="p-8 rounded-2xl bg-slate-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all duration-300">
+            <div className="p-8 rounded-2xl bg-slate-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-300">
               <div className="w-12 h-12 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-6">
                 <Users className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
@@ -120,7 +123,7 @@ export default function Home() {
               <p className="text-gray-600 dark:text-gray-400">Kelola data santri, prestasi, pelanggaran, hingga perizinan dalam satu dashboard yang mudah diakses.</p>
             </div>
             
-            <div className="p-8 rounded-2xl bg-slate-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all duration-300">
+            <div className="p-8 rounded-2xl bg-slate-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-300">
               <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-6">
                 <Shield className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
               </div>
@@ -128,7 +131,7 @@ export default function Home() {
               <p className="text-gray-600 dark:text-gray-400">Sistem pembayaran SPP dan uang saku terintegrasi dengan pencatatan yang akurat dan transparan.</p>
             </div>
 
-            <div className="p-8 rounded-2xl bg-slate-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all duration-300">
+            <div className="p-8 rounded-2xl bg-slate-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-300">
               <div className="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-6">
                 <Zap className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               </div>
@@ -140,7 +143,7 @@ export default function Home() {
       </div>
 
       {/* Footer */}
-      <footer className="bg-gray-50 dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800">
+      <footer className="bg-gray-50 dark:bg-gray-950 border-t border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2">
             <BookOpen className="w-6 h-6 text-green-600" />

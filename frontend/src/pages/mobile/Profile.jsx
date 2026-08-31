@@ -255,7 +255,7 @@ export default function Profile() {
   const MenuItem = ({ icon: Icon, title, badge, badgeColor = 'bg-green-600', isLast, onClick, isRed = false }) => (
     <button 
       onClick={onClick}
-      className={`w-full flex items-center justify-between py-3 px-4 sm:py-4 sm:px-5 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${!isLast ? 'border-b border-gray-100 dark:border-gray-800' : ''}`}
+      className={`w-full flex items-center justify-between py-3 px-4 sm:py-4 sm:px-5 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${!isLast ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
     >
       <div className="flex items-center gap-3 sm:gap-4">
         <Icon className={`w-5 h-5 ${isRed ? 'text-red-500' : 'text-gray-700 dark:text-gray-300'}`} strokeWidth={2.5} />
@@ -331,7 +331,7 @@ export default function Profile() {
         {/* Preferensi Section */}
         <div className="mb-5 sm:mb-6 animate-fade-in-up">
           <h3 className="px-1 text-xs sm:text-sm font-bold text-gray-600 dark:text-gray-400 mb-2 sm:mb-3">Preferensi</h3>
-          <div className="bg-white dark:bg-gray-900 rounded-[20px] sm:rounded-[24px] overflow-hidden shadow-[0_2px_10px_rgb(0,0,0,0.02)] border border-gray-100 dark:border-gray-800">
+          <div className="bg-white dark:bg-gray-900 rounded-[20px] sm:rounded-[24px] overflow-hidden shadow-[0_2px_10px_rgb(0,0,0,0.02)] border border-gray-200 dark:border-gray-700">
             {userRole === ROLES.KANTIN && (
               <>
                 <MenuItem 
@@ -365,7 +365,7 @@ export default function Profile() {
         {/* Aktivitas Section */}
         <div className="mb-5 sm:mb-6 animate-fade-in-up delay-75">
           <h3 className="px-1 text-xs sm:text-sm font-bold text-gray-600 dark:text-gray-400 mb-2 sm:mb-3">Aktivitas di Higo Pondok</h3>
-          <div className="bg-white dark:bg-gray-900 rounded-[20px] sm:rounded-[24px] overflow-hidden shadow-[0_2px_10px_rgb(0,0,0,0.02)] border border-gray-100 dark:border-gray-800">
+          <div className="bg-white dark:bg-gray-900 rounded-[20px] sm:rounded-[24px] overflow-hidden shadow-[0_2px_10px_rgb(0,0,0,0.02)] border border-gray-200 dark:border-gray-700">
             <MenuItem icon={Activity} title="Alur Kerja Saya" onClick={() => setShowWorkflowModal(true)} />
             <MenuItem icon={CreditCard} title="Aktivitas Pembayaran" onClick={() => navigate({ to: '/dashboard/pembayaran' })} />
             <MenuItem icon={BookOpen} title="Buku Panduan & SOP" onClick={() => navigate({ to: '/dashboard/panduan' })} />
@@ -379,7 +379,7 @@ export default function Profile() {
       {userRole === ROLES.KANTIN && showStoreListModal && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] my-auto">
-            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Kelola Toko Saya</h3>
               <button onClick={() => setShowStoreListModal(false)} className="text-gray-400 hover:text-gray-500">
                 <X className="w-5 h-5" />
@@ -398,7 +398,7 @@ export default function Profile() {
                 </div>
               ) : (
                 canteens.map(c => (
-                  <div key={c.id} onClick={() => openEditStore(c)} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl cursor-pointer transition-colors">
+                  <div key={c.id} onClick={() => openEditStore(c)} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer transition-colors">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center overflow-hidden shrink-0">
                         {c.image ? (
@@ -428,7 +428,7 @@ export default function Profile() {
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-100 dark:border-gray-800">
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
               <button 
                 onClick={() => {
                   setShowStoreListModal(false);
@@ -449,7 +449,7 @@ export default function Profile() {
       {showAddStoreModal && createPortal(
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col my-auto">
-            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-2">
                 <button onClick={() => {
                   setShowAddStoreModal(false);
@@ -486,7 +486,7 @@ export default function Profile() {
       {userRole === ROLES.KANTIN && showEditStoreModal && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] my-auto">
-            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-2">
                 <button onClick={() => {
                   setShowEditStoreModal(false);
@@ -588,7 +588,7 @@ export default function Profile() {
                   </div>
                 </div>
               </div>
-              <div className="px-4 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 mt-4">
+              <div className="px-4 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 mt-4">
                 <button type="submit" disabled={isSavingProfile} className="w-full inline-flex items-center justify-center px-5 py-3 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors disabled:opacity-70">
                   {isSavingProfile ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></span> : <Save className="w-4 h-4 mr-2" />}
                   Simpan Perubahan
@@ -604,7 +604,7 @@ export default function Profile() {
       {showEditUserModal && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
           <div className="bg-white dark:bg-gray-900 w-full sm:max-w-md rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] my-auto">
-            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Edit Profil Pribadi</h3>
               <button onClick={() => setShowEditUserModal(false)} className="text-gray-400 hover:text-gray-500">
                 <X className="w-5 h-5" />
@@ -653,7 +653,7 @@ export default function Profile() {
                 <input required type="tel" placeholder="Contoh: 08123456789" value={userData.phone} onChange={e => setUserData({...userData, phone: e.target.value})} className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" />
               </div>
               
-              <div className="pt-4 border-t border-gray-100 dark:border-gray-800 mt-2">
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700 mt-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password Baru (Opsional)</label>
                 <input type="password" placeholder="Kosongkan jika tak ingin diubah" value={userData.password} onChange={e => setUserData({...userData, password: e.target.value})} className="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white p-2.5 text-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-700 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" />
               </div>
@@ -676,7 +676,7 @@ export default function Profile() {
       {showKeluargaModal && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
           <div className="bg-white dark:bg-gray-900 w-full sm:max-w-md rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] my-auto">
-            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Keluarga Santri</h3>
               <button onClick={() => setShowKeluargaModal(false)} className="text-gray-400 hover:text-gray-500">
                 <X className="w-5 h-5" />
@@ -814,7 +814,7 @@ export default function Profile() {
       {showWorkflowModal && createPortal(
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col my-auto">
-            <div className="flex justify-between items-center px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex justify-between items-center px-5 py-4 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Alur Kerja Saya</h3>
               <button onClick={() => setShowWorkflowModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
@@ -829,7 +829,7 @@ export default function Profile() {
                     <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-blue-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
                       1
                     </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
                       <h4 className="font-bold text-gray-900 text-sm">Aktifkan Status Bekerja</h4>
                       <p className="text-[10px] font-semibold text-blue-600 mb-1 mt-1">📍 Navigasi: Beranda → Switch "Status Bekerja"</p>
                       <p className="text-xs text-gray-500">Anda wajib menyalakan toggle "Status Bekerja" menjadi ON agar penyedia menu dapat melihat dan memilih Anda.</p>
@@ -840,7 +840,7 @@ export default function Profile() {
                     <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-blue-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
                       2
                     </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
                       <h4 className="font-bold text-gray-900 text-sm">Ambil Pesanan di Toko Luar</h4>
                       <p className="text-[10px] font-semibold text-blue-600 mb-1 mt-1">📍 Navigasi: Menu Bawah → Ikon Motor (Tugas)</p>
                       <p className="text-xs text-gray-500">Lihat detail pesanan di tab "Tugas". Pergilah ke toko/warung luar untuk mengambil makanan (Kantin di aplikasi hanya menyediakan menu). Jika ditalangi tunai, klik tombol "Upload Struk".</p>
@@ -851,7 +851,7 @@ export default function Profile() {
                     <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-blue-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
                       3
                     </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
                       <h4 className="font-bold text-gray-900 text-sm">Antar ke Lokasi & Foto</h4>
                       <p className="text-[10px] font-semibold text-blue-600 mb-1 mt-1">📍 Navigasi: Halaman Tugas → Upload Bukti Pengantaran</p>
                       <p className="text-xs text-gray-500">Antar makanan ke kamar/kelas santri. Lalu ambil foto serah terima sebagai bukti bahwa tugas selesai diantar.</p>
@@ -868,7 +868,7 @@ export default function Profile() {
                     <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-green-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
                       1
                     </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
                       <h4 className="font-bold text-gray-900 text-sm">Buat & Kelola Toko</h4>
                       <p className="text-[10px] font-semibold text-green-600 mb-1 mt-1">📍 Navigasi: Profil → Kelola Toko Saya</p>
                       <p className="text-xs text-gray-500">Buat toko baru (klik Tambah Toko). Setelah selesai, pilih toko tersebut untuk mulai mengelola jam buka, menu makanan, dan melihat analitik harian Anda.</p>
@@ -879,7 +879,7 @@ export default function Profile() {
                     <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-green-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
                       2
                     </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
                       <h4 className="font-bold text-gray-900 text-sm">Terima Pesanan</h4>
                       <p className="text-[10px] font-semibold text-green-600 mb-1 mt-1">📍 Navigasi: Menu Bawah → Ikon Pesanan</p>
                       <p className="text-xs text-gray-500">Pantau daftar pesanan baru. Jika stok habis, klik tombol merah "Tolak". Jika pesanan disetujui, siapkan makanannya.</p>
@@ -890,7 +890,7 @@ export default function Profile() {
                     <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-green-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
                       3
                     </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
                       <h4 className="font-bold text-gray-900 text-sm">Pilih Kurir</h4>
                       <p className="text-[10px] font-semibold text-green-600 mb-1 mt-1">📍 Navigasi: Halaman Pesanan → Tombol Biru "Pilih Kurir"</p>
                       <p className="text-xs text-gray-500">Klik tombol "Pilih Kurir", lalu pilih kurir yang berstatus aktif/bekerja untuk menugaskannya mengantar pesanan ke santri.</p>
@@ -901,7 +901,7 @@ export default function Profile() {
                     <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-green-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
                       4
                     </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
                       <h4 className="font-bold text-gray-900 text-sm">Tandai Lunas & Selesai</h4>
                       <p className="text-[10px] font-semibold text-green-600 mb-1 mt-1">📍 Navigasi: Halaman Pesanan → Tombol Hijau "Lunas & Selesai"</p>
                       <p className="text-xs text-gray-500">Setelah foto bukti kurir terupload di pesanan, verifikasi, lalu klik "Lunas & Selesai". Saldo Anda akan otomatis bertambah!</p>
@@ -918,7 +918,7 @@ export default function Profile() {
                     <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-orange-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
                       1
                     </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
                       <h4 className="font-bold text-gray-900 text-sm">Pilih Makanan</h4>
                       <p className="text-[10px] font-semibold text-orange-600 mb-1 mt-1">📍 Navigasi: Beranda → Pilih Kantin/Toko → Klik '+' pada Menu</p>
                       <p className="text-xs text-gray-500">Pilih menu dari toko yang berstatus Buka (Hijau). Cek juga menu "Pesanan Khusus" jika ada titipan khusus di luar menu.</p>
@@ -929,7 +929,7 @@ export default function Profile() {
                     <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-orange-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
                       2
                     </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
                       <h4 className="font-bold text-gray-900 text-sm">Checkout & Transfer</h4>
                       <p className="text-[10px] font-semibold text-orange-600 mb-1 mt-1">📍 Navigasi: Ikon Keranjang (Kanan Atas) → Checkout</p>
                       <p className="text-xs text-gray-500">Selesaikan pesanan Anda, lalu unggah bukti transfer pembayaran di halaman Profil → Aktivitas Pembayaran.</p>
@@ -940,7 +940,7 @@ export default function Profile() {
                     <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-orange-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
                       3
                     </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
                       <h4 className="font-bold text-gray-900 text-sm">Tunggu Pengantaran</h4>
                       <p className="text-[10px] font-semibold text-orange-600 mb-1 mt-1">📍 Navigasi: Halaman Pembayaran → Status Order</p>
                       <p className="text-xs text-gray-500">Pantau status pesanan. Kurir akan mengantarkan pesanan ke santri. Anda bisa melihat foto bukti serah terima jika pesanan sudah selesai.</p>

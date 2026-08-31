@@ -83,7 +83,7 @@ export default function PromoVoucher() {
 
       <div className="p-4 space-y-6 -mt-4">
         {/* Banner Section */}
-        <div className="glass-card rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-800">
+        <div className="glass-card rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <ImageIcon className="w-5 h-5 text-green-600" />
@@ -144,7 +144,7 @@ export default function PromoVoucher() {
       {showBannerModal && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-xl animate-in fade-in zoom-in-95 duration-200 my-auto">
-            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
               <h3 className="font-bold text-lg text-gray-900 dark:text-white">Upload Promo / Banner</h3>
               <button onClick={closeBannerModal} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full bg-gray-50 dark:bg-gray-800 transition-colors">
                 <X className="w-5 h-5" />

@@ -62,7 +62,7 @@ export const ProductFormModal = ({
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
       <div className="bg-white dark:bg-gray-900 w-full sm:max-w-md rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] my-auto">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white">
             {editingProduct ? 'Edit Menu' : 'Tambah Menu Baru'}
           </h3>

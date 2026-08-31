@@ -8,6 +8,7 @@ import api from '../../../lib/axios';
 import TopHeader from './TopHeader';
 import MobileBottomNav from './MobileBottomNav';
 import DesktopSidebar from './DesktopSidebar';
+import ActiveCartFloatingBanner from '../../cart/ActiveCartFloatingBanner';
 
 export default function DashboardLayout() {
   const user = useAuthStore((state) => state.user);
@@ -76,6 +77,9 @@ export default function DashboardLayout() {
         {!hideBottomNav && (
           <MobileBottomNav sidebarMenus={sidebarMenus} location={location} />
         )}
+
+        {/* Floating Active Cart Banner (Muncul saat user keluar dari detail toko & masih ada item di keranjang) */}
+        <ActiveCartFloatingBanner />
       </div>
     </div>
   );

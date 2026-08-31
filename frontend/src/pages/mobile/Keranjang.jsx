@@ -127,7 +127,7 @@ export default function Keranjang() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
         {/* Header with back button */}
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-4 flex items-center gap-3 sticky top-0 z-20">
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-4 flex items-center gap-3 sticky top-0 z-20">
           <button
             onClick={() => navigate({ to: '/dashboard/kantin' })}
             className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -156,7 +156,7 @@ export default function Keranjang() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-32">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-4 flex items-center justify-between sticky top-0 z-20">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-4 flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate({ to: '/dashboard/kantin' })}
@@ -181,9 +181,9 @@ export default function Keranjang() {
 
         {/* Per-canteen groups */}
         {canteenSummaries.map(({ canteenId, canteen, itemList, subtotal, deliveryFee, adminFee, total }) => (
-          <div key={canteenId} className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+          <div key={canteenId} className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
             {/* Canteen header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
                   <Store className="w-4 h-4 text-green-600 dark:text-green-400" />
@@ -203,7 +203,7 @@ export default function Keranjang() {
             </div>
 
             {/* Items */}
-            <div className="divide-y divide-gray-50 dark:divide-gray-800">
+            <div className="divide-y divide-gray-50 dark:divide-gray-700">
               {itemList.map(({ product, quantity, notes }) => (
                 <div key={product.id} className="p-4 space-y-2">
                   <div className="flex items-center gap-3">
@@ -276,7 +276,7 @@ export default function Keranjang() {
         ))}
 
         {/* Delivery Location */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-4">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-2">
             <MapPin className="w-5 h-5 text-green-600" />
             <h3 className="font-bold text-gray-900 dark:text-white">Lokasi Pengiriman</h3>
@@ -311,7 +311,7 @@ export default function Keranjang() {
       </div>
 
       {/* Fixed bottom checkout button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 z-50">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 z-50">
         <div className="max-w-2xl mx-auto">
           <button
             onClick={handleCheckoutAll}

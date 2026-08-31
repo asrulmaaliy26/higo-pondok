@@ -1,6 +1,7 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Printer, X, CheckCircle, FileText, ShoppingBag, Store, User, MapPin, Building2, Calendar, Phone, CheckSquare } from 'lucide-react';
+import santriData from '../../data/santri.json';
 
 const formatRupiah = (num) => {
   return Math.round(Number(num) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
@@ -34,6 +35,43 @@ const formatDateOnly = (dateStr) => {
   } catch {
     return dateStr;
   }
+};
+
+export const getSantriReceiptInfo = (user) => {
+  const santriName = user?.santri_name || user?.name || '-';
+  let santriClass = user?.santri_class || '';
+  let santriLevel = user?.santri_level || '';
+  let santriRoom = user?.santri_room || '-';
+
+  if (santriName && santriData?.data) {
+    const sName = santriName.toLowerCase().trim();
+    const match = santriData.data.find(r => {
+      if (!r || !r[1]) return false;
+      const rawName = r[1].toLowerCase().replace(/\s+(laki-laki|perempuan)$/i, '').trim();
+      return rawName === sName || sName.includes(rawName) || rawName.includes(sName);
+    });
+    if (match) {
+      if (!santriLevel && match[4]) santriLevel = match[4];
+      const tingkat = match[5] || '';
+      const rombel = match[6] || '';
+      const program = match[7] && match[7] !== '-' ? match[7] : '';
+      const fullClass = [tingkat, rombel, program].filter(Boolean).join(' ');
+      if (!santriClass || santriClass === tingkat) {
+        santriClass = fullClass || santriClass;
+      }
+      if ((!santriRoom || santriRoom === '-') && match[10]) {
+        santriRoom = match[10];
+      }
+    }
+  }
+
+  return {
+    santriName,
+    santriClass,
+    santriLevel,
+    santriRoom,
+    waliName: user?.name || '-'
+  };
 };
 
 export default function ThermalReceiptModal({
@@ -160,9 +198,9 @@ export default function ThermalReceiptModal({
       `}</style>
 
       <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
-        <div className={`bg-white dark:bg-gray-900 w-full ${isA4 ? 'max-w-5xl' : 'max-w-md'} rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] border border-gray-100 dark:border-gray-800 transition-all duration-200`}>
+        <div className={`bg-white dark:bg-gray-900 w-full ${isA4 ? 'max-w-5xl' : 'max-w-md'} rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] border border-gray-200 dark:border-gray-700 transition-all duration-200`}>
           {/* MODAL HEADER */}
-          <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/80 dark:bg-gray-800/80 no-print flex-wrap gap-2">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50/80 dark:bg-gray-800/80 no-print flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 flex items-center justify-center shrink-0">
                 <Printer className="w-4 h-4" />
@@ -277,28 +315,33 @@ export default function ThermalReceiptModal({
                   {/* GRID INFORMASI: PESANAN & SANTRI PEMESAN */}
                   <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200 text-xs">
                     {/* Kolom 1: Info Pemesan */}
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DATA SANTRI / PEMESAN:</p>
-                      <p className="text-sm font-bold text-gray-900">
-                        {order.user?.santri_name || order.user?.name || '-'}
-                      </p>
-                      <p className="text-gray-600">
-                        <span className="font-semibold">Wali:</span> {order.user?.name || '-'}
-                      </p>
-                      <p className="text-gray-600">
-                        <span className="font-semibold">Asrama / Kamar:</span> {order.user?.santri_room || '-'}
-                      </p>
-                      {order.user?.santri_class && (
-                        <p className="text-gray-600">
-                          <span className="font-semibold">Kelas:</span> {order.user.santri_class} {order.user.santri_level ? `(${order.user.santri_level})` : ''}
-                        </p>
-                      )}
-                      {order.delivery_location && (
-                        <p className="text-gray-600">
-                          <span className="font-semibold">Tujuan Antar:</span> {order.delivery_location}
-                        </p>
-                      )}
-                    </div>
+                    {(() => {
+                      const info = getSantriReceiptInfo(order.user);
+                      return (
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DATA SANTRI / PEMESAN:</p>
+                          <p className="text-sm font-bold text-gray-900">
+                            {info.santriName}
+                          </p>
+                          <p className="text-gray-600">
+                            <span className="font-semibold">Wali:</span> {info.waliName}
+                          </p>
+                          <p className="text-gray-600">
+                            <span className="font-semibold">Asrama / Kamar:</span> {info.santriRoom}
+                          </p>
+                          {(info.santriClass || info.santriLevel) && (
+                            <p className="text-gray-600">
+                              <span className="font-semibold">Kelas:</span> {info.santriClass} {info.santriLevel ? `(${info.santriLevel})` : ''}
+                            </p>
+                          )}
+                          {order.delivery_location && (
+                            <p className="text-gray-600">
+                              <span className="font-semibold">Tujuan Antar:</span> {order.delivery_location}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Kolom 2: Info Toko, Kurir & Status */}
                     <div className="space-y-1 text-right">
@@ -607,28 +650,33 @@ export default function ThermalReceiptModal({
                   </div>
 
                   {/* DATA SANTRI / PEMESAN */}
-                  <div className="py-1 border-b border-dashed border-black text-[10px] space-y-0.5">
-                    <div className="flex justify-between items-start gap-1">
-                      <span className="shrink-0 text-gray-700">Santri:</span>
-                      <span className="font-bold text-right break-words">{order.user?.santri_name || order.user?.name || '-'}</span>
-                    </div>
-                    <div className="flex justify-between items-start gap-1">
-                      <span className="shrink-0 text-gray-700">Asrama:</span>
-                      <span className="font-bold text-right break-words">{order.user?.santri_room || '-'}</span>
-                    </div>
-                    {order.user?.santri_class && (
-                      <div className="flex justify-between items-start gap-1">
-                        <span className="shrink-0 text-gray-700">Kelas:</span>
-                        <span className="text-right">{order.user.santri_class} {order.user.santri_level ? `(${order.user.santri_level})` : ''}</span>
+                  {(() => {
+                    const info = getSantriReceiptInfo(order.user);
+                    return (
+                      <div className="py-1 border-b border-dashed border-black text-[10px] space-y-0.5">
+                        <div className="flex justify-between items-start gap-1">
+                          <span className="shrink-0 text-gray-700">Santri:</span>
+                          <span className="font-bold text-right break-words">{info.santriName}</span>
+                        </div>
+                        <div className="flex justify-between items-start gap-1">
+                          <span className="shrink-0 text-gray-700">Asrama:</span>
+                          <span className="font-bold text-right break-words">{info.santriRoom}</span>
+                        </div>
+                        {(info.santriClass || info.santriLevel) && (
+                          <div className="flex justify-between items-start gap-1">
+                            <span className="shrink-0 text-gray-700">Kelas:</span>
+                            <span className="text-right">{info.santriClass} {info.santriLevel ? `(${info.santriLevel})` : ''}</span>
+                          </div>
+                        )}
+                        {order.delivery_location && (
+                          <div className="flex justify-between items-start gap-1">
+                            <span className="shrink-0 text-gray-700">Antar:</span>
+                            <span className="text-right break-words">{order.delivery_location}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {order.delivery_location && (
-                      <div className="flex justify-between items-start gap-1">
-                        <span className="shrink-0 text-gray-700">Antar:</span>
-                        <span className="text-right break-words">{order.delivery_location}</span>
-                      </div>
-                    )}
-                  </div>
+                    );
+                  })()}
 
                   {/* ITEM LIST */}
                   <div className="py-1 border-b border-dashed border-black">
@@ -792,7 +840,7 @@ export default function ThermalReceiptModal({
           </div>
 
           {/* MODAL FOOTER ACTION BUTTONS */}
-          <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-3 bg-white dark:bg-gray-900 no-print flex-wrap">
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-3 bg-white dark:bg-gray-900 no-print flex-wrap">
             <button
               onClick={onClose}
               className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-2xl font-bold text-xs transition-colors"

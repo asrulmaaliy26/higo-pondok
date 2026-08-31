@@ -606,6 +606,32 @@ export default function TugasKurir() {
       const custKey = `${u?.id || 0}_${santriName}`;
       const gender = getSantriGender(santriName, u?.santri_room);
 
+      let santriClass = u?.santri_class || '';
+      let santriLevel = u?.santri_level || '';
+      let santriRoom = u?.santri_room || order.delivery_location || 'Kamar belum diisi';
+
+      if (santriName && santriData?.data) {
+        const sName = santriName.toLowerCase().trim();
+        const match = santriData.data.find(r => {
+          if (!r || !r[1]) return false;
+          const rawName = r[1].toLowerCase().replace(/\s+(laki-laki|perempuan)$/i, '').trim();
+          return rawName === sName || sName.includes(rawName) || rawName.includes(sName);
+        });
+        if (match) {
+          if (!santriLevel && match[4]) santriLevel = match[4];
+          const tingkat = match[5] || '';
+          const rombel = match[6] || '';
+          const program = match[7] && match[7] !== '-' ? match[7] : '';
+          const fullClass = [tingkat, rombel, program].filter(Boolean).join(' ');
+          if (!santriClass || santriClass === tingkat) {
+            santriClass = fullClass || santriClass;
+          }
+          if ((!santriRoom || santriRoom === 'Kamar belum diisi') && match[10]) {
+            santriRoom = match[10];
+          }
+        }
+      }
+
       if (!map[canteenId].customersMap[custKey]) {
         map[canteenId].customersMap[custKey] = {
           custKey,
@@ -613,9 +639,9 @@ export default function TugasKurir() {
           santriName,
           gender,
           waliName: u?.name || 'Wali Santri',
-          santriRoom: u?.santri_room || 'Kamar belum diisi',
-          santriClass: u?.santri_class || '',
-          santriLevel: u?.santri_level || '',
+          santriRoom,
+          santriClass,
+          santriLevel,
           phone: u?.phone,
           orders: [],
           items: [],
@@ -751,7 +777,7 @@ export default function TugasKurir() {
   return (
     <div className="bg-gray-50 dark:bg-gray-950 min-h-screen pb-28 font-sans">
       {/* STICKY TOP HEADER */}
-      <div className="bg-white dark:bg-gray-900 sticky top-0 z-20 shadow-sm border-b border-gray-100 dark:border-gray-800 px-4 py-3">
+      <div className="bg-white dark:bg-gray-900 sticky top-0 z-20 shadow-sm border-b border-gray-200 dark:border-gray-700 px-4 py-3">
         <div className="flex items-center justify-between gap-2 max-w-7xl mx-auto">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 flex items-center justify-center shadow-xs">
@@ -784,23 +810,23 @@ export default function TugasKurir() {
         </div>
       </div>
 
-      <div className="p-3 sm:p-5 max-w-7xl mx-auto space-y-4">
+      <div className="p-3 sm:p-4 max-w-7xl mx-auto space-y-3">
         {/* UNIFIED FILTER CARD: PERIOD, CANTEEN, SEARCH */}
-        <div className="bg-white dark:bg-gray-900 p-3.5 sm:p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-3">
+        <div className="bg-white dark:bg-gray-900 p-3 sm:p-3.5 rounded-2xl border border-green-300/80 dark:border-green-800 shadow-xs space-y-2.5">
           {/* Header & Active Period Badge */}
-          <div className="flex items-center justify-between flex-wrap gap-2 border-b border-gray-100 dark:border-gray-800 pb-2.5">
+          <div className="flex items-center justify-between flex-wrap gap-1.5 border-b border-gray-200 dark:border-gray-700 pb-2">
             <h3 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
-              <Filter className="w-4 h-4 text-green-600" />
+              <Filter className="w-3.5 h-3.5 text-green-600" />
               Filter Periode & Toko
             </h3>
-            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" />
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800 flex items-center gap-1">
+              <Calendar className="w-3 h-3" />
               <span>📅 Periode: <strong>{getFilterLabel()}</strong></span>
             </span>
           </div>
 
           {/* Mode Selector Buttons */}
-          <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+          <div className="flex gap-1 overflow-x-auto pb-0.5 no-scrollbar">
             {[
               { id: 'day', label: 'Harian (Per Tanggal)' },
               { id: 'week', label: 'Mingguan' },
@@ -816,7 +842,7 @@ export default function TugasKurir() {
                     setFilterWeekIndex(getCurrentWeekIndex(filterYear, filterMonth));
                   }
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all shadow-xs ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all shadow-xs ${
                   filterMode === m.id
                     ? 'bg-green-600 text-white shadow-xs ring-2 ring-green-600/20'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
@@ -828,18 +854,18 @@ export default function TugasKurir() {
           </div>
 
           {/* Dynamic Grid Inputs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-0.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-0.5">
             {/* 1. Date Inputs depending on filterMode */}
             {filterMode === 'day' && (
               <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                   PILIH TANGGAL:
                 </label>
                 <input
                   type="date"
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                 />
               </div>
             )}
@@ -847,7 +873,7 @@ export default function TugasKurir() {
             {filterMode === 'week' && (
               <>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                     PILIH BULAN:
                   </label>
                   <select
@@ -857,7 +883,7 @@ export default function TugasKurir() {
                       setFilterMonth(newMonth);
                       setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
                     }}
-                    className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                    className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                   >
                     {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
                       (m, i) => (
@@ -870,13 +896,13 @@ export default function TugasKurir() {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                     PILIH RENTANG MINGGU:
                   </label>
                   <select
                     value={filterWeekIndex < getWeeksInMonth(filterYear, filterMonth).length ? filterWeekIndex : 0}
                     onChange={(e) => setFilterWeekIndex(parseInt(e.target.value))}
-                    className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                    className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                   >
                     {getWeeksInMonth(filterYear, filterMonth).map((w, i) => (
                       <option key={i} value={i}>
@@ -890,7 +916,7 @@ export default function TugasKurir() {
 
             {filterMode === 'month' && (
               <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                   PILIH BULAN:
                 </label>
                 <select
@@ -900,7 +926,7 @@ export default function TugasKurir() {
                     setFilterMonth(newMonth);
                     setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
                   }}
-                  className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                 >
                   {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
                     (m, i) => (
@@ -915,7 +941,7 @@ export default function TugasKurir() {
 
             {(filterMode === 'week' || filterMode === 'month' || filterMode === 'year') && (
               <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                   PILIH TAHUN:
                 </label>
                 <select
@@ -925,7 +951,7 @@ export default function TugasKurir() {
                     setFilterYear(newYear);
                     setFilterWeekIndex(getCurrentWeekIndex(newYear, filterMonth));
                   }}
-                  className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                 >
                   {[2024, 2025, 2026, 2027, 2028].map((y) => (
                     <option key={y} value={y}>
@@ -938,13 +964,13 @@ export default function TugasKurir() {
 
             {/* 2. Canteen Filter */}
             <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                 PILIH KANTIN / TOKO:
               </label>
               <select
                 value={selectedCanteenFilter}
                 onChange={(e) => setSelectedCanteenFilter(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 dark:border-gray-700 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                className="w-full px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 dark:border-gray-700 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500/20"
               >
                 <option value="all">🏪 Semua Kantin ({canteens.length} Toko)</option>
                 {canteens.map(c => (
@@ -955,22 +981,22 @@ export default function TugasKurir() {
 
             {/* 3. Search Bar */}
             <div className={(filterMode === 'week' || filterMode === 'month' || filterMode === 'year' || filterMode === 'day') ? 'sm:col-span-2 lg:col-span-2' : 'sm:col-span-2 lg:col-span-3'}>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                 PENCARIAN CEPAT:
               </label>
               <div className="relative">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                 <input 
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Cari santri, wali, kamar, kantin, atau makanan..."
-                  className="w-full pl-9 pr-8 py-2 bg-gray-50 dark:bg-gray-800 dark:border-gray-700 border border-gray-200 rounded-xl text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-600 transition-all font-medium"
+                  className="w-full pl-8 pr-7 py-1.5 bg-gray-50 dark:bg-gray-800 dark:border-gray-700 border border-gray-200 rounded-lg text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-600 transition-all font-medium"
                 />
                 {searchQuery && (
                   <button 
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -981,14 +1007,14 @@ export default function TugasKurir() {
         </div>
 
         {/* VIEW MODE TOGGLE & STATUS TABS */}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {/* Dual Mode Switcher */}
-          <div className="grid grid-cols-2 gap-2 bg-gray-200/80 dark:bg-gray-800 p-1 rounded-2xl shadow-inner">
+          <div className="grid grid-cols-2 gap-1.5 bg-gray-200/80 dark:bg-gray-800 p-0.5 rounded-xl shadow-inner">
             <button
               onClick={() => setViewMode('list')}
-              className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${
                 viewMode === 'list' 
-                  ? 'bg-white dark:bg-gray-900 text-green-700 dark:text-green-400 shadow-sm' 
+                  ? 'bg-white dark:bg-gray-900 text-green-700 dark:text-green-400 shadow-xs' 
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
@@ -997,9 +1023,9 @@ export default function TugasKurir() {
             </button>
             <button
               onClick={() => setViewMode('canteen')}
-              className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${
                 viewMode === 'canteen' 
-                  ? 'bg-white dark:bg-gray-900 text-green-700 dark:text-green-400 shadow-sm' 
+                  ? 'bg-white dark:bg-gray-900 text-green-700 dark:text-green-400 shadow-xs' 
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
@@ -1009,9 +1035,9 @@ export default function TugasKurir() {
           </div>
 
           {/* Status Filter Horizontal Tabs + Totals in Line */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 pt-1">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-1.5 pt-0.5">
             {/* Horizontal Filter Tabs */}
-            <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar shrink-0">
+            <div className="flex gap-1 overflow-x-auto pb-0.5 no-scrollbar shrink-0">
               {[
                 { id: 'all', label: 'Semua', count: tabCounts.all },
                 { id: 'my_tasks', label: 'Tugas Saya', count: tabCounts.my_tasks },
@@ -1022,10 +1048,10 @@ export default function TugasKurir() {
                 <button
                   key={tab.id}
                   onClick={() => setStatusTab(tab.id)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                  className={`px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${
                     statusTab === tab.id
                       ? 'bg-green-600 text-white shadow-xs'
-                      : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-100 dark:border-gray-800'
+                      : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700'
                   }`}
                 >
                   <span>{tab.label}</span>
@@ -1037,31 +1063,31 @@ export default function TugasKurir() {
             </div>
 
             {/* Total Uang Produk & Total Ongkir & Tombol Cetak Rekap */}
-            <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
               <button
                 onClick={handlePrintBatchReceipt}
-                className="py-1.5 px-3 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                className="py-1 px-2.5 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs active:scale-95"
                 title={`Cetak Rekap Pesanan (${printableOrdersCount} Pesanan)`}
               >
-                <Printer className="w-3.5 h-3.5 text-green-400" />
+                <Printer className="w-3 h-3 text-green-400" />
                 <span>🖨️ Cetak Rekap ({printableOrdersCount})</span>
               </button>
 
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs shadow-xs">
+              <div className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs shadow-xs">
                 <span className="text-gray-500 dark:text-gray-400 font-medium">Uang Produk:</span>
                 <span className="font-extrabold text-gray-900 dark:text-white">
                   Rp {formatRupiah(filteredSummary.totalProducts)}
                 </span>
               </div>
 
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-xl text-xs shadow-xs">
+              <div className="flex items-center gap-1 px-2.5 py-1 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-lg text-xs shadow-xs">
                 <span className="text-blue-700 dark:text-blue-300 font-medium">Total Ongkir:</span>
                 <span className="font-extrabold text-blue-700 dark:text-blue-300">
                   Rp {formatRupiah(filteredSummary.totalDeliveryFee)}
                 </span>
               </div>
 
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50/80 dark:bg-green-950/40 border border-green-200 dark:border-green-800/60 rounded-xl text-xs shadow-xs">
+              <div className="flex items-center gap-1 px-2.5 py-1 bg-green-50/80 dark:bg-green-950/40 border border-green-200 dark:border-green-800/60 rounded-lg text-xs shadow-xs">
                 <span className="text-green-700 dark:text-green-300 font-medium">Total:</span>
                 <span className="font-extrabold text-green-700 dark:text-green-400">
                   Rp {formatRupiah(filteredSummary.grandTotal)}
@@ -1077,13 +1103,13 @@ export default function TugasKurir() {
         {viewMode === 'list' && (
           <div>
             {filteredOrders.length === 0 ? (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 text-center border border-gray-100 dark:border-gray-800 shadow-xs">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 text-center border border-gray-200 dark:border-gray-700 shadow-xs">
                 <Package className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
                 <p className="text-gray-500 dark:text-gray-400 font-semibold text-sm">Tidak ada pesanan yang sesuai filter.</p>
                 <p className="text-xs text-gray-400 mt-1">Coba ganti filter tab status atau ubah kata kunci pencarian.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2.5">
                 {filteredOrders.map(order => {
                   const isProcessing = order.status === 'processing';
                   const isPending = order.status === 'pending';
@@ -1092,23 +1118,51 @@ export default function TugasKurir() {
                   const isMyTask = order.courier_id === currentUser?.id;
                   const santriName = order.user?.santri_name || order.user?.name || 'Santri';
                   const waliName = order.user?.name || 'Wali';
+                  let santriClass = order.user?.santri_class || '';
+                  let santriLevel = order.user?.santri_level || '';
+                  let santriRoom = order.user?.santri_room || order.delivery_location || '';
+
+                  // Fallback match from santri.json if class/level missing
+                  if (santriName && santriData?.data) {
+                    const sName = santriName.toLowerCase().trim();
+                    const match = santriData.data.find(r => {
+                      if (!r || !r[1]) return false;
+                      const rawName = r[1].toLowerCase().replace(/\s+(laki-laki|perempuan)$/i, '').trim();
+                      return rawName === sName || sName.includes(rawName) || rawName.includes(sName);
+                    });
+                    if (match) {
+                      if (!santriLevel && match[4]) santriLevel = match[4];
+                      const tingkat = match[5] || '';
+                      const rombel = match[6] || '';
+                      const program = match[7] && match[7] !== '-' ? match[7] : '';
+                      const fullClass = [tingkat, rombel, program].filter(Boolean).join(' ');
+                      if (!santriClass || santriClass === tingkat) {
+                        santriClass = fullClass || santriClass;
+                      }
+                      if ((!santriRoom || santriRoom === 'Kamar Santri') && match[10]) {
+                        santriRoom = match[10];
+                      }
+                    }
+                  }
 
                   return (
                     <div 
                       key={order.id} 
-                      className={`bg-white dark:bg-gray-900 rounded-2xl border shadow-xs hover:shadow-md transition-all p-3.5 flex flex-col justify-between gap-2.5 ${
+                      className={`bg-white dark:bg-gray-900 rounded-2xl border shadow-sm hover:shadow-md transition-all p-3 sm:p-3.5 flex flex-col justify-between gap-2 ${
                         isProcessing 
-                          ? 'border-green-300 dark:border-green-800/80 ring-1 ring-green-500/10' 
+                          ? 'border-green-400 dark:border-green-600 ring-1 ring-green-500/20' 
                           : isPending 
-                          ? 'border-amber-200 dark:border-amber-900/60' 
-                          : 'border-gray-100 dark:border-gray-800'
+                          ? 'border-amber-300 dark:border-amber-700 ring-1 ring-amber-500/20' 
+                          : isCompleted
+                          ? 'border-green-200 dark:border-green-900/50'
+                          : 'border-green-300/80 dark:border-green-800'
                       }`}
                     >
                       {/* 1. CARD HEADER: TOKO, ID, TIME & STATUS BADGES */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-800/80 pb-2">
-                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate max-w-[130px]">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-1.5 border-b border-gray-200 dark:border-gray-700/80 pb-1.5">
+                          <div className="flex items-center gap-1 flex-wrap min-w-0">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate max-w-[120px]">
                               🏪 {order.canteen?.name || 'Kantin'}
                             </span>
                             <span className="text-[11px] font-bold text-gray-800 dark:text-gray-200">
@@ -1122,27 +1176,27 @@ export default function TugasKurir() {
                           {/* Status Badges */}
                           <div className="flex items-center gap-1 shrink-0">
                             {isPending && (
-                              <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-[10px] font-bold rounded-full flex items-center gap-1">
+                              <span className="px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-[10px] font-bold rounded-full flex items-center gap-0.5">
                                 <Clock className="w-2.5 h-2.5" /> Menunggu
                               </span>
                             )}
                             {isProcessing && (
-                              <span className="px-2 py-0.5 bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 text-[10px] font-bold rounded-full flex items-center gap-1">
+                              <span className="px-1.5 py-0.5 bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 text-[10px] font-bold rounded-full flex items-center gap-0.5">
                                 <Truck className="w-2.5 h-2.5" /> Diantar
                               </span>
                             )}
                             {isCompleted && (
-                              <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-bold rounded-full flex items-center gap-1">
+                              <span className="px-1.5 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-bold rounded-full flex items-center gap-0.5">
                                 <CheckCircle className="w-2.5 h-2.5" /> Selesai
                               </span>
                             )}
                             {isCancelled && (
-                              <span className="px-2 py-0.5 bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 text-[10px] font-bold rounded-full">
+                              <span className="px-1.5 py-0.5 bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 text-[10px] font-bold rounded-full">
                                 Batal
                               </span>
                             )}
 
-                            <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                            <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
                               order.payment_status === 'paid'
                                 ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300'
                                 : order.payment_status === 'waiting_confirmation'
@@ -1158,33 +1212,31 @@ export default function TugasKurir() {
                           </div>
                         </div>
 
-                        {/* 2. SANTRI, ROOM & CANTEEN WA INFO */}
-                        <div className="text-xs space-y-0.5">
-                          <div className="flex items-center justify-between gap-1">
+                        {/* 2. SANTRI, ROOM & CANTEEN INFO */}
+                        <div className="text-xs space-y-1">
+                          <div className="flex items-center justify-between gap-1.5">
                             <span className="font-bold text-gray-900 dark:text-white truncate flex items-center gap-1">
-                              <User className="w-3 h-3 text-gray-400 shrink-0" />
-                              {santriName}
+                              <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                              <span className="truncate">{santriName}</span>
                             </span>
-                            <span className="text-[11px] text-gray-500 font-medium shrink-0">
-                              📍 {order.user?.santri_room || order.delivery_location || 'Kamar Santri'}
+                            <span className="text-xs sm:text-sm font-extrabold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 px-2 py-0.5 rounded-lg border border-rose-200 dark:border-rose-800 shrink-0 flex items-center gap-1 shadow-2xs">
+                              <span>📍</span>
+                              <span className="font-black">{santriRoom || 'Kamar Santri'}</span>
                             </span>
                           </div>
 
-                          <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-gray-500 dark:text-gray-400 pt-0.5">
                             <span className="truncate">Wali: {waliName}</span>
-                            {order.canteen?.whatsapp_number && (
-                              <button
-                                onClick={() => handleContact(order.canteen?.whatsapp_number, order.canteen?.name)}
-                                className="text-green-600 dark:text-green-400 font-bold hover:underline flex items-center gap-0.5 shrink-0"
-                              >
-                                <MessageCircle className="w-3 h-3" /> WA Kantin
-                              </button>
+                            {(santriLevel || santriClass) && (
+                              <span className="inline-flex items-center px-1.5 py-0.2 rounded-md bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 text-[10px] font-bold">
+                                🎓 {santriLevel ? `${santriLevel} ` : ''}{santriClass ? `Kelas ${santriClass}` : ''}
+                              </span>
                             )}
                           </div>
                         </div>
 
                         {/* 3. COMPACT FOOD ITEMS BOX */}
-                        <div className="bg-green-50/30 dark:bg-gray-800/50 rounded-xl p-2.5 space-y-1 text-xs border border-green-100/60 dark:border-gray-800">
+                        <div className="bg-green-50/30 dark:bg-gray-800/50 rounded-lg p-2 space-y-0.5 text-xs border border-green-100/60 dark:border-gray-800">
                           {order.custom_notes && (
                             <div className="text-[11px] font-medium text-amber-800 dark:text-amber-300 pb-0.5 border-b border-amber-100 dark:border-amber-900/40">
                               ✨ {order.custom_notes}
@@ -1216,7 +1268,7 @@ export default function TugasKurir() {
                         {((order.proof_of_purchase && order.proof_of_purchase.length > 0) ||
                           (order.proof_of_delivery && order.proof_of_delivery.length > 0) ||
                           (order.proof_of_payment && order.proof_of_payment.length > 0)) && (
-                          <div className="flex gap-1.5 flex-wrap pt-0.5">
+                          <div className="flex gap-1 flex-wrap pt-0.5">
                             {order.proof_of_purchase && order.proof_of_purchase.length > 0 && (
                               <button
                                 onClick={() => {
@@ -1225,7 +1277,7 @@ export default function TugasKurir() {
                                     : [getStorageUrl(order.proof_of_purchase)];
                                   setSelectedProofs(proofs);
                                 }}
-                                className="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-800"
+                                className="px-1.5 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-800"
                               >
                                 📄 Struk ({Array.isArray(order.proof_of_purchase) ? order.proof_of_purchase.length : 1})
                               </button>
@@ -1239,7 +1291,7 @@ export default function TugasKurir() {
                                     : [getStorageUrl(order.proof_of_delivery)];
                                   setSelectedProofs(proofs);
                                 }}
-                                className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-blue-200 dark:border-blue-800"
+                                className="px-1.5 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-blue-200 dark:border-blue-800"
                               >
                                 📷 Antar ({Array.isArray(order.proof_of_delivery) ? order.proof_of_delivery.length : 1})
                               </button>
@@ -1253,7 +1305,7 @@ export default function TugasKurir() {
                                     : [getStorageUrl(order.proof_of_payment)];
                                   setSelectedProofs(proofs);
                                 }}
-                                className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-gray-200 dark:border-gray-700"
+                                className="px-1.5 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-gray-200 dark:border-gray-700"
                               >
                                 💳 Transfer
                               </button>
@@ -1263,7 +1315,7 @@ export default function TugasKurir() {
                       </div>
 
                       {/* 5. FOOTER: TOTAL BILL & COURIER ACTIONS */}
-                      <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80 space-y-2">
+                      <div className="pt-1.5 border-t border-gray-200 dark:border-gray-700/80 space-y-1.5">
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0">
                             <span className="text-sm font-black text-green-700 dark:text-green-400 block leading-tight">
@@ -1278,7 +1330,7 @@ export default function TugasKurir() {
                           <div className="flex items-center gap-1 shrink-0">
                             <button
                               onClick={() => handlePrintSingleReceipt(order)}
-                              className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold transition-colors"
+                              className="p-1 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold transition-colors"
                               title="Cetak Struk Thermal / A4"
                             >
                               <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
@@ -1287,7 +1339,7 @@ export default function TugasKurir() {
                             {isCompleted && (
                               <button
                                 onClick={() => setConfirmCancelOrder(order)}
-                                className="p-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800"
+                                className="p-1 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800"
                                 title="Batalkan Pesanan yang Sudah Selesai Ini"
                               >
                                 <X className="w-3.5 h-3.5" />
@@ -1298,26 +1350,26 @@ export default function TugasKurir() {
 
                         {/* Courier Operational Action Buttons */}
                         {!isCompleted && !isCancelled && (
-                          <div className="space-y-1.5 pt-0.5">
+                          <div className="space-y-1 pt-0.5">
                             {/* If order is pending or not yet assigned to this courier */}
                             {(!order.courier_id || (isPending && !isMyTask)) ? (
                               <button
                                 onClick={() => takeOrderMutation.mutate(order.id)}
                                 disabled={takeOrderMutation.isPending}
-                                className="w-full py-2 px-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-50"
+                                className="w-full py-1.5 px-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1 shadow-xs disabled:opacity-50"
                               >
                                 {takeOrderMutation.isPending ? (
                                   <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent"></div>
                                 ) : (
                                   <>
                                     <Truck className="w-3.5 h-3.5" />
-                                    Ambil & Antar Pesanan Ini
+                                    Ambil & Antar Pesanan
                                   </>
                                 )}
                               </button>
                             ) : (
                               <>
-                                <div className="grid grid-cols-2 gap-1.5">
+                                <div className="grid grid-cols-2 gap-1">
                                   <button 
                                     onClick={() => {
                                       setSelectedOrder(order);
@@ -1325,7 +1377,7 @@ export default function TugasKurir() {
                                       setPhotoFiles([]);
                                       setPhotoPreviews([]);
                                     }}
-                                    className="py-1.5 px-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center gap-1 shadow-2xs"
+                                    className="py-1.5 px-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1 shadow-2xs"
                                   >
                                     <Camera className="w-3 h-3" />
                                     + Struk Toko
@@ -1338,7 +1390,7 @@ export default function TugasKurir() {
                                       setPhotoFiles([]);
                                       setPhotoPreviews([]);
                                     }}
-                                    className="py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center gap-1 shadow-2xs"
+                                    className="py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1 shadow-2xs"
                                   >
                                     <Upload className="w-3 h-3" />
                                     + Bukti Antar
@@ -1348,7 +1400,7 @@ export default function TugasKurir() {
                                 <button 
                                   onClick={() => setConfirmCompleteOrder(order)}
                                   disabled={markCompleteMutation.isPending}
-                                  className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-50"
+                                  className="w-full py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1 shadow-xs disabled:opacity-50"
                                 >
                                   {markCompleteMutation.isPending ? (
                                     <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent"></div>
@@ -1385,7 +1437,7 @@ export default function TugasKurir() {
             </div>
 
             {groupedByCanteen.length === 0 ? (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 text-center border border-gray-100 dark:border-gray-800 shadow-xs">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 text-center border border-gray-200 dark:border-gray-700 shadow-xs">
                 <Store className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
                 <p className="text-gray-500 dark:text-gray-400 font-semibold text-sm">Tidak ada data toko/pesanan pada filter saat ini.</p>
               </div>
@@ -1396,7 +1448,7 @@ export default function TugasKurir() {
                 return (
                   <div 
                     key={canteen.canteenId}
-                    className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs overflow-hidden transition-all"
+                    className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xs overflow-hidden transition-all"
                   >
                     {/* CANTEEN HEADER BAR */}
                     <div 
@@ -1493,7 +1545,7 @@ export default function TugasKurir() {
 
                     {/* EXPANDED CONTENT: SUMMARY OF FOOD TO PICK UP + WHO ORDERED WHAT */}
                     {isExpanded && (
-                      <div className="p-3.5 sm:p-4 bg-gray-50/70 dark:bg-gray-800/40 border-t border-gray-100 dark:border-gray-800 space-y-4">
+                      <div className="p-3.5 sm:p-4 bg-gray-50/70 dark:bg-gray-800/40 border-t border-gray-200 dark:border-gray-700 space-y-4">
                         
                         {/* 1. REKAP TOTAL MAKANAN DI TOKO INI */}
                         <div className="bg-white dark:bg-gray-900 p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs space-y-2">
@@ -1501,7 +1553,7 @@ export default function TugasKurir() {
                             🍽️ Total Makanan yang Harus Diambil di {canteen.canteenName}:
                           </h4>
 
-                          <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                          <div className="divide-y divide-gray-200 dark:divide-gray-700">
                             {canteen.itemRecapList.map((item, idx) => (
                               <div key={idx} className="py-2 first:pt-1 last:pb-0 flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-2">
@@ -1519,7 +1571,7 @@ export default function TugasKurir() {
                             ))}
                           </div>
 
-                          <div className="pt-2.5 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs font-bold">
+                          <div className="pt-2.5 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-xs font-bold">
                             <span className="text-gray-600 dark:text-gray-400">Total Nilai Produk:</span>
                             <span className="text-green-600 dark:text-green-400 text-sm">
                               Rp {formatRupiah(canteen.totalCost)}
@@ -1604,7 +1656,7 @@ export default function TugasKurir() {
                                     </div>
 
                                     {/* Customer's items from this store */}
-                                    <div className="bg-gray-50 dark:bg-gray-800/60 p-2.5 rounded-lg space-y-1.5 border border-gray-100 dark:border-gray-750">
+                                    <div className="bg-gray-50 dark:bg-gray-800/60 p-2.5 rounded-lg space-y-1.5 border border-gray-200 dark:border-gray-750">
                                       {cust.items.map((it, idx) => (
                                         <div key={idx} className="flex justify-between items-start text-xs">
                                           <div>
@@ -1625,7 +1677,7 @@ export default function TugasKurir() {
                                     </div>
 
                                     {/* Order IDs and Actions */}
-                                    <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800 text-xs flex-wrap gap-2">
+                                    <div className="flex items-center justify-between pt-1 border-t border-gray-200 dark:border-gray-700 text-xs flex-wrap gap-2">
                                       <div className="flex items-center gap-1.5 flex-wrap">
                                         <span className="text-[11px] text-gray-500 font-medium">Order:</span>
                                         {cust.orders.map(o => (
@@ -1731,7 +1783,7 @@ export default function TugasKurir() {
                                     </div>
 
                                     {/* Customer's items from this store */}
-                                    <div className="bg-gray-50 dark:bg-gray-800/60 p-2.5 rounded-lg space-y-1.5 border border-gray-100 dark:border-gray-750">
+                                    <div className="bg-gray-50 dark:bg-gray-800/60 p-2.5 rounded-lg space-y-1.5 border border-gray-200 dark:border-gray-750">
                                       {cust.items.map((it, idx) => (
                                         <div key={idx} className="flex justify-between items-start text-xs">
                                           <div>
@@ -1752,7 +1804,7 @@ export default function TugasKurir() {
                                     </div>
 
                                     {/* Order IDs and Actions */}
-                                    <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800 text-xs flex-wrap gap-2">
+                                    <div className="flex items-center justify-between pt-1 border-t border-gray-200 dark:border-gray-700 text-xs flex-wrap gap-2">
                                       <div className="flex items-center gap-1.5 flex-wrap">
                                         <span className="text-[11px] text-gray-500 font-medium">Order:</span>
                                         {cust.orders.map(o => (
@@ -1822,7 +1874,7 @@ export default function TugasKurir() {
       {selectedOrder && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl my-auto">
-            <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
                 Upload Foto Bukti #{selectedOrder.id}
               </h3>

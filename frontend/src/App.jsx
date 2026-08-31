@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from './store/authStore';
+import { useThemeStore } from './store/themeStore';
 
 // Pages & Layouts
 import Home from './pages/mobile/Home';
@@ -33,6 +34,7 @@ import TugasKurir from './pages/mobile/TugasKurir';
 import Keranjang from './pages/mobile/Keranjang';
 
 import RoleGuard from './components/RoleGuard';
+import GlobalLoadingBar from './components/common/GlobalLoadingBar';
 import { ROLES } from './config/roles';
 
 const queryClient = new QueryClient();
@@ -40,6 +42,7 @@ const queryClient = new QueryClient();
 const rootRoute = createRootRoute({
   component: () => (
     <>
+      <GlobalLoadingBar />
       <Outlet />
     </>
   ),
@@ -289,6 +292,12 @@ const router = createRouter({
 });
 
 function App() {
+  const initTheme = useThemeStore((state) => state.initTheme);
+
+  React.useEffect(() => {
+    initTheme();
+  }, [initTheme]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />

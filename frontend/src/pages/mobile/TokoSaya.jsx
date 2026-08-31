@@ -195,7 +195,7 @@ export default function TokoSaya() {
         
         <div className="p-4 max-w-lg mx-auto space-y-3">
           {!canteensList || canteensList.length === 0 ? (
-             <div className="text-center py-10 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm mt-4">
+             <div className="text-center py-10 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm mt-4">
                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
                  <Store className="w-8 h-8 text-gray-400" />
                </div>
@@ -211,7 +211,7 @@ export default function TokoSaya() {
              </div>
           ) : (
             canteensList.map(c => (
-              <div key={c.id} className="flex flex-col p-4 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl shadow-sm gap-3 relative">
+              <div key={c.id} className="flex flex-col p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm gap-3 relative">
                 
                 {/* Toko Info (Click to enter) */}
                 <div onClick={() => { setActiveCanteenId(c.id); setIsStoreSelected(true); }} className="flex items-center justify-between cursor-pointer group">
@@ -238,7 +238,7 @@ export default function TokoSaya() {
                   <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-green-500 transition-colors" />
                 </div>
 
-                  <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700">
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${c.is_open ? 'bg-green-500' : 'bg-red-500'}`}></div>
                     <span className={`text-xs font-medium ${c.is_open ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
@@ -278,7 +278,7 @@ export default function TokoSaya() {
 
       {/* STORE INFO CARD (Overlapping banner) */}
       <div className="px-4 md:px-8 max-w-7xl mx-auto -mt-12 relative z-10">
-        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-md p-4 md:p-6 border border-gray-100 dark:border-gray-800">
+        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-md p-4 md:p-6 border border-green-300/80 dark:border-green-800">
           <div className="flex items-center justify-between mb-2">
             <div className="flex-1">
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white leading-tight">
@@ -318,15 +318,15 @@ export default function TokoSaya() {
               4.9 <span className="text-gray-400 ml-1 font-normal">(99+ Penilaian)</span>
             </div>
             <div className="flex items-center">
-              <span className="mr-1 text-gray-400">⏱</span>
-              ± 15 Menit
+              <span className="text-green-500 mr-1">📍</span>
+              {canteen?.category ? `Zona ${canteen.category.toUpperCase()}` : 'Zona Belum Diatur'}
             </div>
           </div>
         </div>
       </div>
 
       {/* TABS */}
-      <div className="mt-4 bg-white dark:bg-gray-900 sticky top-0 z-20 border-b border-gray-100 dark:border-gray-800">
+      <div className="mt-4 bg-white dark:bg-gray-900 sticky top-0 z-20 border-b border-gray-200 dark:border-gray-700">
         <div className="flex overflow-x-auto hide-scrollbar px-2">
           {['Semua Menu', 'Paling Laris'].map(tab => (
             <button 
@@ -347,7 +347,7 @@ export default function TokoSaya() {
       {/* PRODUCT LIST */}
       <div className="mt-4 px-4 md:px-8 max-w-7xl mx-auto">
         {isLoadingProducts && !productsRes ? (
-          <div className="space-y-5 bg-white dark:bg-gray-900 p-4 md:p-6 rounded-xl border border-gray-100 dark:border-gray-800">
+          <div className="space-y-5 bg-white dark:bg-gray-900 p-4 md:p-6 rounded-xl border border-green-300/80 dark:border-green-800">
             {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
           </div>
         ) : products.length === 0 ? (
@@ -356,11 +356,11 @@ export default function TokoSaya() {
             <p>Belum ada menu yang ditambahkan.</p>
           </div>
         ) : (
-          <div className="space-y-5 bg-white dark:bg-gray-900 p-4 md:p-6 rounded-xl border border-gray-100 dark:border-gray-800">
+          <div className="space-y-5 bg-white dark:bg-gray-900 p-4 md:p-6 rounded-xl border border-green-300/80 dark:border-green-800">
             {products.map((product) => (
               <div key={product.id} className="flex gap-4 group relative border-b border-gray-50 dark:border-gray-800/50 pb-5">
                 {/* Product Image */}
-                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0 border border-gray-100 dark:border-gray-800 overflow-hidden relative">
+                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0 border border-gray-200 dark:border-gray-700 overflow-hidden relative">
                    {product.image ? (
                      <img src={getStorageUrl(product.image)} alt={product.name} className="w-full h-full object-cover" />
                    ) : (

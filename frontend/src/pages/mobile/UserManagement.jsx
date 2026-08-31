@@ -235,7 +235,7 @@ export default function UserManagement() {
   return (
     <div className="space-y-6 animate-fade-in-up pb-24">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-gray-900 p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-gray-900 p-4 sm:p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             Manajemen User & Akun
@@ -254,7 +254,7 @@ export default function UserManagement() {
       </div>
 
       {/* Action Bar & Server-Side Filters */}
-      <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
+      <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-green-300/80 dark:border-green-800/80 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
         {/* Search Input */}
         <div className="relative w-full sm:w-80">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -332,141 +332,145 @@ export default function UserManagement() {
       </div>
 
       {/* Users List (Optimized Cards with Santri Details) */}
-      <div className="space-y-3">
+      <div>
         {isLoading ? (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl p-12 text-center border border-gray-100 dark:border-gray-800 shadow-sm">
-            <div className="animate-spin rounded-full h-8 w-8 border-2 border-green-600 border-t-transparent mx-auto mb-3"></div>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 text-center border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div className="animate-spin rounded-full h-7 w-7 border-2 border-green-600 border-t-transparent mx-auto mb-2"></div>
             <p className="text-gray-500 text-xs font-semibold">Memuat data pengguna...</p>
           </div>
         ) : users.length > 0 ? (
-          users.map((user) => {
-            const isUserSantri = user.role === ROLES.USER || (!user.role && (user.santri_name || user.santri_room));
-            
-            return (
-              <div 
-                key={user.id} 
-                className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 shadow-xs hover:border-green-200 dark:hover:border-green-800 transition-all space-y-3"
-              >
-                {/* User Header */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center space-x-3 min-w-0">
-                    <div className="flex-shrink-0 h-10 w-10 rounded-2xl bg-green-100 dark:bg-green-900/50 flex items-center justify-center text-green-700 dark:text-green-300 font-extrabold text-sm uppercase shadow-xs">
-                      {user.name?.charAt(0) || 'U'}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate">
-                          {user.name}
-                        </h3>
-                        <span className="text-[10px] text-gray-400 font-mono">#{user.id}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2.5">
+            {users.map((user) => {
+              const isUserSantri = user.role === ROLES.USER || (!user.role && (user.santri_name || user.santri_room));
+              
+              return (
+                <div 
+                  key={user.id} 
+                  className="bg-white dark:bg-gray-900 rounded-2xl p-3 sm:p-3.5 border border-green-300/90 dark:border-green-800 shadow-sm hover:border-green-500 dark:hover:border-green-600 hover:shadow-md transition-all space-y-2 flex flex-col justify-between"
+                >
+                  <div className="space-y-2">
+                    {/* User Header */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        <div className="flex-shrink-0 h-9 w-9 rounded-xl bg-green-100 dark:bg-green-900/50 flex items-center justify-center text-green-700 dark:text-green-300 font-extrabold text-xs uppercase shadow-xs">
+                          {user.name?.charAt(0) || 'U'}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h3 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white truncate">
+                              {user.name}
+                            </h3>
+                            <span className="text-[10px] text-gray-400 font-mono">#{user.id}</span>
+                          </div>
+                          <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                            {user.email || '-'}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                        {user.email || '-'}
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    {getRoleBadge(user.role)}
-                    {user.role === ROLES.KURIR && (
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border shadow-xs ${user.penalty_points > 0 ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800'}`}>
-                        SP {user.penalty_points || 0}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        {getRoleBadge(user.role)}
+                        {user.role === ROLES.KURIR && (
+                          <span className={`px-2 py-0.2 rounded-full text-[9px] font-bold border shadow-xs ${user.penalty_points > 0 ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800'}`}>
+                            SP {user.penalty_points || 0}
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
-                {/* Santri & Contact Details (If available) */}
-                {(user.santri_name || user.santri_room || user.santri_class || user.phone) && (
-                  <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800 text-xs grid grid-cols-1 sm:grid-cols-2 gap-2 text-gray-700 dark:text-gray-300">
-                    {user.santri_name && (
-                      <div className="flex items-center gap-1.5 truncate">
-                        <GraduationCap className="w-3.5 h-3.5 text-green-600 shrink-0" />
-                        <span className="text-gray-500 font-medium">Santri:</span>
-                        <strong className="text-gray-900 dark:text-white truncate">{user.santri_name}</strong>
+                    {/* Santri & Contact Details (If available) */}
+                    {(user.santri_name || user.santri_room || user.santri_class || user.phone) && (
+                      <div className="bg-gray-50/80 dark:bg-gray-800/60 p-2 rounded-xl border border-green-200/70 dark:border-green-900/50 text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-gray-700 dark:text-gray-300">
+                        {user.santri_name && (
+                          <div className="flex items-center gap-1.5 truncate">
+                            <GraduationCap className="w-3 h-3 text-green-600 shrink-0" />
+                            <span className="text-gray-500 font-medium text-[10px]">Santri:</span>
+                            <strong className="text-gray-900 dark:text-white truncate">{user.santri_name}</strong>
+                          </div>
+                        )}
+                        {user.santri_room && (
+                          <div className="flex items-center gap-1.5 truncate">
+                            <Home className="w-3 h-3 text-blue-600 shrink-0" />
+                            <span className="text-gray-500 font-medium text-[10px]">Asrama:</span>
+                            <strong className="text-gray-900 dark:text-white truncate">{user.santri_room}</strong>
+                          </div>
+                        )}
+                        {user.santri_class && (
+                          <div className="flex items-center gap-1.5 truncate">
+                            <BookOpen className="w-3 h-3 text-purple-600 shrink-0" />
+                            <span className="text-gray-500 font-medium text-[10px]">Kelas:</span>
+                            <span>{user.santri_class} {user.santri_level ? `(${user.santri_level})` : ''}</span>
+                          </div>
+                        )}
+                        {user.phone && (
+                          <div className="flex items-center gap-1.5 truncate">
+                            <Phone className="w-3 h-3 text-amber-600 shrink-0" />
+                            <span className="text-gray-500 font-medium text-[10px]">No. HP:</span>
+                            <a 
+                              href={`https://wa.me/${user.phone.replace(/^0/, '62')}`} 
+                              target="_blank" 
+                              rel="noreferrer"
+                              className="text-green-600 hover:underline font-semibold"
+                            >
+                              {user.phone}
+                            </a>
+                          </div>
+                        )}
                       </div>
                     )}
-                    {user.santri_room && (
-                      <div className="flex items-center gap-1.5 truncate">
-                        <Home className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                        <span className="text-gray-500 font-medium">Asrama:</span>
-                        <strong className="text-gray-900 dark:text-white truncate">{user.santri_room}</strong>
-                      </div>
-                    )}
-                    {user.santri_class && (
-                      <div className="flex items-center gap-1.5 truncate">
-                        <BookOpen className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                        <span className="text-gray-500 font-medium">Kelas:</span>
-                        <span>{user.santri_class} {user.santri_level ? `(${user.santri_level})` : ''}</span>
-                      </div>
-                    )}
-                    {user.phone && (
-                      <div className="flex items-center gap-1.5 truncate">
-                        <Phone className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                        <span className="text-gray-500 font-medium">No. HP:</span>
-                        <a 
-                          href={`https://wa.me/${user.phone.replace(/^0/, '62')}`} 
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="text-green-600 hover:underline font-semibold"
-                        >
-                          {user.phone}
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                {/* Card Footer: Registered date & Action buttons */}
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800 text-xs">
-                  <div className="text-[11px] text-gray-400">
-                    Terdaftar: {new Date(user.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </div>
                   
-                  <div className="flex items-center gap-1.5">
-                    {user.role !== ROLES.ADMIN && (
+                  {/* Card Footer: Registered date & Action buttons */}
+                  <div className="flex items-center justify-between pt-1.5 border-t border-gray-200 dark:border-gray-700 text-xs">
+                    <div className="text-[10px] text-gray-400">
+                      {new Date(user.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </div>
+                    
+                    <div className="flex items-center gap-1">
+                      {user.role !== ROLES.ADMIN && (
+                        <button 
+                          onClick={() => handleImpersonate(user)}
+                          className="px-2 py-0.5 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors" 
+                          title="Login Sebagai Pengguna Ini"
+                        >
+                          <LogIn className="w-3 h-3" />
+                          <span>Login As</span>
+                        </button>
+                      )}
+                      {user.role === ROLES.KURIR && (
+                        <button 
+                          onClick={() => {
+                            setSpFormData({ id: user.id, penalty_points: user.penalty_points || 0 });
+                            setIsSPModalOpen(true);
+                          }}
+                          className="p-1 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg transition-colors" 
+                          title="Kelola SP Kurir"
+                        >
+                          <AlertTriangle className="w-3 h-3" />
+                        </button>
+                      )}
                       <button 
-                        onClick={() => handleImpersonate(user)}
-                        className="px-2.5 py-1 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors" 
-                        title="Login Sebagai Pengguna Ini"
+                        onClick={() => openEditModal(user)}
+                        className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors" 
+                        title="Edit Data User"
                       >
-                        <LogIn className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Login As</span>
+                        <Edit2 className="w-3 h-3" />
                       </button>
-                    )}
-                    {user.role === ROLES.KURIR && (
                       <button 
-                        onClick={() => {
-                          setSpFormData({ id: user.id, penalty_points: user.penalty_points || 0 });
-                          setIsSPModalOpen(true);
-                        }}
-                        className="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg transition-colors" 
-                        title="Kelola SP Kurir"
+                        onClick={() => handleDelete(user)}
+                        className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg transition-colors" 
+                        title="Hapus User"
                       >
-                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3 h-3" />
                       </button>
-                    )}
-                    <button 
-                      onClick={() => openEditModal(user)}
-                      className="p-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 border border-gray-200 dark:border-gray-700 rounded-lg transition-colors" 
-                      title="Edit User"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(user)}
-                      className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 border border-gray-200 dark:border-gray-700 rounded-lg transition-colors" 
-                      title="Hapus User"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         ) : (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl p-12 text-center border border-gray-100 dark:border-gray-800 shadow-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-12 text-center border border-gray-200 dark:border-gray-700 shadow-sm">
             <User className="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600 mb-2" />
             <h3 className="text-sm font-bold text-gray-900 dark:text-white">Tidak ada pengguna ditemukan</h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -478,7 +482,7 @@ export default function UserManagement() {
 
       {/* PAGINATION CONTROLS BAR */}
       {lastPage > 1 && (
-        <div className="bg-white dark:bg-gray-900 p-3 sm:p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="bg-white dark:bg-gray-900 p-3 sm:p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-xs text-gray-500 font-medium">
             Halaman <strong>{currentPage}</strong> dari <strong>{lastPage}</strong>
           </div>
@@ -545,8 +549,8 @@ export default function UserManagement() {
       {/* Modal CRUD User (Add & Edit) */}
       {isModalOpen && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 my-auto border border-gray-100 dark:border-gray-800 max-h-[92vh] flex flex-col">
-            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/80 dark:bg-gray-800/50">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 my-auto border border-gray-200 dark:border-gray-700 max-h-[92vh] flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50/80 dark:bg-gray-800/50">
               <h3 className="font-bold text-base sm:text-lg text-gray-900 dark:text-white flex items-center gap-2">
                 {modalMode === 'add' ? 'Tambah User Baru' : 'Edit Data User'}
               </h3>
@@ -704,8 +708,8 @@ export default function UserManagement() {
       {/* SP (Penalty) Modal */}
       {isSPModalOpen && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 my-auto border border-gray-100 dark:border-gray-800">
-            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-amber-50 dark:bg-amber-900/20">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 my-auto border border-gray-200 dark:border-gray-700">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-amber-50 dark:bg-amber-900/20">
               <h3 className="font-bold text-base text-amber-900 dark:text-amber-400 flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5" /> Kelola SP Kurir
               </h3>

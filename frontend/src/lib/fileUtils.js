@@ -29,11 +29,11 @@ export const getFileType = (urlOrName = '') => {
 
 export const isImageFile = (file) => {
   if (!file) return false;
-  if (file.type && file.type.startsWith('image/') && !file.type.includes('heic') && !file.type.includes('heif')) {
+  if (file.type && file.type.startsWith('image/')) {
     return true;
   }
   const name = file.name || '';
-  return !!name.match(/\.(jpeg|jpg|png|webp|gif|svg|bmp|ico)$/i);
+  return !!name.match(/\.(jpeg|jpg|png|webp|gif|svg|bmp|ico|heic|heif)$/i);
 };
 
 export const isHeifFile = (file) => {
@@ -65,16 +65,43 @@ export const getFileNameFromPath = (path = '') => {
 };
 
 /**
- * Compress an image file using browser Canvas.
+ * Compress an image file using browser Canvas and convert HEIC/HEIF to JPEG automatically.
  * Reduces large photos (e.g. 5-15MB from phone camera) down to ~150-350KB
  * without noticeable quality loss for receipts/proofs/photos.
  *
  * @param {File} file
- * @param {Object} options - { maxWidth: 1600, maxHeight: 1600, quality: 0.8, outputType: 'image/jpeg' }
+ * @param {Object} options - { maxWidth: 1400, maxHeight: 1400, quality: 0.75, outputType: 'image/jpeg' }
  * @returns {Promise<File>}
  */
-export const compressImageFile = async (file, options = {}) => {
-  if (!file || !isImageFile(file)) {
+export const compressImageFile = async (rawFile, options = {}) => {
+  if (!rawFile) return rawFile;
+
+  let file = rawFile;
+
+  // 1. Auto-Convert Apple iPhone HEIC/HEIF to standard JPEG (Dynamic import for tiny initial bundle)
+  if (isHeifFile(file)) {
+    try {
+      const heic2anyModule = await import('heic2any');
+      const heic2any = heic2anyModule.default || heic2anyModule;
+      const convertedBlob = await heic2any({
+        blob: file,
+        toType: 'image/jpeg',
+        quality: options.quality !== undefined ? options.quality : 0.8,
+      });
+
+      const blobResult = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+      const baseName = (file.name || 'photo').replace(/\.(heic|heif)$/i, '');
+      file = new File([blobResult], `${baseName}.jpg`, {
+        type: 'image/jpeg',
+        lastModified: Date.now(),
+      });
+      file.originalSize = rawFile.size;
+    } catch (heicErr) {
+      console.warn('HEIC to JPEG conversion warning:', heicErr);
+    }
+  }
+
+  if (!isImageFile(file)) {
     return file;
   }
 

@@ -429,11 +429,26 @@ class OrderController extends Controller
     public function userOrders(Request $request)
     {
         $user = $request->user();
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+        $status = $request->query('status');
 
-        $orders = Order::where('user_id', $user->id)
+        $query = Order::where('user_id', $user->id)
             ->with(['canteen', 'items.product', 'courier'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+            ->orderBy('created_at', 'desc');
+
+        if ($startDate && $endDate) {
+            $query->whereBetween('created_at', [
+                $startDate . ' 00:00:00',
+                $endDate . ' 23:59:59'
+            ]);
+        }
+
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $orders = $query->get();
 
         return response()->json($orders);
     }
@@ -815,7 +830,7 @@ class OrderController extends Controller
     {
         $request->validate([
             'proof_of_payment' => 'required|array|min:1|max:5',
-            'proof_of_payment.*' => 'required|file|mimes:jpeg,png,jpg,webp,heic,heif,pdf|max:10240',
+            'proof_of_payment.*' => 'required|file|max:15360',
         ]);
 
         $order = DB::transaction(function () use ($request, $id) {

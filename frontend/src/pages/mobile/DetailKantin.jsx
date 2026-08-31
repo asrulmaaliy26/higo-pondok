@@ -13,7 +13,7 @@ export default function DetailKantin() {
   const { id } = useParams({ strict: false });
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
-  const { addItem, removeItem, getCanteenItems } = useCartStore();
+  const { addItem, removeItem, getCanteenItems, getTotalItems } = useCartStore();
 
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,7 +48,12 @@ export default function DetailKantin() {
   // Cart from global store for this specific canteen
   const canteenCart = getCanteenItems(canteen.id);
   const cartItems = Object.values(canteenCart);
-  const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const canteenItemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const canteenSubtotal = cartItems.reduce((sum, item) => sum + (parseFloat(item.product?.price || 0) * item.quantity), 0);
+  
+  const allTotalItems = getTotalItems();
+  const totalItems = allTotalItems;
+  const otherStoresItemsCount = Math.max(0, allTotalItems - canteenItemsCount);
 
   const handleAddToCart = (product) => {
     const current = canteenCart[String(product.id)];
@@ -115,7 +120,7 @@ export default function DetailKantin() {
       </div>
 
       {/* CANTEEN INFO */}
-      <div className="bg-white dark:bg-gray-900 px-4 py-4 border-b border-gray-100 dark:border-gray-800">
+      <div className="bg-white dark:bg-gray-900 px-4 py-4 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto">
           {canteen.description && (
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{canteen.description}</p>
@@ -136,7 +141,7 @@ export default function DetailKantin() {
       </div>
 
       {/* SEARCH */}
-      <div className="px-4 py-3 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
+      <div className="px-4 py-3 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -181,7 +186,7 @@ export default function DetailKantin() {
               return (
                 <div 
                   key={product.id} 
-                  className="flex gap-4 bg-white dark:bg-gray-900 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+                  className="flex gap-4 bg-white dark:bg-gray-900 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
                   onClick={() => setSelectedProduct(product)}
                 >
                   {/* Product Image */}
@@ -251,27 +256,48 @@ export default function DetailKantin() {
       </div>
 
       {/* FLOATING CART SUMMARY */}
-      {totalItems > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 shadow-[0_-4px_15px_rgba(0,0,0,0.05)]">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
-                  <ShoppingCart className="w-6 h-6" />
+      {allTotalItems > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 p-3.5 sm:p-4 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="relative shrink-0">
+                <div className="w-11 h-11 sm:w-12 sm:h-12 bg-emerald-100 dark:bg-emerald-900/50 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white dark:border-gray-900">
-                  {totalItems}
+                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-4.5 flex items-center justify-center rounded-full px-1 border-2 border-white dark:border-gray-900">
+                  {allTotalItems}
                 </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{totalItems} item dari toko ini</p>
-                <p className="font-bold text-sm text-gray-900 dark:text-white">+ item dari toko lain</p>
+              <div className="min-w-0">
+                {canteenItemsCount > 0 ? (
+                  <>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {canteenItemsCount} item di toko ini (Rp {canteenSubtotal.toLocaleString('id-ID')})
+                    </p>
+                    {otherStoresItemsCount > 0 ? (
+                      <p className="font-bold text-xs sm:text-sm text-emerald-700 dark:text-emerald-400 truncate">
+                        + {otherStoresItemsCount} item di toko lain
+                      </p>
+                    ) : (
+                      <p className="font-bold text-xs sm:text-sm text-gray-900 dark:text-white">
+                        Total: Rp {canteenSubtotal.toLocaleString('id-ID')}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Keranjang Aktif</p>
+                    <p className="font-bold text-xs sm:text-sm text-emerald-700 dark:text-emerald-400">
+                      {otherStoresItemsCount} item di toko lain
+                    </p>
+                  </>
+                )}
               </div>
             </div>
             
             <button 
               onClick={handleGoToCart}
-              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold transition-colors shadow-lg shadow-green-600/30 flex items-center gap-2"
+              className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold transition-all shadow-md shadow-emerald-600/30 flex items-center gap-2 shrink-0 text-xs sm:text-sm"
             >
               <ShoppingCart className="w-4 h-4" />
               Lihat Keranjang
@@ -322,14 +348,14 @@ export default function DetailKantin() {
                 Rp {selectedProduct.price?.toLocaleString()}
               </div>
               
-              <div className="border-t border-gray-100 dark:border-gray-800 pt-4 mb-6">
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mb-6">
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Deskripsi Produk</h3>
                 <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-line">
                   {selectedProduct.description || 'Tidak ada deskripsi untuk produk ini.'}
                 </p>
               </div>
               
-              <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Kantin Penyedia</h3>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-950 flex items-center justify-center text-green-600">
@@ -345,7 +371,7 @@ export default function DetailKantin() {
           </div>
           
           {/* Bottom Action Bar */}
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between shadow-[0_-4px_15px_rgba(0,0,0,0.05)]">
+          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-[0_-4px_15px_rgba(0,0,0,0.05)]">
             <div className="max-w-3xl mx-auto w-full flex items-center justify-between gap-4">
               <div className="flex flex-col">
                 <span className="text-xs text-gray-500">Total Produk Ini</span>
@@ -389,7 +415,7 @@ export default function DetailKantin() {
       {showCustomModal && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl my-auto">
-            <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Pesanan Khusus / Titip Beli</h3>
               <button onClick={() => setShowCustomModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                 <X className="w-6 h-6" />

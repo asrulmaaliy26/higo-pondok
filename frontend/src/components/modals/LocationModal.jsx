@@ -21,7 +21,7 @@ export const LocationModal = ({
   return createPortal(
     <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] my-auto">
-        <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-800">
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-xl font-bold text-gray-900 dark:text-white">Lokasi Pengiriman</h3>
           <p className="text-sm text-gray-500 mt-1">Pilih lokasi pengantaran pesanan Anda</p>
         </div>
@@ -78,7 +78,7 @@ export const LocationModal = ({
           
 
           {/* Show Total dynamically in Modal */}
-          <div className="pt-3 border-t border-gray-100 dark:border-gray-800 space-y-1">
+          <div className="pt-3 border-t border-gray-200 dark:border-gray-700 space-y-1">
             <div className="flex justify-between items-center pt-2">
               <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">Total Tagihan:</span>
               <span className="text-lg font-bold text-gray-900 dark:text-white">

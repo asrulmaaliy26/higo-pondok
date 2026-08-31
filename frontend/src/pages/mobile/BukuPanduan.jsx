@@ -15,7 +15,7 @@ export default function BukuPanduan() {
   const SectionHeader = ({ id, title }) => (
     <button 
       onClick={() => toggleSection(id)}
-      className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 font-bold text-gray-900 dark:text-white text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-700"
+      className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 font-bold text-gray-900 dark:text-white text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-700"
     >
       <span>{title}</span>
       {openSection === id ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
@@ -27,7 +27,7 @@ export default function BukuPanduan() {
   return (
     <div className={`space-y-4 animate-fade-in-up pb-24 font-sans px-4 md:px-0 max-w-4xl mx-auto ${isPublicRoute ? 'pt-8' : 'mt-4'}`}>
       {isPublicRoute && (
-        <button onClick={() => window.history.back()} className="mb-4 flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-green-600 transition-colors bg-white dark:bg-gray-900 px-4 py-2 rounded-full border border-gray-200 dark:border-gray-800 shadow-sm w-fit">
+        <button onClick={() => window.history.back()} className="mb-4 flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-green-600 transition-colors bg-white dark:bg-gray-900 px-4 py-2 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm w-fit">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           Kembali
         </button>
@@ -46,7 +46,7 @@ export default function BukuPanduan() {
       <div className="space-y-2">
         <SectionHeader id="umum" title="Bagian I - VII: Informasi Umum & Layanan" />
         {openSection === 'umum' && (
-          <div className="p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 text-sm text-gray-700 dark:text-gray-300 space-y-6">
+          <div className="p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 space-y-6">
             
             <section>
               <h3 className="font-bold text-lg text-green-600 dark:text-green-400 mb-2 border-b pb-1">I. Latar Belakang</h3>
@@ -104,7 +104,7 @@ export default function BukuPanduan() {
       <div className="space-y-2">
         <SectionHeader id="santri" title="SOP Santri & Wali Santri" />
         {openSection === 'santri' && (
-          <div className="p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 text-sm text-gray-700 dark:text-gray-300 space-y-6">
+          <div className="p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 space-y-6">
               <section>
                 <h3 className="font-bold text-lg text-green-600 dark:text-green-400 mb-2 border-b pb-1">Ketentuan Umum Pemesanan</h3>
                 <ul className="list-disc pl-5 space-y-2">
@@ -147,7 +147,7 @@ export default function BukuPanduan() {
       <div className="space-y-2">
         <SectionHeader id="kantin" title="SOP Kantin Asrama & Pembayaran" />
         {openSection === 'kantin' && (
-          <div className="p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 text-sm text-gray-700 dark:text-gray-300 space-y-6">
+          <div className="p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 space-y-6">
               <section>
                 <h3 className="font-bold text-lg text-green-600 dark:text-green-400 mb-2 border-b pb-1">Pembayaran Melalui Kantin (Bab XII)</h3>
                 <ul className="list-disc pl-5 space-y-2">
@@ -177,7 +177,7 @@ export default function BukuPanduan() {
       <div className="space-y-2">
         <SectionHeader id="driver" title="SOP Driver / Ojek Hidayah Go" />
         {openSection === 'driver' && (
-          <div className="p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 text-sm text-gray-700 dark:text-gray-300 space-y-6">
+          <div className="p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 space-y-6">
               <section>
                 <h3 className="font-bold text-lg text-green-600 dark:text-green-400 mb-2 border-b pb-1">Tugas & Tanggung Jawab (Bab X)</h3>
                 <ul className="list-disc pl-5 space-y-1">
@@ -218,7 +218,7 @@ export default function BukuPanduan() {
       <div className="space-y-2">
         <SectionHeader id="admin" title="SOP Admin Pemegang HP" />
         {openSection === 'admin' && (
-          <div className="p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 text-sm text-gray-700 dark:text-gray-300 space-y-6">
+          <div className="p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 space-y-6">
               <section>
                 <h3 className="font-bold text-lg text-green-600 dark:text-green-400 mb-2 border-b pb-1">Jadwal Kerja Admin (Bab IX)</h3>
                 <ul className="list-disc pl-5 space-y-1">
@@ -264,7 +264,7 @@ export default function BukuPanduan() {
       <div className="space-y-2">
         <SectionHeader id="komplain" title="Ketentuan Komplain & Obat-obatan" />
         {openSection === 'komplain' && (
-          <div className="p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 text-sm text-gray-700 dark:text-gray-300 space-y-6">
+          <div className="p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 space-y-6">
             <section>
               <h3 className="font-bold text-lg text-green-600 dark:text-green-400 mb-2 border-b pb-1">Ketentuan Komplain (Bab XV)</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">

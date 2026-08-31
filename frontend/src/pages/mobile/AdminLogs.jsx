@@ -87,7 +87,7 @@ export default function AdminLogs() {
                     <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white dark:border-gray-900 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow">
                       <Activity className="w-5 h-5" />
                     </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800 shadow-sm">
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-bold text-gray-900 dark:text-white text-sm">{log.user?.name || 'Sistem'}</span>
                         <span className="text-[10px] text-gray-500 font-medium px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full uppercase">{log.action}</span>
@@ -115,7 +115,7 @@ export default function AdminLogs() {
               </div>
             ) : paymentLogs?.length > 0 ? (
               paymentLogs.map((log) => (
-                <div key={log.id} className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex gap-4 items-start">
+                <div key={log.id} className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 flex gap-4 items-start">
                   <div className={`p-3 rounded-xl shrink-0 ${
                     log.type === 'withdraw' ? 'bg-amber-100 text-amber-600' :
                     log.type === 'courier_fee' ? 'bg-blue-100 text-blue-600' :

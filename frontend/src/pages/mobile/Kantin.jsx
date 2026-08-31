@@ -95,7 +95,7 @@ export default function Kantin() {
 
       {/* SEARCH BAR (Overlapping) */}
       <div className="px-4 -mt-10 relative z-20 mb-6">
-        <div className="bg-white dark:bg-gray-800 rounded-full shadow-md px-4 py-3 flex items-center space-x-3 border border-gray-100 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-full shadow-md px-4 py-3 flex items-center space-x-3 border border-gray-200 dark:border-gray-700">
           <Search size={20} className="text-gray-400" />
           <input 
             type="text" 
@@ -128,7 +128,7 @@ export default function Kantin() {
         ) : (
           <div className="space-y-4">
             {Array.isArray(canteens) && canteens.map((canteen) => (
-              <Link key={canteen.id} to={`/dashboard/kantin/${canteen.id}`} className="flex bg-white dark:bg-gray-800 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-gray-700">
+              <Link key={canteen.id} to={`/dashboard/kantin/${canteen.id}`} className="flex bg-white dark:bg-gray-800 rounded-2xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
                 <div className="w-24 h-24 rounded-xl bg-gray-100 dark:bg-gray-700 overflow-hidden shrink-0 flex items-center justify-center">
                    {canteen.image ? (
                      <img src={getStorageUrl(canteen.image)} alt={canteen.name} className="w-full h-full object-cover" />

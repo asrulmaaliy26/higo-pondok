@@ -6,6 +6,26 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Higo Pondok</title>
+    <script>
+      (function() {
+        try {
+          var storage = localStorage.getItem('higo-theme-storage');
+          var theme = null;
+          if (storage) {
+            var parsed = JSON.parse(storage);
+            theme = parsed && parsed.state && parsed.state.theme;
+          }
+          if (!theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            theme = 'dark';
+          }
+          if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

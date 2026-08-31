@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from '@tanstack/react-router';
+import ThemeToggle from '../../ui/ThemeToggle';
 
 export default function TopHeader({ user, isNoTopHeaderPage }) {
   if (isNoTopHeaderPage) return null;
@@ -13,10 +14,13 @@ export default function TopHeader({ user, isNoTopHeaderPage }) {
         </h1>
       </div>
       
-      <div className="flex items-center gap-4">
-        <button className="relative p-2 text-gray-400 hover:text-gray-500">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-          <span className="absolute top-1.5 right-1.5 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Theme Mode Toggle */}
+        <ThemeToggle size="md" />
+
+        <button className="relative p-2 text-gray-400 hover:text-gray-500 dark:text-gray-400 dark:hover:text-gray-200">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          <span className="absolute top-1.5 right-1.5 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900" />
         </button>
         
         <div className="relative flex items-center gap-3 pl-4 border-l border-gray-200 dark:border-gray-700">

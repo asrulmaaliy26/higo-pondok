@@ -8,6 +8,7 @@ import api, { getStorageUrl } from '../../lib/axios';
 import { useCanteenStore } from '../../store/canteenStore';
 import { getFileType, isImageFile, isHeifFile, isPdfFile, formatFileSize, getFileNameFromPath, compressImageFiles } from '../../lib/fileUtils';
 import ThermalReceiptModal from '../../components/receipt/ThermalReceiptModal';
+import santriData from '../../data/santri.json';
 
 function getWeeksInMonth(year, month) {
   // month is 0-indexed
@@ -617,7 +618,7 @@ export default function PesananToko() {
   if (canteensList && canteensList.length === 0) {
     return (
       <div className="bg-gray-50 h-full min-h-screen p-6 flex items-center justify-center dark:bg-gray-950 font-sans">
-        <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 max-w-md w-full border border-gray-100 dark:border-gray-800 shadow-xl text-center space-y-5 animate-in zoom-in-95 duration-200">
+        <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 max-w-md w-full border border-gray-200 dark:border-gray-700 shadow-xl text-center space-y-5 animate-in zoom-in-95 duration-200">
           <div className="w-20 h-20 bg-green-100 dark:bg-green-900/40 text-green-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
             <Store className="w-10 h-10" />
           </div>
@@ -646,25 +647,52 @@ export default function PesananToko() {
     const isCancelled = order.status === 'cancelled';
     const isPaid = order.payment_status === 'paid';
     const isWaiting = order.payment_status === 'waiting_confirmation';
+    const santriName = order.user?.santri_name || order.user?.name || 'Pembeli';
+    const waliName = order.user?.name || 'Wali';
+    let santriClass = order.user?.santri_class || '';
+    let santriLevel = order.user?.santri_level || '';
+    let santriRoom = order.user?.santri_room || order.delivery_location || '';
+
+    if (santriName && santriData?.data) {
+      const sName = santriName.toLowerCase().trim();
+      const match = santriData.data.find(r => {
+        if (!r || !r[1]) return false;
+        const rawName = r[1].toLowerCase().replace(/\s+(laki-laki|perempuan)$/i, '').trim();
+        return rawName === sName || sName.includes(rawName) || rawName.includes(sName);
+      });
+      if (match) {
+        if (!santriLevel && match[4]) santriLevel = match[4];
+        const tingkat = match[5] || '';
+        const rombel = match[6] || '';
+        const program = match[7] && match[7] !== '-' ? match[7] : '';
+        const fullClass = [tingkat, rombel, program].filter(Boolean).join(' ');
+        if (!santriClass || santriClass === tingkat) {
+          santriClass = fullClass || santriClass;
+        }
+        if ((!santriRoom || santriRoom === '-') && match[10]) {
+          santriRoom = match[10];
+        }
+      }
+    }
 
     return (
       <div 
         key={order.id} 
-        className={`rounded-2xl border shadow-xs hover:shadow-md transition-all p-3.5 flex flex-col justify-between gap-2.5 ${
+        className={`rounded-2xl border shadow-sm hover:shadow-md transition-all p-3 sm:p-3.5 flex flex-col justify-between gap-2 ${
           isCompleted 
-            ? 'bg-gray-50/70 dark:bg-gray-900/40 border-gray-200 dark:border-gray-800' 
+            ? 'bg-gray-50/70 dark:bg-gray-900/40 border-green-200 dark:border-green-900/50' 
             : isProcessing
-            ? 'bg-white dark:bg-gray-900 border-green-300 dark:border-green-800/80 ring-1 ring-green-500/10'
+            ? 'bg-white dark:bg-gray-900 border-green-400 dark:border-green-600 ring-1 ring-green-500/20'
             : isPending
-            ? 'bg-white dark:bg-gray-900 border-amber-200 dark:border-amber-900/60'
-            : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800'
+            ? 'bg-white dark:bg-gray-900 border-amber-300 dark:border-amber-700 ring-1 ring-amber-500/20'
+            : 'bg-white dark:bg-gray-900 border-green-300/80 dark:border-green-800'
         }`}
       >
         {/* 1. Header: Toko, ID, Jam & Status Badges */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-800/80 pb-2">
-            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate max-w-[130px]">
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-1.5 border-b border-gray-200 dark:border-gray-700/80 pb-1.5">
+            <div className="flex items-center gap-1 flex-wrap min-w-0">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate max-w-[130px]">
                 🏪 {order.canteen?.name || 'Toko'}
               </span>
               <span className="text-[11px] font-bold text-gray-800 dark:text-gray-200">
@@ -677,17 +705,17 @@ export default function PesananToko() {
 
             {/* Status Badges */}
             <div className="flex items-center gap-1 shrink-0">
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                 isPaid
                   ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
                   : isWaiting
                   ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 ring-1 ring-amber-300 animate-pulse'
                   : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
               }`}>
-                {isPaid ? 'Lunas' : isWaiting ? 'Verifikasi' : 'Belum Bayar'}
+                {isPaid ? 'Lunas' : isWaiting ? 'Verifikasi' : 'COD / Belum'}
               </span>
 
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                 isCompleted
                   ? 'bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800'
                   : isProcessing
@@ -705,21 +733,28 @@ export default function PesananToko() {
           <div className="text-xs space-y-0.5">
             <div className="flex items-center justify-between gap-1">
               <span className="font-bold text-gray-900 dark:text-white truncate flex items-center gap-1">
-                <User className="w-3 h-3 text-gray-400 shrink-0" />
-                {order.user?.santri_name || order.user?.name || 'Pembeli'}
+                <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <span className="truncate">{santriName}</span>
               </span>
-              <span className="text-[11px] text-gray-500 font-medium shrink-0">
-                📍 {order.user?.santri_room || order.delivery_location || '-'}
+              <span className="text-[11px] text-gray-600 dark:text-gray-300 font-semibold shrink-0">
+                📍 {santriRoom || '-'}
               </span>
             </div>
 
-            <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
-              <span className="truncate">Wali: {order.user?.name || '-'}</span>
+            <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400 pt-0.5 flex-wrap gap-1">
+              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                <span className="truncate">Wali: {waliName}</span>
+                {(santriLevel || santriClass) && (
+                  <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 text-[10px] font-bold">
+                    🎓 {santriLevel ? `${santriLevel} ` : ''}{santriClass ? `Kelas ${santriClass}` : ''}
+                  </span>
+                )}
+              </div>
               {order.user?.phone && (
                 <button
                   type="button"
                   onClick={() => handleContact(order.user?.phone, order.user?.name)}
-                  className="text-green-600 dark:text-green-400 font-bold hover:underline flex items-center gap-0.5 shrink-0"
+                  className="text-green-600 dark:text-green-400 font-bold hover:underline flex items-center gap-0.5 shrink-0 text-[10px]"
                 >
                   <MessageCircle className="w-3 h-3" /> WA Pembeli
                 </button>
@@ -728,7 +763,7 @@ export default function PesananToko() {
           </div>
 
           {/* 3. Items List Box (Minimalist & Clean) */}
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-2.5 space-y-1 text-xs border border-gray-100 dark:border-gray-800">
+          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2 space-y-0.5 text-xs border border-gray-200 dark:border-gray-700">
             {order.custom_notes && (
               <div className="text-[11px] font-medium text-purple-800 dark:text-purple-300 pb-0.5 border-b border-purple-100 dark:border-purple-900/40">
                 ✨ {order.custom_notes}
@@ -847,7 +882,7 @@ export default function PesananToko() {
         </div>
 
         {/* 6. Footer: Total Price & Canteen Operational Actions */}
-        <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between gap-2 flex-wrap">
+        <div className="pt-2 border-t border-gray-200 dark:border-gray-700/80 flex items-center justify-between gap-2 flex-wrap">
           <div className="min-w-0">
             <span className="text-sm font-black text-green-700 dark:text-green-400 block leading-tight">
               Rp {formatRupiah(order.total_price)}
@@ -958,7 +993,7 @@ export default function PesananToko() {
     <div className="bg-gray-50 min-h-screen pb-28 dark:bg-gray-950 font-sans animate-fade-in-up">
       <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-gray-900 p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-gray-900 p-4 sm:p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => navigate({ to: '/dashboard' })} 
@@ -1000,19 +1035,19 @@ export default function PesananToko() {
         </div>
 
         {/* UNIFIED GLOBAL FILTER SECTION (TERPADU - PERSIS SEPERTI DI ADMIN) */}
-        <div className="bg-white dark:bg-gray-900 p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-2 border-b border-gray-100 dark:border-gray-800 pb-3">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Filter className="w-4 h-4 text-green-600" />
+        <div className="bg-white dark:bg-gray-900 p-3 sm:p-3.5 rounded-2xl border border-green-300/80 dark:border-green-800 shadow-sm space-y-2.5">
+          <div className="flex items-center justify-between flex-wrap gap-1.5 border-b border-gray-200 dark:border-gray-700 pb-2">
+            <h3 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-green-600" />
               Filter Periode & Toko (Terpadu)
             </h3>
-            <span className="text-xs font-semibold px-3 py-1 rounded-full bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800">
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800">
               📅 Periode Aktif: <strong>{getFilterLabel()}</strong>
             </span>
           </div>
 
           {/* Mode Filter Selector */}
-          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <div className="flex gap-1 overflow-x-auto pb-0.5 no-scrollbar">
             {[
               { id: 'day', label: 'Harian (Per Tanggal)' },
               { id: 'week', label: 'Mingguan' },
@@ -1028,7 +1063,7 @@ export default function PesananToko() {
                     setFilterWeekIndex(getCurrentWeekIndex(filterYear, filterMonth));
                   }
                 }}
-                className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all shadow-xs ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all shadow-xs ${
                   filterMode === m.id
                     ? 'bg-green-600 text-white shadow-sm ring-2 ring-green-600/20'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
@@ -1040,16 +1075,16 @@ export default function PesananToko() {
           </div>
 
           {/* Dynamic Inputs & Filters Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-0.5">
             {/* 1. Filter Toko / Kantin */}
             <div>
-              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                 PILIH TOKO / KANTIN:
               </label>
               <select
                 value={selectedCanteenFilter}
                 onChange={(e) => setSelectedCanteenFilter(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-gray-50 text-gray-800 border border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-green-500 focus:outline-none"
+                className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-50 text-gray-800 border border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-green-500 focus:outline-none"
               >
                 <option value="all">🏪 Semua Toko / Kantin</option>
                 {canteensList?.map((c) => (
@@ -1063,7 +1098,7 @@ export default function PesananToko() {
             {/* 2. Date Input (Per Tanggal / Datepicker) */}
             {filterMode === 'day' && (
               <div>
-                <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                   PILIH TANGGAL:
                 </label>
                 <div className="relative">
@@ -1071,7 +1106,7 @@ export default function PesananToko() {
                     type="date"
                     value={filterDate}
                     onChange={(e) => setFilterDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                    className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -1212,7 +1247,7 @@ export default function PesananToko() {
         </div>
 
         {/* MAIN TAB SWITCHER */}
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 flex gap-4 rounded-2xl shadow-sm">
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 flex gap-4 rounded-2xl shadow-sm">
           <button
             onClick={() => setActiveTab('orders')}
             className={`py-3.5 px-3 text-sm font-bold border-b-2 flex items-center gap-2 transition-colors ${
@@ -1248,19 +1283,19 @@ export default function PesananToko() {
               <>
                 {/* Summary Metric Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                  <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
                     <span className="text-xs text-gray-500 font-medium block mb-1">Total Produk (Belanjaan)</span>
                     <span className="text-lg font-black text-gray-900 dark:text-white">
                       Rp {(recapData?.summary?.total_products || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
-                  <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                  <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
                     <span className="text-xs text-gray-500 font-medium block mb-1">Total Ongkir</span>
                     <span className="text-lg font-black text-blue-600 dark:text-blue-400">
                       Rp {(recapData?.summary?.total_delivery_fee || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
-                  <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                  <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
                     <span className="text-xs text-gray-500 font-medium block mb-1">Total Biaya Admin</span>
                     <span className="text-lg font-black text-purple-600 dark:text-purple-400">
                       Rp {(recapData?.summary?.total_admin_fee || 0).toLocaleString('id-ID')}
@@ -1276,14 +1311,14 @@ export default function PesananToko() {
 
                 {/* Rekap Per Toko / Kantin */}
                 {recapData?.canteen_recap && recapData.canteen_recap.length > 0 && (
-                  <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-blue-50/50 dark:bg-blue-950/20">
+                  <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50/50 dark:bg-blue-950/20">
                       <h3 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
                         <Store className="w-4 h-4 text-blue-600" />
                         Rekapitulasi Per Toko / Kantin
                       </h3>
                     </div>
-                    <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
                       {recapData.canteen_recap.map(c => (
                         <div key={c.canteen_id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
                           <div>
@@ -1318,8 +1353,8 @@ export default function PesananToko() {
                 )}
 
                 {/* Rekap Per Wali / Santri */}
-                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-                  <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
                     <h3 className="font-bold text-gray-900 dark:text-white text-sm">
                       Rekap Per Wali / Santri
                     </h3>
@@ -1327,7 +1362,7 @@ export default function PesananToko() {
                       Format ringkas: Total Produk | Total Ongkir | Total Admin
                     </p>
                   </div>
-                  <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
                     {(!recapData?.user_recap || recapData.user_recap.length === 0) ? (
                       <div className="p-6 text-center text-gray-500 text-sm">Belum ada transaksi di periode ini.</div>
                     ) : (
@@ -1360,13 +1395,13 @@ export default function PesananToko() {
                 </div>
 
                 {/* Rekap Per Produk */}
-                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-                  <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
                     <h3 className="font-bold text-gray-900 dark:text-white text-sm">
                       Rekap Kuantitas Per Produk
                     </h3>
                   </div>
-                  <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
                     {(!recapData?.product_breakdown || recapData.product_breakdown.length === 0) ? (
                       <div className="p-6 text-center text-gray-500 text-sm">Belum ada produk terjual.</div>
                     ) : (
@@ -1399,7 +1434,7 @@ export default function PesananToko() {
         ) : (
           <div className="space-y-4">
             {orders.length === 0 ? (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 text-center py-16 text-gray-500 flex flex-col items-center">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 text-center py-16 text-gray-500 flex flex-col items-center">
                 <ShoppingBag className="w-14 h-14 mb-3 opacity-20 text-green-600" />
                 <p className="font-semibold text-gray-700 dark:text-gray-300">Belum ada pesanan yang sesuai filter.</p>
                 <p className="text-xs text-gray-400 mt-1">Coba ganti filter tanggal, toko, status, atau kata kunci pencarian.</p>
@@ -1416,16 +1451,16 @@ export default function PesananToko() {
                         Semua pesanan aktif di periode ini telah selesai diproses! 🎉
                       </div>
                     )}
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2.5">
                       {activeOrders.map(renderOrderCard)}
                     </div>
                     
                     {completedOrders.length > 0 && (
-                      <div className="mt-6 border-t border-gray-200 dark:border-gray-800 pt-5">
+                      <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-5">
                         <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">
                           Riwayat Selesai ({completedOrders.length})
                         </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2.5">
                           {completedOrders.map(renderOrderCard)}
                         </div>
                       </div>
@@ -1434,7 +1469,7 @@ export default function PesananToko() {
                 );
               })()
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2.5">
                 {orders.map(renderOrderCard)}
               </div>
             )}
@@ -1479,7 +1514,7 @@ export default function PesananToko() {
                     className={`flex items-center p-4 rounded-xl border cursor-pointer transition-all ${
                       isSelfSelected 
                       ? 'border-green-500 bg-green-50/50 dark:bg-green-950/30 dark:border-green-500 shadow-sm ring-1 ring-green-500' 
-                      : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                      : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                     }`}
                   >
                     <input 
@@ -1509,7 +1544,7 @@ export default function PesananToko() {
                       className={`flex items-center p-4 rounded-xl border cursor-pointer transition-all ${
                         isSelected 
                         ? 'border-green-500 bg-green-50/50 dark:bg-green-950/30 dark:border-green-500 shadow-sm ring-1 ring-green-500' 
-                        : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                       }`}
                     >
                       <input 
@@ -1543,7 +1578,7 @@ export default function PesananToko() {
             </div>
           </div>
           
-          <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 shadow-[0_-4px_15px_rgba(0,0,0,0.05)] pb-safe">
+          <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-[0_-4px_15px_rgba(0,0,0,0.05)] pb-safe">
             <div className="max-w-3xl mx-auto flex gap-3">
               <button 
                 onClick={() => {
@@ -1573,7 +1608,7 @@ export default function PesananToko() {
       {showProofModal && activeOrderForProof && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/60 flex flex-col justify-end animate-in fade-in duration-200">
           <div className="bg-white dark:bg-gray-900 w-full rounded-t-3xl overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-8 duration-300">
-            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
               <div>
                 <h3 className="font-bold text-gray-900 dark:text-white text-lg">Upload Bukti Pengiriman</h3>
                 <p className="text-xs text-gray-500 mt-0.5">Order #{activeOrderForProof.id}</p>
@@ -1684,7 +1719,7 @@ export default function PesananToko() {
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-3 sticky bottom-0 bg-white dark:bg-gray-900">
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-3 sticky bottom-0 bg-white dark:bg-gray-900">
               <button 
                 onClick={() => {setShowProofModal(false); setProofFiles([]);}}
                 className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold"
@@ -1726,7 +1761,7 @@ export default function PesananToko() {
       {showReceiptModal && activeOrderForReceipt && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/60 flex flex-col justify-end animate-in fade-in duration-200">
           <div className="bg-white dark:bg-gray-900 w-full rounded-t-3xl overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-8 duration-300">
-            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
               <div>
                 <h3 className="font-bold text-gray-900 dark:text-white text-lg">Upload Bukti Pesanan / Struk</h3>
                 <p className="text-xs text-gray-500 mt-0.5">Order #{activeOrderForReceipt.id}</p>
@@ -1867,7 +1902,7 @@ export default function PesananToko() {
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-3 sticky bottom-0 bg-white dark:bg-gray-900">
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-3 sticky bottom-0 bg-white dark:bg-gray-900">
               <button 
                 onClick={() => {setShowReceiptModal(false); setReceiptFiles([]);}}
                 className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold"
@@ -1907,7 +1942,7 @@ export default function PesananToko() {
       {showManualModal && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl my-auto">
-            <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Buat Pesanan Manual</h3>
               <button onClick={() => setShowManualModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                 <X className="w-6 h-6" />
@@ -2019,7 +2054,7 @@ export default function PesananToko() {
       {/* CONFIRMATION ALERT MODAL WHEN PROCEEDING UNPAID ORDER */}
       {unpaidProceedOrder && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-800 p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-200 my-auto text-left">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-700 p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-200 my-auto text-left">
             {/* Header Icon & Title */}
             <div className="flex items-start gap-3.5">
               <div className="w-11 h-11 rounded-2xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 shadow-inner">
@@ -2128,7 +2163,7 @@ export default function PesananToko() {
       {showSetPriceModal && activeOrderForSetPrice && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl my-auto">
-            <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Tentukan Harga Pesanan</h3>
               <button onClick={() => setShowSetPriceModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                 <X className="w-6 h-6" />
@@ -2332,8 +2367,8 @@ export default function PesananToko() {
       {/* Recap Modal */}
       {showRecapModal && createPortal(
         <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-800 flex flex-col max-h-[85vh] my-auto">
-            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col max-h-[85vh] my-auto">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
               <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <ShoppingBag className="w-5 h-5 text-green-600" />
                 Rekap per Produk
@@ -2354,7 +2389,7 @@ export default function PesananToko() {
                       <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2">Produk Reguler</h4>
                       <div className="space-y-2">
                         {productRecap.items.map((item, idx) => (
-                          <div key={idx} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+                          <div key={idx} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
                             <div className="font-semibold text-gray-800 dark:text-gray-200 text-sm">
                               {item.name}
                             </div>
@@ -2392,7 +2427,7 @@ export default function PesananToko() {
                 </div>
               )}
             </div>
-            <div className="p-4 border-t border-gray-100 dark:border-gray-800">
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
               <button 
                 onClick={() => setShowRecapModal(false)}
                 className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 rounded-xl font-bold transition-colors"

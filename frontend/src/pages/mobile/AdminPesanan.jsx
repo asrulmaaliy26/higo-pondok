@@ -33,6 +33,7 @@ import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
 import { getFileType, getFileNameFromPath } from '../../lib/fileUtils';
 import ThermalReceiptModal from '../../components/receipt/ThermalReceiptModal';
+import santriData from '../../data/santri.json';
 
 function getWeeksInMonth(year, month) {
   const weeks = [];
@@ -554,35 +555,35 @@ export default function AdminPesanan() {
   };
 
   return (
-    <div className="space-y-6 pb-28 animate-fade-in-up font-sans max-w-7xl mx-auto">
+    <div className="space-y-4 pb-24 animate-fade-in-up font-sans max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-white dark:bg-gray-900 p-3.5 sm:p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
               Rekapitulasi & Manajemen Pesanan
             </h1>
           </div>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             Pantau seluruh arus pesanan di semua kantin, periksa rekapitulasi omzet per tanggal, dan kelola/hapus pesanan bermasalah.
           </p>
         </div>
       </div>
 
       {/* UNIFIED GLOBAL FILTER SECTION (DITARUH DI ATAS SEBELUM TAB) */}
-      <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-2 border-b border-gray-100 dark:border-gray-800 pb-3">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Filter className="w-4 h-4 text-green-600" />
+      <div className="bg-white dark:bg-gray-900 p-3 sm:p-3.5 rounded-2xl border border-green-300/80 dark:border-green-800 shadow-sm space-y-2.5">
+        <div className="flex items-center justify-between flex-wrap gap-1.5 border-b border-gray-200 dark:border-gray-700 pb-2">
+          <h3 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-green-600" />
             Filter Periode & Toko (Terpadu)
           </h3>
-          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800">
+          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800">
             📅 Periode Aktif: <strong>{getFilterLabel()}</strong>
           </span>
         </div>
 
         {/* Mode Filter Selector */}
-        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <div className="flex gap-1 overflow-x-auto pb-0.5 no-scrollbar">
           {[
             { id: 'day', label: 'Harian (Per Tanggal)' },
             { id: 'week', label: 'Mingguan' },
@@ -598,7 +599,7 @@ export default function AdminPesanan() {
                   setFilterWeekIndex(getCurrentWeekIndex(filterYear, filterMonth));
                 }
               }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all shadow-xs ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all shadow-xs ${
                 filterMode === m.id
                   ? 'bg-green-600 text-white shadow-sm ring-2 ring-green-600/20'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
@@ -610,16 +611,16 @@ export default function AdminPesanan() {
         </div>
 
         {/* Dynamic Inputs & Filters Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-0.5">
           {/* 1. Filter Toko / Kantin */}
           <div>
-            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
               Pilih Toko / Kantin:
             </label>
             <select
               value={selectedCanteenFilter}
               onChange={(e) => setSelectedCanteenFilter(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-gray-50 text-gray-800 border border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-green-500 focus:outline-none"
+              className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-50 text-gray-800 border border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-green-500 focus:outline-none"
             >
               <option value="all">🏪 Semua Toko / Kantin</option>
               {canteensList.map((c) => (
@@ -783,7 +784,7 @@ export default function AdminPesanan() {
       </div>
 
       {/* MAIN TAB SWITCHER (DITARUH DI BAWAH FILTER) */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-2 flex items-center justify-between gap-4 rounded-2xl shadow-sm overflow-x-auto no-scrollbar">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center justify-between gap-4 rounded-2xl shadow-sm overflow-x-auto no-scrollbar">
         <div className="flex gap-4">
           <button
             onClick={() => setActiveTab('orders')}
@@ -854,7 +855,7 @@ export default function AdminPesanan() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
             </div>
           ) : orders.length === 0 ? (
-            <div className="bg-white dark:bg-gray-900 rounded-2xl p-12 text-center border border-gray-100 dark:border-gray-800 shadow-sm">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl p-12 text-center border border-gray-200 dark:border-gray-700 shadow-sm">
               <ShoppingBag className="w-16 h-16 mx-auto mb-3 text-gray-300 dark:text-gray-700" />
               <h3 className="font-bold text-gray-700 dark:text-gray-300 text-base">Tidak ada pesanan ditemukan</h3>
               <p className="text-xs text-gray-400 mt-1">
@@ -862,21 +863,48 @@ export default function AdminPesanan() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2.5">
               {orders.map((order) => {
                 const isPaid = order.payment_status === 'paid';
                 const isWaiting = order.payment_status === 'waiting_confirmation';
+                const santriName = order.user?.santri_name || order.user?.name || 'Santri';
+                const waliName = order.user?.name || 'Wali';
+                let santriClass = order.user?.santri_class || '';
+                let santriLevel = order.user?.santri_level || '';
+                let santriRoom = order.user?.santri_room || order.delivery_location || '';
+
+                if (santriName && santriData?.data) {
+                  const sName = santriName.toLowerCase().trim();
+                  const match = santriData.data.find(r => {
+                    if (!r || !r[1]) return false;
+                    const rawName = r[1].toLowerCase().replace(/\s+(laki-laki|perempuan)$/i, '').trim();
+                    return rawName === sName || sName.includes(rawName) || rawName.includes(sName);
+                  });
+                  if (match) {
+                    if (!santriLevel && match[4]) santriLevel = match[4];
+                    const tingkat = match[5] || '';
+                    const rombel = match[6] || '';
+                    const program = match[7] && match[7] !== '-' ? match[7] : '';
+                    const fullClass = [tingkat, rombel, program].filter(Boolean).join(' ');
+                    if (!santriClass || santriClass === tingkat) {
+                      santriClass = fullClass || santriClass;
+                    }
+                    if ((!santriRoom || santriRoom === '-') && match[10]) {
+                      santriRoom = match[10];
+                    }
+                  }
+                }
 
                 return (
                   <div
                     key={order.id}
-                    className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs hover:shadow-md transition-all hover:border-gray-200 dark:hover:border-gray-700 p-3.5 flex flex-col justify-between gap-2.5"
+                    className="bg-white dark:bg-gray-900 rounded-2xl border border-green-300/90 dark:border-green-800 shadow-sm hover:border-green-500 dark:hover:border-green-600 hover:shadow-md transition-all p-3 sm:p-3.5 flex flex-col justify-between gap-2"
                   >
                     {/* 1. Header: Toko, ID, Jam & Status Badges */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-800/80 pb-2">
-                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate max-w-[140px]">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-1.5 border-b border-gray-200 dark:border-gray-700/80 pb-1.5">
+                        <div className="flex items-center gap-1 flex-wrap min-w-0">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate max-w-[130px]">
                             🏪 {order.canteen?.name || `Kantin #${order.canteen_id}`}
                           </span>
                           <span className="text-[11px] font-bold text-gray-800 dark:text-gray-200">
@@ -893,7 +921,7 @@ export default function AdminPesanan() {
                             type="button"
                             onClick={() => handleOpenChangeStatusModal(order)}
                             title="Klik untuk ubah status pembayaran / pesanan"
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                               isPaid
                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
                                 : isWaiting
@@ -908,7 +936,7 @@ export default function AdminPesanan() {
                             type="button"
                             onClick={() => handleOpenChangeStatusModal(order)}
                             title="Klik untuk ubah status pesanan"
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                               order.status === 'completed'
                                 ? 'bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800'
                                 : order.status === 'processing'
@@ -930,25 +958,35 @@ export default function AdminPesanan() {
                       </div>
 
                       {/* 2. Customer & Room Info (Compact 1-2 lines) */}
-                      <div className="text-xs">
+                      <div className="text-xs space-y-0.5">
                         <div className="flex items-center justify-between gap-1">
                           <span className="font-bold text-gray-900 dark:text-white truncate flex items-center gap-1">
-                            <User className="w-3 h-3 text-gray-400 shrink-0" />
-                            {order.user?.santri_name || order.user?.name || 'Santri'}
+                            <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="truncate">{santriName}</span>
                           </span>
-                          <span className="text-[11px] text-gray-500 font-medium shrink-0">
-                            📍 {order.user?.santri_room || order.delivery_location || '-'}
+                          <span className="text-[11px] text-gray-600 dark:text-gray-300 font-semibold shrink-0">
+                            📍 {santriRoom || '-'}
                           </span>
                         </div>
-                        {order.courier?.name && (
-                          <p className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 mt-0.5">
-                            <Truck className="w-3 h-3" /> Kurir: {order.courier.name}
-                          </p>
-                        )}
+                        <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400 pt-0.5 flex-wrap gap-1">
+                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                            <span className="truncate">Wali: {waliName}</span>
+                            {(santriLevel || santriClass) && (
+                              <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 text-[10px] font-bold">
+                                🎓 {santriLevel ? `${santriLevel} ` : ''}{santriClass ? `Kelas ${santriClass}` : ''}
+                              </span>
+                            )}
+                          </div>
+                          {order.courier?.name && (
+                            <span className="text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-0.5 shrink-0">
+                              <Truck className="w-3 h-3" /> {order.courier.name}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* 3. Items List Box (Minimalist & Clean) */}
-                      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-2.5 space-y-1 text-xs border border-gray-100 dark:border-gray-800">
+                      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2 space-y-0.5 text-xs border border-gray-200 dark:border-gray-700">
                         {order.custom_notes && (
                           <div className="text-[11px] font-medium text-purple-800 dark:text-purple-300 pb-0.5 border-b border-purple-100 dark:border-purple-900/40">
                             ✨ {order.custom_notes}
@@ -1025,7 +1063,7 @@ export default function AdminPesanan() {
                     </div>
 
                     {/* 5. Footer: Total Price & Minimalist Actions */}
-                    <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between gap-2">
+                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700/80 flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <span className="text-sm font-black text-green-700 dark:text-green-400 block leading-tight">
                           Rp {parseFloat(order.total_price || 0).toLocaleString('id-ID')}
@@ -1088,7 +1126,7 @@ export default function AdminPesanan() {
       {activeTab === 'recap' && (
         <div className="space-y-6">
           {/* Header Ringkasan Periode Aktif */}
-          <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <FileText className="w-5 h-5 text-green-600" />
               Rekapitulasi Penjualan & Keuangan ({getFilterLabel()})
@@ -1109,19 +1147,19 @@ export default function AdminPesanan() {
             <>
               {/* Metric Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-                <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
                   <span className="text-xs text-gray-500 font-medium block mb-1">Total Produk (Belanjaan)</span>
                   <span className="text-lg sm:text-xl font-black text-gray-900 dark:text-white">
                     Rp {(recapData?.summary?.total_products || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
-                <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
                   <span className="text-xs text-gray-500 font-medium block mb-1">Total Ongkir</span>
                   <span className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400">
                     Rp {(recapData?.summary?.total_delivery_fee || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
-                <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
                   <span className="text-xs text-gray-500 font-medium block mb-1">Total Biaya Admin</span>
                   <span className="text-lg sm:text-xl font-black text-purple-600 dark:text-purple-400">
                     Rp {(recapData?.summary?.total_admin_fee || 0).toLocaleString('id-ID')}
@@ -1138,14 +1176,14 @@ export default function AdminPesanan() {
               </div>
 
               {/* Rekapitulasi Per Toko / Kantin */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-                <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-blue-50/50 dark:bg-blue-950/20">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50/50 dark:bg-blue-950/20">
                   <h3 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
                     <Store className="w-4 h-4 text-blue-600" />
                     Rekapitulasi Per Toko / Kantin
                   </h3>
                 </div>
-                <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                <div className="divide-y divide-gray-200 dark:divide-gray-700">
                   {!recapData?.canteen_recap || recapData.canteen_recap.length === 0 ? (
                     <div className="p-6 text-center text-gray-500 text-sm">
                       Belum ada transaksi pada periode <strong>{getFilterLabel()}</strong>.
@@ -1188,14 +1226,14 @@ export default function AdminPesanan() {
               </div>
 
               {/* Rekapitulasi Per Santri / Wali */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-                <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
                   <h3 className="font-bold text-gray-900 dark:text-white text-sm">Rekapitulasi Per Wali / Santri</h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                     Format: Total Belanja Produk | Total Ongkir | Total Admin
                   </p>
                 </div>
-                <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-96 overflow-y-auto">
+                <div className="divide-y divide-gray-200 dark:divide-gray-700 max-h-96 overflow-y-auto">
                   {!recapData?.user_recap || recapData.user_recap.length === 0 ? (
                     <div className="p-6 text-center text-gray-500 text-sm">
                       Belum ada transaksi pada periode <strong>{getFilterLabel()}</strong>.
@@ -1235,11 +1273,11 @@ export default function AdminPesanan() {
               </div>
 
               {/* Rekapitulasi Produk Terjual */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-                <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
                   <h3 className="font-bold text-gray-900 dark:text-white text-sm">Rekapitulasi Kuantitas Produk Terjual</h3>
                 </div>
-                <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-96 overflow-y-auto">
+                <div className="divide-y divide-gray-200 dark:divide-gray-700 max-h-96 overflow-y-auto">
                   {!recapData?.product_breakdown || recapData.product_breakdown.length === 0 ? (
                     <div className="p-6 text-center text-gray-500 text-sm">
                       Belum ada produk terjual pada periode <strong>{getFilterLabel()}</strong>.
@@ -1316,7 +1354,7 @@ export default function AdminPesanan() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
             </div>
           ) : trashedOrders.length === 0 ? (
-            <div className="bg-white dark:bg-gray-900 rounded-2xl p-12 text-center border border-gray-100 dark:border-gray-800 shadow-sm space-y-2">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl p-12 text-center border border-gray-200 dark:border-gray-700 shadow-sm space-y-2">
               <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 flex items-center justify-center mx-auto">
                 <Trash2 className="w-6 h-6" />
               </div>
@@ -1383,7 +1421,7 @@ export default function AdminPesanan() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2 pt-1 border-t border-gray-100 dark:border-gray-800">
+                    <div className="flex items-center gap-2 pt-1 border-t border-gray-200 dark:border-gray-700">
                       <button
                         type="button"
                         onClick={() => restoreOrderMutation.mutate(order.id)}
@@ -1413,7 +1451,7 @@ export default function AdminPesanan() {
       {/* MODAL KONFIRMASI PINDAHKAN KE SAMPAH (SOFT DELETE) */}
       {orderToDelete && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-100 dark:border-gray-800 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
             <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>
@@ -1472,7 +1510,7 @@ export default function AdminPesanan() {
       {/* MODAL KONFIRMASI HAPUS PERMANEN (FORCE DELETE) */}
       {orderToForceDelete && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-100 dark:border-gray-800 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
             <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
               <AlertTriangle className="w-6 h-6" />
             </div>
@@ -1519,7 +1557,7 @@ export default function AdminPesanan() {
       {/* MODAL KONFIRMASI KOSONGKAN SELURUH KOTAK SAMPAH */}
       {showEmptyTrashModal && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-100 dark:border-gray-800 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
             <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
               <AlertTriangle className="w-6 h-6" />
             </div>
@@ -1625,7 +1663,7 @@ export default function AdminPesanan() {
       {/* MODAL KONFIRMASI BATALKAN PESANAN */}
       {orderToCancel && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-100 dark:border-gray-800 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
             <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
               <AlertTriangle className="w-6 h-6" />
             </div>
@@ -1699,7 +1737,7 @@ export default function AdminPesanan() {
       {/* MODAL UBAH STATUS PESANAN & PEMBAYARAN */}
       {orderToChangeStatus && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-100 dark:border-gray-800 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
             <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl flex items-center justify-center mx-auto">
               <RotateCcw className="w-6 h-6" />
             </div>
@@ -1714,7 +1752,7 @@ export default function AdminPesanan() {
             </div>
 
             {/* Kotak Ringkasan Status Saat Ini */}
-            <div className="bg-gray-50 dark:bg-gray-800/80 p-3 rounded-2xl border border-gray-100 dark:border-gray-700/60 flex items-center justify-between text-xs">
+            <div className="bg-gray-50 dark:bg-gray-800/80 p-3 rounded-2xl border border-gray-200 dark:border-gray-700/60 flex items-center justify-between text-xs">
               <div>
                 <span className="text-gray-400 block text-[10px] uppercase font-bold tracking-wider mb-0.5">Status Saat Ini:</span>
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-bold text-[11px] ${

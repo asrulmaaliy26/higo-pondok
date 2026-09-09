@@ -834,13 +834,20 @@ class OrderController extends Controller
         ]);
 
         $order = DB::transaction(function () use ($request, $id) {
-            $order = Order::where('user_id', $request->user()->id)
-                ->lockForUpdate()
-                ->findOrFail($id);
+            $user = $request->user();
+            if ($user->hasRole('admin')) {
+                $order = Order::lockForUpdate()->findOrFail($id);
+            } else {
+                $order = Order::where('user_id', $user->id)
+                    ->lockForUpdate()
+                    ->findOrFail($id);
+            }
+
+            $targetUser = $order->user ?: $user;
 
             $paths = [];
             foreach ($request->file('proof_of_payment') as $file) {
-                $paths[] = $this->storeOptimizedImage($file, $request->user(), 'proofs');
+                $paths[] = $this->storeOptimizedImage($file, $targetUser, 'proofs');
             }
 
             $existingProofs = is_array($order->proof_of_payment) ? $order->proof_of_payment : [];
@@ -856,6 +863,52 @@ class OrderController extends Controller
 
         return response()->json([
             'message' => 'Bukti transfer berhasil diunggah! Menunggu konfirmasi & validasi pembayaran dari kantin.',
+            'order' => $order->load(['canteen', 'user', 'items.product', 'courier'])
+        ]);
+    }
+
+    // For Canteen: Upload payment proof on behalf of santri
+    public function uploadPaymentProofByCanteen(Request $request, $id)
+    {
+        $request->validate([
+            'proof_of_payment' => 'required',
+            'proof_of_payment.*' => 'file|max:15360',
+            'payment_status' => 'nullable|in:unpaid,waiting_confirmation,paid',
+        ]);
+
+        $order = DB::transaction(function () use ($request, $id) {
+            $order = $this->findCanteenOrder($request, $id, true);
+
+            $files = $request->file('proof_of_payment');
+            if (!is_array($files)) {
+                $files = [$files];
+            }
+
+            $targetUser = $order->user ?: $request->user();
+
+            $paths = [];
+            foreach ($files as $file) {
+                if ($file) {
+                    $paths[] = $this->storeOptimizedImage($file, $targetUser, 'proofs');
+                }
+            }
+
+            $existingProofs = is_array($order->proof_of_payment) ? $order->proof_of_payment : ($order->proof_of_payment ? [$order->proof_of_payment] : []);
+            $mergedPaths = array_merge($existingProofs, $paths);
+
+            // Default to 'paid' when canteen uploads payment proof, or accept choice
+            $newPaymentStatus = $request->input('payment_status', 'paid');
+
+            $order->update([
+                'proof_of_payment' => $mergedPaths,
+                'payment_status' => $newPaymentStatus,
+            ]);
+
+            return $order;
+        });
+
+        return response()->json([
+            'message' => 'Bukti transfer berhasil diunggah dan status pembayaran diperbarui!',
             'order' => $order->load(['canteen', 'user', 'items.product', 'courier'])
         ]);
     }

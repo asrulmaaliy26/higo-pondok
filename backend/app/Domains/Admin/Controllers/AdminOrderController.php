@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Domains\Canteen\Order;
 use App\Domains\Admin\ActivityLog;
+use App\Domains\Admin\Requests\AdminUploadPaymentProofRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
@@ -496,6 +497,102 @@ class AdminOrderController extends Controller
             return response()->json([
                 'message' => "Status pesanan #{$orderId} berhasil diperbarui.",
                 'order' => $order->load(['user', 'canteen', 'courier', 'items.product'])
+            ]);
+        });
+    }
+
+    /**
+     * Upload payment proof on behalf of user / santri by Admin
+     */
+    public function uploadPaymentProof(AdminUploadPaymentProofRequest $request, $id)
+    {
+        return DB::transaction(function () use ($request, $id) {
+            $order = Order::with(['user', 'canteen', 'courier', 'items.product'])->lockForUpdate()->findOrFail($id);
+
+            $files = $request->file('proof_of_payment');
+            if (!is_array($files)) {
+                $files = [$files];
+            }
+
+            // Target user for folder path naming: the user who owns the order (or fallback to admin)
+            $targetUser = $order->user ?: $request->user();
+
+            $paths = [];
+            foreach ($files as $file) {
+                if ($file) {
+                    $paths[] = $this->storeOptimizedImage($file, $targetUser, 'proofs');
+                }
+            }
+
+            $existingProofs = is_array($order->proof_of_payment) ? $order->proof_of_payment : ($order->proof_of_payment ? [$order->proof_of_payment] : []);
+            $mergedPaths = array_merge($existingProofs, $paths);
+
+            // Default payment status to 'paid' when admin uploads, or accept admin's choice
+            $newPaymentStatus = $request->input('payment_status', 'paid');
+
+            $order->update([
+                'proof_of_payment' => $mergedPaths,
+                'payment_status' => $newPaymentStatus,
+            ]);
+
+            $canteenName = $order->canteen ? $order->canteen->name : "Kantin #{$order->canteen_id}";
+            $customerName = $order->user ? ($order->user->santri_name ?: $order->user->name) : "User #{$order->user_id}";
+            $filesCount = count($paths);
+
+            ActivityLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'upload_payment_proof',
+                'model_type' => Order::class,
+                'model_id' => $order->id,
+                'description' => "Admin {$request->user()->name} mengunggah {$filesCount} berkas bukti pembayaran untuk pesanan #{$order->id} ({$canteenName} - {$customerName}). Status pembayaran: {$newPaymentStatus}",
+            ]);
+
+            return response()->json([
+                'message' => "Bukti pembayaran berhasil diunggah! Status pembayaran ditandai sebagai " . ($newPaymentStatus === 'paid' ? 'Lunas.' : 'Menunggu Validasi.'),
+                'order' => $order->fresh()->load(['user', 'canteen', 'courier', 'items.product'])
+            ]);
+        });
+    }
+
+    /**
+     * Delete a specific uploaded photo proof from order by Admin
+     */
+    public function deleteProof(Request $request, $id)
+    {
+        $request->validate([
+            'type' => 'required|in:proof_of_payment,proof_of_purchase,proof_of_delivery',
+            'path' => 'required|string',
+        ]);
+
+        return DB::transaction(function () use ($request, $id) {
+            $order = Order::with(['user', 'canteen', 'courier', 'items.product'])->lockForUpdate()->findOrFail($id);
+
+            $type = $request->input('type');
+            $targetPath = $request->input('path');
+            $currentArray = is_array($order->$type) ? $order->$type : ($order->$type ? [$order->$type] : []);
+
+            $filtered = array_values(array_filter($currentArray, function ($p) use ($targetPath) {
+                return $p !== $targetPath;
+            }));
+
+            $order->update([
+                $type => count($filtered) > 0 ? $filtered : null,
+            ]);
+
+            // Physically delete the file from storage
+            Storage::disk('public')->delete($targetPath);
+
+            ActivityLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'delete_order_proof',
+                'model_type' => Order::class,
+                'model_id' => $order->id,
+                'description' => "Admin {$request->user()->name} menghapus berkas bukti ({$type}) pada pesanan #{$order->id}",
+            ]);
+
+            return response()->json([
+                'message' => 'Berkas bukti berhasil dihapus.',
+                'order' => $order->fresh()->load(['user', 'canteen', 'courier', 'items.product'])
             ]);
         });
     }

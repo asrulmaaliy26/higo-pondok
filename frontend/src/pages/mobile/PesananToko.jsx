@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { ChevronLeft, ShoppingBag, CheckCircle, Clock, Truck, MessageCircle, X, Image as ImageIcon, ChevronDown, ChevronRight, Store, Upload, Trash2, RotateCcw, FileText, Filter, Search, AlertTriangle, AlertCircle, Download, ExternalLink, Printer, User } from 'lucide-react';
+import { ChevronLeft, ShoppingBag, CheckCircle, Clock, Truck, MessageCircle, X, Image as ImageIcon, ChevronDown, ChevronRight, Store, Upload, Trash2, RotateCcw, FileText, Filter, Search, AlertTriangle, AlertCircle, Download, ExternalLink, Printer, User, UploadCloud, Camera, FileUp, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
 import { useCanteenStore } from '../../store/canteenStore';
@@ -501,6 +501,89 @@ export default function PesananToko() {
     }
   });
 
+  // Payment Proof Upload States & Mutations for Canteen
+  const [orderToUploadPaymentProof, setOrderToUploadPaymentProof] = useState(null);
+  const [canteenPaymentProofFiles, setCanteenPaymentProofFiles] = useState([]);
+  const [isCompressingPaymentProof, setIsCompressingPaymentProof] = useState(false);
+  const [canteenPaymentStatus, setCanteenPaymentStatus] = useState('paid');
+  const canteenPaymentFileInputRef = React.useRef(null);
+  const canteenPaymentCameraInputRef = React.useRef(null);
+
+  const handleOpenUploadPaymentModal = (order) => {
+    setOrderToUploadPaymentProof(order);
+    setCanteenPaymentProofFiles([]);
+    setCanteenPaymentStatus('paid');
+  };
+
+  const handleCanteenProofFilesSelected = async (filesList) => {
+    if (!filesList || filesList.length === 0) return;
+    const incomingFiles = Array.from(filesList);
+
+    const remainingSlots = 5 - canteenPaymentProofFiles.length;
+    if (remainingSlots <= 0) {
+      toast.error('Maksimal 5 berkas bukti pembayaran.');
+      return;
+    }
+
+    const filesToProcess = incomingFiles.slice(0, remainingSlots);
+    setIsCompressingPaymentProof(true);
+
+    try {
+      const compressed = await compressImageFiles(filesToProcess, {
+        maxWidth: 1600,
+        maxHeight: 1600,
+        quality: 0.8
+      });
+      setCanteenPaymentProofFiles((prev) => [...prev, ...compressed]);
+    } catch (err) {
+      console.error('Gagal mengompresi gambar bukti:', err);
+      setCanteenPaymentProofFiles((prev) => [...prev, ...filesToProcess]);
+    } finally {
+      setIsCompressingPaymentProof(false);
+      if (canteenPaymentFileInputRef.current) canteenPaymentFileInputRef.current.value = '';
+      if (canteenPaymentCameraInputRef.current) canteenPaymentCameraInputRef.current.value = '';
+    }
+  };
+
+  const uploadCanteenPaymentProofMutation = useMutation({
+    mutationFn: ({ id, formData, canteen_id }) =>
+      api.post(`/canteen/orders/${id}/payment-proof?canteen_id=${canteen_id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 45000,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['canteen_recap'] });
+      toast.success('Bukti pembayaran santri berhasil diunggah!');
+      setOrderToUploadPaymentProof(null);
+      setCanteenPaymentProofFiles([]);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal mengunggah bukti pembayaran');
+    }
+  });
+
+  const deleteCanteenProofMutation = useMutation({
+    mutationFn: async ({ id, type, path }) => {
+      const res = await api.delete(`/canteen/orders/${id}/proof`, {
+        data: { type, path }
+      });
+      return { ...res.data, deletedPath: path };
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Berkas bukti berhasil dihapus');
+      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['canteen_recap'] });
+      if (data.order && orderToUploadPaymentProof && orderToUploadPaymentProof.id === data.order.id) {
+        setOrderToUploadPaymentProof(data.order);
+      }
+      setSelectedProofs((prev) => prev.filter((p) => !p.includes(data.deletedPath || '')));
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal menghapus berkas bukti');
+    }
+  });
+
   const assignCourierMutation = useMutation({
     mutationFn: async ({ id, courier_id, canteen_id }) => {
       const res = await api.put(`/canteen/orders/${id}/courier?canteen_id=${canteen_id}`, { courier_id });
@@ -791,12 +874,10 @@ export default function PesananToko() {
             )}
           </div>
 
-          {/* 4. Proof Buttons (If uploaded) */}
-          {((order.proof_of_payment && order.proof_of_payment.length !== 0) || 
-            (order.proof_of_purchase && order.proof_of_purchase.length !== 0) || 
-            (order.proof_of_delivery && order.proof_of_delivery.length !== 0)) && (
-            <div className="flex gap-1.5 flex-wrap pt-0.5">
-              {order.proof_of_payment && order.proof_of_payment.length !== 0 && (
+          {/* 4. Proof Buttons (If uploaded) & Quick Upload */}
+          <div className="flex gap-1.5 flex-wrap items-center pt-0.5">
+            {order.proof_of_payment && order.proof_of_payment.length !== 0 ? (
+              <div className="inline-flex items-center gap-1">
                 <button 
                   onClick={() => {
                     let proofs = [];
@@ -811,41 +892,60 @@ export default function PesananToko() {
                 >
                   <ImageIcon className="w-3 h-3" /> Bukti Transfer ({Array.isArray(order.proof_of_payment) ? order.proof_of_payment.length : 1})
                 </button>
-              )}
-              {order.proof_of_purchase && order.proof_of_purchase.length !== 0 && (
-                <button 
-                  onClick={() => {
-                    let proofs = [];
-                    if (Array.isArray(order.proof_of_purchase)) {
-                      proofs = order.proof_of_purchase.map(path => getStorageUrl(path));
-                    } else {
-                      proofs = [getStorageUrl(order.proof_of_purchase)];
-                    }
-                    setSelectedProofs(proofs);
-                  }}
-                  className="px-2 py-0.5 bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 hover:bg-purple-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-800"
+                <button
+                  type="button"
+                  onClick={() => handleOpenUploadPaymentModal(order)}
+                  title="Tambah / perbarui bukti transfer santri"
+                  className="px-1.5 py-0.5 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300 hover:bg-green-100 rounded-md text-[10px] font-bold flex items-center gap-0.5 transition-colors border border-green-200 dark:border-green-800"
                 >
-                  <ImageIcon className="w-3 h-3" /> Struk ({Array.isArray(order.proof_of_purchase) ? order.proof_of_purchase.length : 1})
+                  <Plus className="w-2.5 h-2.5" /> Bukti
                 </button>
-              )}
-              {order.proof_of_delivery && order.proof_of_delivery.length !== 0 && (
-                <button 
-                  onClick={() => {
-                    let proofs = [];
-                    if (Array.isArray(order.proof_of_delivery)) {
-                      proofs = order.proof_of_delivery.map(path => getStorageUrl(path));
-                    } else {
-                      proofs = [getStorageUrl(order.proof_of_delivery)];
-                    }
-                    setSelectedProofs(proofs);
-                  }}
-                  className="px-2 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-blue-200 dark:border-blue-800"
-                >
-                  <ImageIcon className="w-3 h-3" /> Serah Terima ({Array.isArray(order.proof_of_delivery) ? order.proof_of_delivery.length : 1})
-                </button>
-              )}
-            </div>
-          )}
+              </div>
+            ) : (
+              <button 
+                type="button"
+                onClick={() => handleOpenUploadPaymentModal(order)}
+                className="px-2 py-0.5 bg-green-50 hover:bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-green-200 dark:border-green-800"
+                title="Unggah bukti pembayaran santri"
+              >
+                <UploadCloud className="w-3 h-3 text-green-600 dark:text-green-400" />
+                <span>+ Bukti Transfer</span>
+              </button>
+            )}
+
+            {order.proof_of_purchase && order.proof_of_purchase.length !== 0 && (
+              <button 
+                onClick={() => {
+                  let proofs = [];
+                  if (Array.isArray(order.proof_of_purchase)) {
+                    proofs = order.proof_of_purchase.map(path => getStorageUrl(path));
+                  } else {
+                    proofs = [getStorageUrl(order.proof_of_purchase)];
+                  }
+                  setSelectedProofs(proofs);
+                }}
+                className="px-2 py-0.5 bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 hover:bg-purple-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-800"
+              >
+                <ImageIcon className="w-3 h-3" /> Struk ({Array.isArray(order.proof_of_purchase) ? order.proof_of_purchase.length : 1})
+              </button>
+            )}
+            {order.proof_of_delivery && order.proof_of_delivery.length !== 0 && (
+              <button 
+                onClick={() => {
+                  let proofs = [];
+                  if (Array.isArray(order.proof_of_delivery)) {
+                    proofs = order.proof_of_delivery.map(path => getStorageUrl(path));
+                  } else {
+                    proofs = [getStorageUrl(order.proof_of_delivery)];
+                  }
+                  setSelectedProofs(proofs);
+                }}
+                className="px-2 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-blue-200 dark:border-blue-800"
+              >
+                <ImageIcon className="w-3 h-3" /> Serah Terima ({Array.isArray(order.proof_of_delivery) ? order.proof_of_delivery.length : 1})
+              </button>
+            )}
+          </div>
 
           {/* 5. Payment Validation Bar (Compact) */}
           <div className="flex items-center justify-between gap-1.5 p-2 bg-gray-50/80 dark:bg-gray-800/40 rounded-xl border border-gray-200/80 dark:border-gray-700/80 flex-wrap">
@@ -854,12 +954,22 @@ export default function PesananToko() {
             </span>
 
             <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleOpenUploadPaymentModal(order)}
+                className="py-1 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg text-[10px] font-bold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                title="Unggah Bukti Transfer Santri"
+              >
+                <UploadCloud className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                <span>Unggah Bukti</span>
+              </button>
+
               {!isPaid ? (
                 <button
                   type="button"
                   disabled={updatePaymentMutation.isPending}
                   onClick={() => updatePaymentMutation.mutate({ id: order.id, status: 'paid', canteen_id: order.canteen_id })}
-                  className="py-1 px-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center gap-1 shadow-2xs disabled:opacity-50"
+                  className="py-1 px-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center gap-1 shadow-2xs disabled:opacity-50 cursor-pointer"
                 >
                   <CheckCircle className="w-3 h-3" /> Konfirmasi Lunas
                 </button>
@@ -872,7 +982,7 @@ export default function PesananToko() {
                       updatePaymentMutation.mutate({ id: order.id, status: 'unpaid', canteen_id: order.canteen_id });
                     }
                   }}
-                  className="py-0.5 px-2 bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-[10px] font-semibold transition-colors flex items-center gap-1"
+                  className="py-0.5 px-2 bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-[10px] font-semibold transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <X className="w-2.5 h-2.5" /> Batal Lunas
                 </button>
@@ -2439,6 +2549,276 @@ export default function PesananToko() {
         </div>,
         document.body
       )}
+
+      {/* MODAL UNGGAH BUKTI PEMBAYARAN OLEH KANTIN */}
+      {orderToUploadPaymentProof && createPortal(
+        <div className="fixed inset-0 z-[105] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-5 sm:p-6 border border-gray-200 dark:border-gray-700 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 flex items-center justify-center shadow-xs">
+                  <UploadCloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white leading-tight">
+                    Unggah Bukti Bayar Santri
+                  </h3>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    Pesanan #{orderToUploadPaymentProof.id} • {orderToUploadPaymentProof.canteen?.name || 'Toko'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderToUploadPaymentProof(null);
+                  setCanteenPaymentProofFiles([]);
+                }}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Info Santri & Tagihan */}
+            <div className="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-3.5 border border-gray-200 dark:border-gray-700/60 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-500 dark:text-gray-400">Santri / Pemesan:</span>
+                <span className="font-bold text-gray-900 dark:text-white truncate max-w-[200px]">
+                  {orderToUploadPaymentProof.user?.santri_name || orderToUploadPaymentProof.user?.name}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-500 dark:text-gray-400">Kamar / Lokasi:</span>
+                <span className="font-semibold text-gray-700 dark:text-gray-300">
+                  {orderToUploadPaymentProof.user?.santri_room || orderToUploadPaymentProof.delivery_location || '-'}
+                </span>
+              </div>
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-700/60 flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Total Tagihan:</span>
+                <span className="text-base font-black text-green-600 dark:text-green-400">
+                  Rp {formatRupiah(orderToUploadPaymentProof.total_price)}
+                </span>
+              </div>
+            </div>
+
+            {/* Bukti Yang Sudah Ada (Jika Ada) */}
+            {orderToUploadPaymentProof.proof_of_payment && orderToUploadPaymentProof.proof_of_payment.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-300">
+                  <span>Bukti Tersimpan ({orderToUploadPaymentProof.proof_of_payment.length}):</span>
+                  <span className="text-[10px] text-gray-400 font-normal">Klik untuk hapus jika salah</span>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {(Array.isArray(orderToUploadPaymentProof.proof_of_payment) 
+                    ? orderToUploadPaymentProof.proof_of_payment 
+                    : [orderToUploadPaymentProof.proof_of_payment]
+                  ).map((p, pIdx) => (
+                    <div key={pIdx} className="relative group shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-black/10">
+                      <img src={getStorageUrl(p)} alt="Bukti" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('Hapus berkas bukti ini?')) {
+                            deleteCanteenProofMutation.mutate({
+                              id: orderToUploadPaymentProof.id,
+                              type: 'proof_of_payment',
+                              path: p
+                            });
+                          }
+                        }}
+                        disabled={deleteCanteenProofMutation.isPending}
+                        className="absolute inset-0 bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Hapus berkas ini"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tombol Pilih File & Kamera */}
+            <div className="space-y-2">
+              <input
+                type="file"
+                ref={canteenPaymentFileInputRef}
+                multiple
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={(e) => handleCanteenProofFilesSelected(e.target.files)}
+              />
+              <input
+                type="file"
+                ref={canteenPaymentCameraInputRef}
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => handleCanteenProofFilesSelected(e.target.files)}
+              />
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={isCompressingPaymentProof || uploadCanteenPaymentProofMutation.isPending}
+                  onClick={() => canteenPaymentCameraInputRef.current?.click()}
+                  className="py-3 px-3 bg-gray-50 hover:bg-green-50/80 dark:bg-gray-800/80 dark:hover:bg-green-950/40 border border-gray-200 dark:border-gray-700 hover:border-green-400 rounded-2xl text-gray-700 dark:text-gray-200 flex flex-col items-center justify-center gap-1.5 transition-all text-xs font-bold active:scale-98 cursor-pointer"
+                >
+                  <Camera className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <span>Ambil Foto</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isCompressingPaymentProof || uploadCanteenPaymentProofMutation.isPending}
+                  onClick={() => canteenPaymentFileInputRef.current?.click()}
+                  className="py-3 px-3 bg-gray-50 hover:bg-green-50/80 dark:bg-gray-800/80 dark:hover:bg-green-950/40 border border-gray-200 dark:border-gray-700 hover:border-green-400 rounded-2xl text-gray-700 dark:text-gray-200 flex flex-col items-center justify-center gap-1.5 transition-all text-xs font-bold active:scale-98 cursor-pointer"
+                >
+                  <FileUp className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <span>Pilih dari Galeri</span>
+                </button>
+              </div>
+
+              <p className="text-[10px] text-gray-400 text-center">
+                Mendukung JPG, PNG, WEBP, PDF (Maks 15MB/berkas, auto kompresi cerdas)
+              </p>
+            </div>
+
+            {/* List Berkas Yang Dipilih */}
+            {canteenPaymentProofFiles.length > 0 && (
+              <div className="space-y-1.5">
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 block">
+                  Berkas Terpilih ({canteenPaymentProofFiles.length}):
+                </span>
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                  {canteenPaymentProofFiles.map((file, fIdx) => {
+                    const isImg = isImageFile(file);
+                    return (
+                      <div key={fIdx} className="relative rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2 flex flex-col justify-between">
+                        {isImg ? (
+                          <div className="aspect-video w-full rounded-lg overflow-hidden bg-black/5 mb-1">
+                            <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
+                          </div>
+                        ) : (
+                          <div className="aspect-video w-full rounded-lg bg-green-50 dark:bg-green-950/40 flex flex-col items-center justify-center text-green-600 dark:text-green-400 mb-1">
+                            <FileText className="w-5 h-5" />
+                            <span className="text-[9px] font-bold uppercase mt-0.5">PDF</span>
+                          </div>
+                        )}
+                        <p className="text-[11px] font-semibold text-gray-800 dark:text-gray-200 truncate" title={file.name}>
+                          {file.name}
+                        </p>
+                        <div className="flex items-center justify-between text-[10px] text-gray-400 mt-0.5">
+                          <span>{formatFileSize(file.size)}</span>
+                          {file.originalSize && file.originalSize > file.size && (
+                            <span className="text-green-600 font-bold">
+                              (-{Math.round((1 - file.size / file.originalSize) * 100)}%)
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setCanteenPaymentProofFiles((prev) => prev.filter((_, i) => i !== fIdx))}
+                          className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-xs active:scale-90"
+                          title="Hapus berkas"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Pilihan Status Pembayaran */}
+            <div className="space-y-1.5 text-left">
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 block">
+                Ubah Status Pembayaran Menjadi:
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCanteenPaymentStatus('paid')}
+                  className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    canteenPaymentStatus === 'paid'
+                      ? 'bg-green-50 dark:bg-green-950/60 border-green-500 text-green-700 dark:text-green-300 ring-2 ring-green-500/30'
+                      : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+                  }`}
+                >
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <span>Langsung Lunas</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCanteenPaymentStatus('waiting_confirmation')}
+                  className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    canteenPaymentStatus === 'waiting_confirmation'
+                      ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-800 dark:text-amber-300 ring-2 ring-amber-500/30'
+                      : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+                  }`}
+                >
+                  <Clock className="w-4 h-4 text-amber-600" />
+                  <span>Menunggu Validasi</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderToUploadPaymentProof(null);
+                  setCanteenPaymentProofFiles([]);
+                }}
+                disabled={uploadCanteenPaymentProofMutation.isPending || isCompressingPaymentProof}
+                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={canteenPaymentProofFiles.length === 0 || uploadCanteenPaymentProofMutation.isPending || isCompressingPaymentProof}
+                onClick={() => {
+                  const formData = new FormData();
+                  canteenPaymentProofFiles.forEach((file) => {
+                    formData.append('proof_of_payment[]', file);
+                  });
+                  formData.append('payment_status', canteenPaymentStatus);
+                  uploadCanteenPaymentProofMutation.mutate({
+                    id: orderToUploadPaymentProof.id,
+                    formData,
+                    canteen_id: orderToUploadPaymentProof.canteen_id
+                  });
+                }}
+                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                {uploadCanteenPaymentProofMutation.isPending ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Mengunggah...</span>
+                  </>
+                ) : isCompressingPaymentProof ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Mengompresi...</span>
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>Unggah ({canteenPaymentProofFiles.length}) Bukti</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* MODAL CETAK STRUK THERMAL IWARE UNTUK KANTIN */}
       <ThermalReceiptModal
         isOpen={receiptModalConfig.isOpen}

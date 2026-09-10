@@ -12,6 +12,7 @@ use App\Domains\Canteen\Order;
 use App\Domains\Canteen\Resources\CanteenResource;
 use App\Domains\Canteen\Requests\BulkUpdateHoursRequest;
 use App\Domains\Canteen\Requests\UpdateCanteenHoursRequest;
+use Illuminate\Support\Facades\DB;
 
 class AdminController extends Controller
 {
@@ -92,8 +93,8 @@ class AdminController extends Controller
         $canteen = Canteen::findOrFail($id);
         
         $category = $request->input('category', $canteen->category ?? 'kauman');
-        $defaultDelivery = ($category === 'kota') ? 3500 : 2000;
-        $defaultAdmin = ($category === 'kota') ? 1500 : 1000;
+        $defaultDelivery = 3500;
+        $defaultAdmin = 1500;
 
         $canteen->update([
             'category' => $category,
@@ -276,49 +277,51 @@ class AdminController extends Controller
 
     public function processWithdrawal(Request $request, $id)
     {
-        $canteen = Canteen::findOrFail($id);
-        
         $data = $request->validate([
             'amount' => 'required|numeric|min:1000',
             'notes' => 'nullable|string|max:255',
         ]);
 
-        if ($canteen->balance < $data['amount']) {
+        return DB::transaction(function () use ($request, $id, $data) {
+            $canteen = Canteen::lockForUpdate()->findOrFail($id);
+
+            if ($canteen->balance < $data['amount']) {
+                return response()->json([
+                    'message' => 'Saldo kantin tidak mencukupi untuk pencairan ini.',
+                    'current_balance' => $canteen->balance
+                ], 400);
+            }
+
+            $withdrawalAmount = (float) $data['amount'];
+
+            \App\Domains\Canteen\CanteenBalanceLedger::record(
+                $canteen,
+                'out',
+                $withdrawalAmount,
+                "Pencairan dana kantin ({$canteen->name}) oleh admin: " . ($data['notes'] ?? '-')
+            );
+
+            $canteen->decrement('balance', $withdrawalAmount);
+
+            \App\Domains\Canteen\CanteenWithdrawal::create([
+                'canteen_id' => $canteen->id,
+                'admin_id' => $request->user()->id,
+                'amount' => $withdrawalAmount,
+                'notes' => $data['notes'] ?? null
+            ]);
+
+            \App\Domains\Admin\PaymentLog::create([
+                'user_id' => $canteen->user_id,
+                'amount' => $withdrawalAmount,
+                'type' => 'withdraw',
+                'description' => "Pencairan dana kantin ({$canteen->name}) oleh admin: " . ($data['notes'] ?? '-'),
+            ]);
+
             return response()->json([
-                'message' => 'Saldo kantin tidak mencukupi untuk pencairan ini.',
-                'current_balance' => $canteen->balance
-            ], 400);
-        }
-
-        $withdrawalAmount = (float)$data['amount'];
-
-        \App\Domains\Canteen\CanteenBalanceLedger::record(
-            $canteen,
-            'out',
-            $withdrawalAmount,
-            "Pencairan dana kantin ({$canteen->name}) oleh admin: " . ($data['notes'] ?? '-')
-        );
-
-        $canteen->decrement('balance', $withdrawalAmount);
-
-        \App\Domains\Canteen\CanteenWithdrawal::create([
-            'canteen_id' => $canteen->id,
-            'admin_id' => $request->user()->id,
-            'amount' => $withdrawalAmount,
-            'notes' => $data['notes']
-        ]);
-
-        \App\Domains\Admin\PaymentLog::create([
-            'user_id' => $canteen->user_id,
-            'amount' => $withdrawalAmount,
-            'type' => 'withdraw',
-            'description' => "Pencairan dana kantin ({$canteen->name}) oleh admin: " . ($data['notes'] ?? '-'),
-        ]);
-
-        return response()->json([
-            'message' => 'Pencairan dana berhasil diproses.',
-            'canteen' => $canteen->fresh()
-        ]);
+                'message' => 'Pencairan dana berhasil diproses.',
+                'canteen' => $canteen->fresh()
+            ]);
+        });
     }
 
     public function activityLogs(Request $request)

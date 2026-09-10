@@ -196,12 +196,36 @@ export default function Pembayaran() {
     }
   };
 
+  const handleCancelGroup = async (orders) => {
+    const pendingOrders = orders.filter(o => o.status === 'pending');
+    if (pendingOrders.length === 0) return;
+    if (window.confirm(`Apakah Anda yakin ingin membatalkan pesanan ${pendingOrders.length > 1 ? `seluruh (${pendingOrders.length}) toko ini` : 'ini'}?`)) {
+      for (const o of pendingOrders) {
+        try {
+          await api.put(`/orders/${o.id}/cancel`);
+        } catch (e) {
+          // continue
+        }
+      }
+      queryClient.invalidateQueries(['user_orders']);
+      toast.success('Pesanan berhasil dibatalkan');
+    }
+  };
+
   const uploadPaymentProofMutation = useMutation({
-    mutationFn: async ({ id, formData }) => {
-      const res = await api.post(`/orders/${id}/payment-proof`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 30000, // 30s timeout for high traffic resilience
-      });
+    mutationFn: async ({ id, checkoutId, formData }) => {
+      let res;
+      if (checkoutId) {
+        res = await api.post(`/orders/checkout/${checkoutId}/payment-proof`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 30000, // 30s timeout for high traffic resilience
+        });
+      } else {
+        res = await api.post(`/orders/${id}/payment-proof`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 30000,
+        });
+      }
       return res.data;
     },
     retry: (failureCount, error) => {
@@ -215,6 +239,7 @@ export default function Pembayaran() {
     retryDelay: (attemptIndex) => Math.min(1500 * (attemptIndex + 1), 6000),
     onSuccess: () => {
       queryClient.invalidateQueries(['user_orders']);
+      queryClient.invalidateQueries(['orders']);
       toast.success('Bukti transfer berhasil diunggah!');
       setShowPaymentProofModal(false);
       setPaymentProofFiles([]);
@@ -268,6 +293,88 @@ export default function Pembayaran() {
     return list;
   }, [rawOrders, filterMode, currentParams.start_date, currentParams.end_date, activeFilter]);
 
+  const checkoutGroups = useMemo(() => {
+    const groups = [];
+    const map = new Map();
+
+    filteredOrders.forEach(order => {
+      // Group by checkout_id if available; otherwise fallback to unique order id
+      const key = order.checkout_id ? `chk_${order.checkout_id}` : `ord_${order.id}`;
+      if (!map.has(key)) {
+        const groupObj = {
+          key,
+          checkoutId: order.checkout_id || null,
+          created_at: order.created_at,
+          delivery_location: order.delivery_location,
+          orders: []
+        };
+        map.set(key, groupObj);
+        groups.push(groupObj);
+      }
+      map.get(key).orders.push(order);
+    });
+
+    return groups.map(group => {
+      const orders = group.orders;
+      const isMultiStore = orders.length > 1;
+
+      // Calculate totals across all orders in group
+      const grandTotal = orders.reduce((sum, o) => sum + parseFloat(o.total_price || 0), 0);
+      const totalDeliveryFee = orders.reduce((sum, o) => sum + parseFloat(o.delivery_fee || 0), 0);
+      const totalAdminFee = orders.reduce((sum, o) => sum + parseFloat(o.admin_fee || 0), 0);
+      const totalProductSubtotal = orders.reduce((sum, o) => {
+        const sub = o.is_custom 
+          ? Math.max(0, parseFloat(o.total_price) - parseFloat(o.delivery_fee || 0) - parseFloat(o.admin_fee || 0))
+          : (o.items?.reduce((s, i) => s + parseFloat(i.subtotal), 0) || 0);
+        return sum + sub;
+      }, 0);
+
+      // Payment status across group
+      const isAllPaid = orders.every(o => o.payment_status === 'paid');
+      const isAnyWaiting = orders.some(o => o.payment_status === 'waiting_confirmation');
+      const payment_status = isAllPaid ? 'paid' : (isAnyWaiting ? 'waiting_confirmation' : 'unpaid');
+
+      // Order status across group
+      const isAllCompleted = orders.every(o => o.status === 'completed');
+      const isAllCancelled = orders.every(o => o.status === 'cancelled');
+      const isAnyProcessing = orders.some(o => o.status === 'processing');
+      const isAnyPending = orders.some(o => o.status === 'pending');
+      
+      let overallStatus = 'pending';
+      if (isAllCompleted) overallStatus = 'completed';
+      else if (isAllCancelled) overallStatus = 'cancelled';
+      else if (isAnyProcessing) overallStatus = 'processing';
+      else if (isAnyPending) overallStatus = 'pending';
+
+      // Gather proofs
+      const proof_of_payment = orders.find(o => o.proof_of_payment)?.proof_of_payment || null;
+      
+      const proof_of_purchase = orders.flatMap(o => {
+        if (!o.proof_of_purchase) return [];
+        return Array.isArray(o.proof_of_purchase) ? o.proof_of_purchase : [o.proof_of_purchase];
+      });
+
+      const proof_of_delivery = orders.flatMap(o => {
+        if (!o.proof_of_delivery) return [];
+        return Array.isArray(o.proof_of_delivery) ? o.proof_of_delivery : [o.proof_of_delivery];
+      });
+
+      return {
+        ...group,
+        isMultiStore,
+        grandTotal,
+        totalDeliveryFee,
+        totalAdminFee,
+        totalProductSubtotal,
+        payment_status,
+        overallStatus,
+        proof_of_payment,
+        proof_of_purchase,
+        proof_of_delivery
+      };
+    });
+  }, [filteredOrders]);
+
   const filters = [
     { key: 'all', label: 'Semua Status' },
     { key: 'pending', label: 'Menunggu' },
@@ -283,6 +390,23 @@ export default function Pembayaran() {
     else if (p.startsWith('8')) p = '628' + p.substring(1);
     else if (p.startsWith('0')) p = '62' + p.substring(1);
     return `https://wa.me/${p}`;
+  };
+
+  const buildCourierWAText = (group) => {
+    const santriName = user?.santri_name || user?.name || '-';
+    let santriRoom = user?.santri_room || group.delivery_location || '';
+
+    let text = `Assalamu'alaikum Warahmatullahi Wabarakatuh, Kurir Higo Pondok.\n`;
+    text += `Saya ingin konfirmasi pengiriman pesanan saya:\n`;
+    if (group.checkoutId) {
+      text += `*ID Checkout*: #${group.checkoutId}\n`;
+    }
+    text += `*Toko*: ${group.orders.map(o => o.canteen?.name).filter(Boolean).join(', ')}\n\n`;
+    text += `*Penerima*: ${santriName}\n`;
+    if (santriRoom) text += `🏠 Lokasi/Kamar: ${santriRoom}\n\n`;
+    text += `*Total Tagihan: Rp ${Math.round(group.grandTotal).toLocaleString('id-ID')}*\n\n`;
+    text += `Mohon bantuannya untuk pengiriman ya, Syukron! 🙏`;
+    return text;
   };
 
   const buildOrderWAText = (order) => {
@@ -554,483 +678,599 @@ export default function Pembayaran() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5 sm:gap-3">
-            {filteredOrders.map(order => (
-              <div key={order.id} className="bg-white dark:bg-gray-900 p-4 sm:p-5 rounded-2xl border border-green-300/90 dark:border-green-800 shadow-sm hover:border-green-500 dark:hover:border-green-600 hover:shadow-md transition-all space-y-3">
-              {/* Header: ID, Date, Canteen Name & Status Badges */}
-              <div className="flex justify-between items-start gap-2 pb-3 border-b border-gray-200 dark:border-gray-700/80">
-                <div>
-                  <div className="flex items-center gap-1.5 flex-wrap text-xs text-gray-500 mb-1">
-                    <span className="font-bold text-gray-800 dark:text-gray-200">Order #{order.id}</span>
-                    <span>•</span>
-                    <span>{new Date(order.created_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</span>
-                  </div>
-                  <h3 className="font-extrabold text-base sm:text-lg text-gray-900 dark:text-white flex items-center gap-1.5">
-                    <Store className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
-                    {order.canteen?.name || 'Kantin'}
-                  </h3>
-                  {order.delivery_location && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
-                      <span>📍</span> 
-                      <span className="font-semibold text-gray-700 dark:text-gray-300">Kamar Santri:</span>
-                      <span>{order.delivery_location}</span>
-                    </p>
-                  )}
-                </div>
+            {checkoutGroups.map(group => {
+              const isMulti = group.isMultiStore;
+              const singleOrder = group.orders[0];
+              const cardKey = group.key;
+              const isExpanded = !!expandedOrders[cardKey];
+              const allPending = group.orders.every(o => o.status === 'pending');
 
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-2xs ${
-                    order.payment_status === 'paid' 
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border border-green-200 dark:border-green-800' 
-                      : order.payment_status === 'waiting_confirmation'
-                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 ring-1 ring-amber-400 animate-pulse border border-amber-200'
-                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300 border border-yellow-200'
-                  }`}>
-                    {order.payment_status === 'paid' 
-                      ? 'Sudah Dibayar' 
-                      : order.payment_status === 'waiting_confirmation' 
-                        ? 'Menunggu Validasi Toko' 
-                        : 'Belum Bayar'}
-                  </div>
-                  <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                    order.status === 'completed' 
-                      ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800' 
-                      : order.status === 'processing' 
-                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800' 
-                      : order.status === 'cancelled'
-                      ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800'
-                      : 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
-                  }`}>
-                    {order.is_custom && parseFloat(order.total_price) === 0 ? 'Menunggu Harga Toko' :
-                     order.status === 'pending' ? 'Menunggu Konfirmasi' : 
-                     order.status === 'processing' ? 'Sedang Diproses' : 
-                     order.status === 'completed' ? 'Selesai' : 
-                     order.status === 'cancelled' ? 'Dibatalkan' : order.status}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Items List Box */}
-              <div className="space-y-1.5 py-1">
-                {order.custom_notes && (
-                  <div className="bg-purple-50/80 dark:bg-purple-950/30 p-2.5 rounded-xl border border-purple-200/80 dark:border-purple-900/50 mb-2">
-                    <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase block mb-0.5">Catatan Pesanan:</span>
-                    <p className="text-xs font-medium text-purple-900 dark:text-purple-200 whitespace-pre-wrap">
-                      {order.custom_notes}
-                    </p>
-                    {order.is_custom && parseFloat(order.total_price) === 0 && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 font-semibold mt-2">
-                        ⏳ Pihak toko sedang menghitung & menentukan total harga pesanan ini.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {order.is_custom && parseFloat(order.total_price) > 0 && (
-                  <div className="text-sm p-2 rounded-xl bg-gray-50 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800 flex justify-between items-center">
-                    <span className="text-purple-700 dark:text-purple-300 flex items-center gap-2">
-                      <span className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 font-bold px-1.5 py-0.5 rounded text-xs">1x</span>
-                      <span className="font-medium text-xs sm:text-sm">Pesanan Khusus / Titip Beli</span>
-                    </span>
-                    <span className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
-                      Rp {Math.round(Math.max(0, parseFloat(order.total_price) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0))).toLocaleString('id-ID')}
-                    </span>
-                  </div>
-                )}
-
-                {order.items?.map(item => (
-                  <div key={item.id} className="text-sm p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors">
-                    <div className="flex justify-between items-center cursor-pointer" onClick={() => setSelectedProduct(item.product)}>
-                      <span className="text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                        <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-bold px-1.5 py-0.5 rounded text-xs">{item.quantity}x</span>
-                        <span className="font-medium text-xs sm:text-sm">{item.product?.name}</span>
-                      </span>
-                      <span className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
-                        Rp {Math.round(parseFloat(item.subtotal)).toLocaleString('id-ID')}
-                      </span>
-                    </div>
-                    {item.notes && (
-                      <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded mt-1 inline-block font-medium ml-7">
-                        📝 Catatan: {item.notes}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* ======================================================== */}
-              {/* DEDICATED VISUAL PROOF & DOCUMENTATION SECTION */}
-              {/* ======================================================== */}
-              {((order.proof_of_purchase && order.proof_of_purchase.length > 0) || 
-                (order.status === 'completed' && order.proof_of_delivery && order.proof_of_delivery.length > 0) ||
-                order.proof_of_payment || 
-                (order.status !== 'cancelled' && order.payment_status === 'unpaid')) && (
-                <div className="pt-3 pb-1 border-t border-gray-200 dark:border-gray-700 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-green-600" />
-                      Bukti & Dokumentasi Foto
-                    </span>
-                    <span className="text-[10px] text-gray-400 font-medium">
-                      Klik kartu untuk memperbesar
-                    </span>
-                  </div>
-
-                  {/* 1. Struk Pembelian Toko Card (Kurir) */}
-                  {order.proof_of_purchase && order.proof_of_purchase.length > 0 && (() => {
-                    const proofs = Array.isArray(order.proof_of_purchase) ? order.proof_of_purchase : [order.proof_of_purchase];
-                    const firstProofUrl = getStorageUrl(proofs[0]);
-                    const count = proofs.length;
-                    const fullUrls = proofs.map(p => getStorageUrl(p));
-
-                    return (
-                      <div 
-                        onClick={() => setSelectedProofs(fullUrls)}
-                        className="group relative overflow-hidden bg-gradient-to-r from-purple-50 via-purple-50/70 to-indigo-50/40 dark:from-purple-950/40 dark:via-purple-950/20 dark:to-indigo-950/30 border-2 border-purple-300/80 dark:border-purple-800/80 hover:border-purple-500 dark:hover:border-purple-600 rounded-2xl p-2.5 sm:p-3 transition-all duration-200 hover:shadow-md cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          {/* Mini Thumbnail Preview */}
-                          <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-purple-100 dark:bg-purple-900/50 shrink-0 ring-2 ring-purple-400/80 dark:ring-purple-700 shadow-xs flex items-center justify-center">
-                            <img 
-                              src={firstProofUrl} 
-                              alt="Struk Toko" 
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                                if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                              }}
-                            />
-                            <div className="hidden absolute inset-0 bg-purple-100 dark:bg-purple-900/50 items-center justify-center text-purple-600 dark:text-purple-400">
-                              <Receipt className="w-5 h-5" />
-                            </div>
-                            <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-[9px] text-white px-1 py-0.2 rounded font-bold backdrop-blur-xs">
-                              🔍
-                            </span>
-                          </div>
-
-                          {/* Text Info */}
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-xs sm:text-sm font-black text-purple-950 dark:text-purple-100 truncate">
-                                Struk Pembelian Toko
-                              </span>
-                              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                                {count} Foto
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-purple-700/80 dark:text-purple-300/80 truncate mt-0.5 flex items-center gap-1">
-                              <span>Foto nota kasir dari kurir • Sentuh untuk lihat</span>
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Call to Action Button Pill */}
-                        <div className="shrink-0">
-                          <button
-                            type="button"
-                            className="px-3 py-1.5 bg-purple-600 group-hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 group-hover:gap-2"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Lihat Struk</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* 2. Bukti Serah Terima Card */}
-                  {order.status === 'completed' && order.proof_of_delivery && order.proof_of_delivery.length > 0 && (() => {
-                    const proofs = Array.isArray(order.proof_of_delivery) ? order.proof_of_delivery : [order.proof_of_delivery];
-                    const firstProofUrl = getStorageUrl(proofs[0]);
-                    const count = proofs.length;
-                    const fullUrls = proofs.map(p => getStorageUrl(p));
-
-                    return (
-                      <div 
-                        onClick={() => setSelectedProofs(fullUrls)}
-                        className="group relative overflow-hidden bg-gradient-to-r from-blue-50 via-sky-50/70 to-emerald-50/40 dark:from-blue-950/40 dark:via-sky-950/20 dark:to-emerald-950/30 border-2 border-blue-300/80 dark:border-blue-800/80 hover:border-blue-500 dark:hover:border-blue-600 rounded-2xl p-2.5 sm:p-3 transition-all duration-200 hover:shadow-md cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          {/* Mini Thumbnail Preview */}
-                          <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-blue-100 dark:bg-blue-900/50 shrink-0 ring-2 ring-blue-400/80 dark:ring-blue-700 shadow-xs flex items-center justify-center">
-                            <img 
-                              src={firstProofUrl} 
-                              alt="Bukti Serah Terima" 
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                                if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                              }}
-                            />
-                            <div className="hidden absolute inset-0 bg-blue-100 dark:bg-blue-900/50 items-center justify-center text-blue-600 dark:text-blue-400">
-                              <Camera className="w-5 h-5" />
-                            </div>
-                            <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-[9px] text-white px-1 py-0.2 rounded font-bold backdrop-blur-xs">
-                              📸
-                            </span>
-                          </div>
-
-                          {/* Text Info */}
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-xs sm:text-sm font-black text-blue-950 dark:text-blue-100 truncate">
-                                Foto Paket Sampai ke Santri
-                              </span>
-                              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                                {count} Foto
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-blue-700/80 dark:text-blue-300/80 truncate mt-0.5 flex items-center gap-1">
-                              <span>Foto paket diterima santri • Sentuh untuk lihat</span>
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Call to Action Button Pill */}
-                        <div className="shrink-0">
-                          <button
-                            type="button"
-                            className="px-3 py-1.5 bg-blue-600 group-hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 group-hover:gap-2"
-                          >
-                            <Camera className="w-3.5 h-3.5" />
-                            <span>Lihat Foto</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* 3. Bukti Transfer Card (Pembayaran Wali) */}
-                  {order.proof_of_payment && (() => {
-                    const proofs = Array.isArray(order.proof_of_payment) ? order.proof_of_payment : [order.proof_of_payment];
-                    const firstProofUrl = getStorageUrl(proofs[0]);
-                    const count = proofs.length;
-                    const fullUrls = proofs.map(p => getStorageUrl(p));
-                    const isPaid = order.payment_status === 'paid';
-                    const isWaiting = order.payment_status === 'waiting_confirmation';
-
-                    return (
-                      <div className="space-y-2">
-                        {/* Status Validation Alert */}
-                        {isWaiting && (
-                          <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800 flex items-center gap-2.5 text-xs text-amber-800 dark:text-amber-300 font-medium shadow-2xs">
-                            <span className="text-base shrink-0 animate-pulse">⏳</span>
-                            <div className="min-w-0">
-                              <strong className="block font-bold">Bukti Transfer Berhasil Terkirim</strong>
-                              <span>Sedang menunggu pihak kantin memvalidasi pembayaran Anda.</span>
-                            </div>
-                          </div>
-                        )}
-                        {isPaid && (
-                          <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 flex items-center gap-2.5 text-xs text-emerald-800 dark:text-emerald-300 font-medium shadow-2xs">
-                            <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                            <div className="min-w-0">
-                              <strong className="block font-bold">Pembayaran Divalidasi Lunas</strong>
-                              <span>Pembayaran Anda telah diverifikasi oleh kasir kantin.</span>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Visual Proof Card */}
-                        <div 
-                          onClick={() => setSelectedProofs(fullUrls)}
-                          className="group relative overflow-hidden bg-gradient-to-r from-indigo-50 via-blue-50/40 to-purple-50/30 dark:from-indigo-950/40 dark:via-blue-950/20 dark:to-purple-950/30 border-2 border-indigo-300/80 dark:border-indigo-800/80 hover:border-indigo-500 dark:hover:border-indigo-600 rounded-2xl p-2.5 sm:p-3 transition-all duration-200 hover:shadow-md cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            {/* Mini Thumbnail Preview */}
-                            <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-indigo-100 dark:bg-indigo-900/50 shrink-0 ring-2 ring-indigo-400/80 dark:ring-indigo-700 shadow-xs flex items-center justify-center">
-                              <img 
-                                src={firstProofUrl} 
-                                alt="Bukti Transfer" 
-                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
-                                  if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                }}
-                              />
-                              <div className="hidden absolute inset-0 bg-indigo-100 dark:bg-indigo-900/50 items-center justify-center text-indigo-600 dark:text-indigo-400">
-                                <ImageIcon className="w-5 h-5" />
-                              </div>
-                              <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-[9px] text-white px-1 py-0.2 rounded font-bold backdrop-blur-xs">
-                                💳
-                              </span>
-                            </div>
-
-                            {/* Text Info */}
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-xs sm:text-sm font-black text-indigo-950 dark:text-indigo-100 truncate">
-                                  Bukti Transfer Anda
-                                </span>
-                                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                                  {count} Foto
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80 truncate mt-0.5">
-                                Klik untuk melihat foto bukti transfer Anda
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Call to Action Button Pill */}
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              className="px-3 py-1.5 bg-indigo-600 group-hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 group-hover:gap-2"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>Lihat</span>
-                            </button>
-
-                            {order.status !== 'cancelled' && order.payment_status !== 'paid' && (
-                              <button 
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveOrderForPaymentProof(order);
-                                  setShowPaymentProofModal(true);
-                                }}
-                                className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1 active:scale-95"
-                              >
-                                <span>+ Tambah</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* 4. Section Upload Pertama Kali (Jika belum ada bukti & belum lunas) */}
-                  {order.status !== 'cancelled' && order.payment_status === 'unpaid' && !order.proof_of_payment && (
-                    <div className="space-y-2">
-                      <button 
-                        type="button"
-                        onClick={() => {
-                          setActiveOrderForPaymentProof(order);
-                          setShowPaymentProofModal(true);
-                        }}
-                        className="w-full flex items-center justify-between p-3.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-2xl transition-all font-bold shadow-md shadow-green-600/20 active:scale-[0.98] group cursor-pointer"
-                      >
-                        <div className="flex items-center gap-2.5 text-left">
-                          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-                            <Camera className="w-5 h-5 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-xs sm:text-sm font-extrabold leading-tight">Unggah Bukti Transfer Sekarang</p>
-                            <p className="text-[10px] text-white/80 font-normal mt-0.5">Kirim foto bukti transfer agar pesanan segera diproses</p>
-                          </div>
-                        </div>
-                        <span className="px-2.5 py-1 bg-white/20 group-hover:bg-white/30 rounded-xl text-xs font-black shrink-0 flex items-center gap-1">
-                          Upload ➔
+              return (
+                <div key={cardKey} className="bg-white dark:bg-gray-900 p-4 sm:p-5 rounded-2xl border border-green-300/90 dark:border-green-800 shadow-sm hover:border-green-500 dark:hover:border-green-600 hover:shadow-md transition-all space-y-3">
+                  {/* Header: ID, Date, Canteen Name & Status Badges */}
+                  <div className="flex justify-between items-start gap-2 pb-3 border-b border-gray-200 dark:border-gray-700/80">
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap text-xs text-gray-500 mb-1">
+                        <span className="font-bold text-gray-800 dark:text-gray-200">
+                          {group.checkoutId ? `Checkout #${group.checkoutId}` : `Order #${singleOrder.id}`}
                         </span>
-                      </button>
+                        <span>•</span>
+                        <span>{new Date(group.created_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                      </div>
 
-                      {!isPaymentTime(order) && (
-                        <p className="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-3 py-1.5 rounded-xl border border-amber-200 dark:border-amber-800/60 flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 shrink-0 text-amber-600" />
-                          <span>Toko sedang tutup. Bukti transfer tetap dapat Anda kirim sekarang dan akan diverifikasi saat toko buka.</span>
+                      {isMulti ? (
+                        <div>
+                          <h3 className="font-extrabold text-base sm:text-lg text-gray-900 dark:text-white flex items-center gap-1.5">
+                            <Store className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
+                            <span>{group.orders.length} Toko Pesanan</span>
+                          </h3>
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                            {group.orders.map(o => o.canteen?.name).filter(Boolean).join(' • ')}
+                          </p>
+                        </div>
+                      ) : (
+                        <h3 className="font-extrabold text-base sm:text-lg text-gray-900 dark:text-white flex items-center gap-1.5">
+                          <Store className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
+                          {singleOrder.canteen?.name || 'Kantin'}
+                        </h3>
+                      )}
+
+                      {group.delivery_location && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
+                          <span>📍</span> 
+                          <span className="font-semibold text-gray-700 dark:text-gray-300">Kamar Santri:</span>
+                          <span>{group.delivery_location}</span>
                         </p>
                       )}
                     </div>
-                  )}
-                </div>
-              )}
 
-              {/* Rincian Biaya & Total */}
-              <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-2">
-                <button 
-                  onClick={() => toggleOrderDetails(order.id)}
-                  className="w-full flex items-center justify-between py-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-                >
-                  <span className="font-semibold">Rincian Biaya & Ongkir</span>
-                  <span className="text-[10px] font-bold border px-2 py-0.5 rounded-full bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-600 dark:text-gray-300">
-                    {expandedOrders[order.id] ? 'Tutup ⌃' : 'Lihat ⌄'}
-                  </span>
-                </button>
-                
-                {expandedOrders[order.id] && (
-                  <div className="space-y-1.5 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
-                    <div className="flex justify-between">
-                      <span>Subtotal {order.is_custom ? 'Pesanan Khusus' : 'Makanan'}</span>
-                      <span className="font-semibold text-gray-900 dark:text-white">
-                        Rp {
-                          (() => {
-                            const sub = order.is_custom
-                              ? Math.max(0, parseFloat(order.total_price) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0))
-                              : (order.items?.reduce((sum, item) => sum + parseFloat(item.subtotal), 0) || 0);
-                            return Math.round(sub).toLocaleString('id-ID');
-                          })()
-                        }
-                      </span>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {/* Payment Status Badge */}
+                      <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-2xs ${
+                        group.payment_status === 'paid' 
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border border-green-200 dark:border-green-800' 
+                          : group.payment_status === 'waiting_confirmation'
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 ring-1 ring-amber-400 animate-pulse border border-amber-200'
+                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300 border border-yellow-200'
+                      }`}>
+                        {group.payment_status === 'paid' 
+                          ? 'Sudah Dibayar' 
+                          : group.payment_status === 'waiting_confirmation' 
+                            ? 'Menunggu Validasi Toko' 
+                            : 'Belum Bayar'}
+                      </div>
+
+                      {/* Order Status Badge */}
+                      <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                        group.overallStatus === 'completed' 
+                          ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800' 
+                          : group.overallStatus === 'processing' 
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800' 
+                          : group.overallStatus === 'cancelled'
+                          ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800'
+                          : 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
+                      }`}>
+                        {group.overallStatus === 'pending' ? 'Menunggu Konfirmasi' : 
+                         group.overallStatus === 'processing' ? 'Sedang Diproses' : 
+                         group.overallStatus === 'completed' ? 'Selesai' : 
+                         group.overallStatus === 'cancelled' ? 'Dibatalkan' : group.overallStatus}
+                      </div>
                     </div>
-                    {parseFloat(order.delivery_fee) > 0 && (
-                      <div className="flex justify-between">
-                        <span>Ongkos Kirim (Kurir)</span>
-                        <span className="font-semibold text-gray-900 dark:text-white">Rp {Math.round(parseFloat(order.delivery_fee)).toLocaleString('id-ID')}</span>
-                      </div>
-                    )}
-                    {parseFloat(order.admin_fee) > 0 && (
-                      <div className="flex justify-between">
-                        <span>Biaya Layanan & Admin</span>
-                        <span className="font-semibold text-gray-900 dark:text-white">Rp {Math.round(parseFloat(order.admin_fee)).toLocaleString('id-ID')}</span>
-                      </div>
+                  </div>
+
+                  {/* Items List Box */}
+                  <div className="space-y-2 py-1">
+                    {isMulti ? (
+                      // Multi-store: Render per-canteen sections
+                      group.orders.map((order, oIdx) => (
+                        <div key={order.id} className="p-2.5 rounded-xl bg-gray-50/80 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700/60 space-y-1.5">
+                          <div className="flex items-center justify-between pb-1 border-b border-gray-200/60 dark:border-gray-700/60">
+                            <div className="flex items-center gap-1.5">
+                              <Store className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                              <span className="font-bold text-xs text-gray-900 dark:text-white">
+                                {order.canteen?.name || `Toko ${oIdx + 1}`}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${
+                                order.status === 'completed' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                order.status === 'processing' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                                order.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                'bg-gray-100 text-gray-700 border-gray-200'
+                              }`}>
+                                {order.status === 'pending' ? 'Menunggu' : order.status === 'processing' ? 'Diproses' : order.status === 'completed' ? 'Selesai' : order.status}
+                              </span>
+                              {order.canteen?.whatsapp_number && (
+                                <a
+                                  href={formatPhoneWA(order.canteen.whatsapp_number) + `?text=${encodeURIComponent(buildOrderWAText(order))}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-emerald-600 hover:text-emerald-700 p-0.5 rounded hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                                  title="Hubungi Toko ini via WhatsApp"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+
+                          {order.custom_notes && (
+                            <div className="bg-purple-50/80 dark:bg-purple-950/30 p-2 rounded-lg border border-purple-200/80 dark:border-purple-900/50">
+                              <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase block mb-0.5">Catatan Toko:</span>
+                              <p className="text-xs font-medium text-purple-900 dark:text-purple-200 whitespace-pre-wrap">
+                                {order.custom_notes}
+                              </p>
+                            </div>
+                          )}
+
+                          {order.items?.map(item => (
+                            <div key={item.id} className="text-xs py-1 hover:bg-gray-100/50 dark:hover:bg-gray-800/60 transition-colors rounded">
+                              <div className="flex justify-between items-center cursor-pointer" onClick={() => setSelectedProduct(item.product)}>
+                                <span className="text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                  <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-bold px-1.5 py-0.2 rounded text-[11px]">
+                                    {item.quantity}x
+                                  </span>
+                                  <span className="font-medium">{item.product?.name}</span>
+                                </span>
+                                <span className="font-bold text-gray-900 dark:text-white">
+                                  Rp {Math.round(parseFloat(item.subtotal)).toLocaleString('id-ID')}
+                                </span>
+                              </div>
+                              {item.notes && (
+                                <p className="text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.2 rounded mt-0.5 inline-block font-medium ml-6">
+                                  📝 {item.notes}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+
+                          <div className="flex justify-between text-[11px] font-semibold text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-200/40 dark:border-gray-700/40">
+                            <span>Total Toko Ini:</span>
+                            <span className="text-gray-800 dark:text-gray-200 font-bold">
+                              Rp {Math.round(parseFloat(order.total_price)).toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      // Single Store items
+                      <>
+                        {singleOrder.custom_notes && (
+                          <div className="bg-purple-50/80 dark:bg-purple-950/30 p-2.5 rounded-xl border border-purple-200/80 dark:border-purple-900/50 mb-2">
+                            <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase block mb-0.5">Catatan Pesanan:</span>
+                            <p className="text-xs font-medium text-purple-900 dark:text-purple-200 whitespace-pre-wrap">
+                              {singleOrder.custom_notes}
+                            </p>
+                          </div>
+                        )}
+
+                        {singleOrder.items?.map(item => (
+                          <div key={item.id} className="text-sm p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors">
+                            <div className="flex justify-between items-center cursor-pointer" onClick={() => setSelectedProduct(item.product)}>
+                              <span className="text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                                <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-bold px-1.5 py-0.5 rounded text-xs">{item.quantity}x</span>
+                                <span className="font-medium text-xs sm:text-sm">{item.product?.name}</span>
+                              </span>
+                              <span className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
+                                Rp {Math.round(parseFloat(item.subtotal)).toLocaleString('id-ID')}
+                              </span>
+                            </div>
+                            {item.notes && (
+                              <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded mt-1 inline-block font-medium ml-7">
+                                📝 Catatan: {item.notes}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </>
                     )}
                   </div>
-                )}
 
-                <div className="flex justify-between items-center pt-1">
-                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium">Total Belanja</p>
-                  <p className="font-black text-green-700 dark:text-green-400 text-base sm:text-lg">
-                    Rp {Math.round(parseFloat(order.total_price)).toLocaleString('id-ID')}
-                  </p>
-                </div>
+                  {/* DEDICATED VISUAL PROOF & DOCUMENTATION SECTION */}
+                  {((group.proof_of_purchase && group.proof_of_purchase.length > 0) || 
+                    (group.overallStatus === 'completed' && group.proof_of_delivery && group.proof_of_delivery.length > 0) ||
+                    group.proof_of_payment || 
+                    (group.overallStatus !== 'cancelled' && group.payment_status === 'unpaid')) && (
+                    <div className="pt-3 pb-1 border-t border-gray-200 dark:border-gray-700 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-green-600" />
+                          Bukti & Dokumentasi Foto
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-medium">
+                          Klik kartu untuk memperbesar
+                        </span>
+                      </div>
 
-                {/* Contact Buttons */}
-                {(order.canteen?.whatsapp_number || order.courier?.phone) && (
-                  <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                    {order.canteen?.whatsapp_number && (
-                      <a 
-                        href={formatPhoneWA(order.canteen.whatsapp_number) + `?text=${encodeURIComponent(buildOrderWAText(order))}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-[0.98]"
-                      >
-                        <MessageCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> 
-                        <span>Hubungi Toko</span>
-                      </a>
-                    )}
-                    {order.courier?.phone && order.status !== 'cancelled' && (
-                      <a 
-                        href={formatPhoneWA(order.courier.phone) + `?text=${encodeURIComponent(buildOrderWAText(order))}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-[0.98]"
-                      >
-                        <MessageCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" /> 
-                        <span>Hubungi Kurir</span>
-                      </a>
-                    )}
-                  </div>
-                )}
-                
-                {/* Cancel Button */}
-                {order.status === 'pending' && (
-                  <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                      {/* 1. Struk Pembelian Toko Card (Kurir) */}
+                      {group.proof_of_purchase && group.proof_of_purchase.length > 0 && (() => {
+                        const proofs = group.proof_of_purchase;
+                        const firstProofUrl = getStorageUrl(proofs[0]);
+                        const count = proofs.length;
+                        const fullUrls = proofs.map(p => getStorageUrl(p));
+
+                        return (
+                          <div 
+                            onClick={() => setSelectedProofs(fullUrls)}
+                            className="group relative overflow-hidden bg-gradient-to-r from-purple-50 via-purple-50/70 to-indigo-50/40 dark:from-purple-950/40 dark:via-purple-950/20 dark:to-indigo-950/30 border-2 border-purple-300/80 dark:border-purple-800/80 hover:border-purple-500 dark:hover:border-purple-600 rounded-2xl p-2.5 sm:p-3 transition-all duration-200 hover:shadow-md cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-purple-100 dark:bg-purple-900/50 shrink-0 ring-2 ring-purple-400/80 dark:ring-purple-700 shadow-xs flex items-center justify-center">
+                                <img 
+                                  src={firstProofUrl} 
+                                  alt="Struk Toko" 
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                  }}
+                                />
+                                <div className="hidden absolute inset-0 bg-purple-100 dark:bg-purple-900/50 items-center justify-center text-purple-600 dark:text-purple-400">
+                                  <Receipt className="w-5 h-5" />
+                                </div>
+                                <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-[9px] text-white px-1 py-0.2 rounded font-bold backdrop-blur-xs">
+                                  🔍
+                                </span>
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-xs sm:text-sm font-black text-purple-950 dark:text-purple-100 truncate">
+                                    Struk Pembelian Toko
+                                  </span>
+                                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                    {count} Foto
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-purple-700/80 dark:text-purple-300/80 truncate mt-0.5 flex items-center gap-1">
+                                  <span>Foto nota kasir dari kurir • Sentuh untuk lihat</span>
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="shrink-0">
+                              <button
+                                type="button"
+                                className="px-3 py-1.5 bg-purple-600 group-hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 group-hover:gap-2"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Lihat Struk</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* 2. Bukti Serah Terima Card */}
+                      {group.overallStatus === 'completed' && group.proof_of_delivery && group.proof_of_delivery.length > 0 && (() => {
+                        const proofs = group.proof_of_delivery;
+                        const firstProofUrl = getStorageUrl(proofs[0]);
+                        const count = proofs.length;
+                        const fullUrls = proofs.map(p => getStorageUrl(p));
+
+                        return (
+                          <div 
+                            onClick={() => setSelectedProofs(fullUrls)}
+                            className="group relative overflow-hidden bg-gradient-to-r from-blue-50 via-sky-50/70 to-emerald-50/40 dark:from-blue-950/40 dark:via-sky-950/20 dark:to-emerald-950/30 border-2 border-blue-300/80 dark:border-blue-800/80 hover:border-blue-500 dark:hover:border-blue-600 rounded-2xl p-2.5 sm:p-3 transition-all duration-200 hover:shadow-md cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-blue-100 dark:bg-blue-900/50 shrink-0 ring-2 ring-blue-400/80 dark:ring-blue-700 shadow-xs flex items-center justify-center">
+                                <img 
+                                  src={firstProofUrl} 
+                                  alt="Bukti Serah Terima" 
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                  }}
+                                />
+                                <div className="hidden absolute inset-0 bg-blue-100 dark:bg-blue-900/50 items-center justify-center text-blue-600 dark:text-blue-400">
+                                  <Camera className="w-5 h-5" />
+                                </div>
+                                <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-[9px] text-white px-1 py-0.2 rounded font-bold backdrop-blur-xs">
+                                  📸
+                                </span>
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-xs sm:text-sm font-black text-blue-950 dark:text-blue-100 truncate">
+                                    Foto Paket Sampai ke Santri
+                                  </span>
+                                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                    {count} Foto
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-blue-700/80 dark:text-blue-300/80 truncate mt-0.5 flex items-center gap-1">
+                                  <span>Foto paket diterima santri • Sentuh untuk lihat</span>
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="shrink-0">
+                              <button
+                                type="button"
+                                className="px-3 py-1.5 bg-blue-600 group-hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 group-hover:gap-2"
+                              >
+                                <Camera className="w-3.5 h-3.5" />
+                                <span>Lihat Foto</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* 3. Bukti Transfer Card (Pembayaran Wali) */}
+                      {group.proof_of_payment && (() => {
+                        const proofs = Array.isArray(group.proof_of_payment) ? group.proof_of_payment : [group.proof_of_payment];
+                        const firstProofUrl = getStorageUrl(proofs[0]);
+                        const count = proofs.length;
+                        const fullUrls = proofs.map(p => getStorageUrl(p));
+                        const isPaid = group.payment_status === 'paid';
+                        const isWaiting = group.payment_status === 'waiting_confirmation';
+
+                        return (
+                          <div className="space-y-2">
+                            {isWaiting && (
+                              <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800 flex items-center gap-2.5 text-xs text-amber-800 dark:text-amber-300 font-medium shadow-2xs">
+                                <span className="text-base shrink-0 animate-pulse">⏳</span>
+                                <div className="min-w-0">
+                                  <strong className="block font-bold">Bukti Transfer Berhasil Terkirim</strong>
+                                  <span>Sedang menunggu pihak toko memvalidasi pembayaran Anda.</span>
+                                </div>
+                              </div>
+                            )}
+                            {isPaid && (
+                              <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 flex items-center gap-2.5 text-xs text-emerald-800 dark:text-emerald-300 font-medium shadow-2xs">
+                                <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <div className="min-w-0">
+                                  <strong className="block font-bold">Pembayaran Divalidasi Lunas</strong>
+                                  <span>Pembayaran Anda telah diverifikasi oleh kasir toko.</span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Visual Proof Card */}
+                            <div 
+                              onClick={() => setSelectedProofs(fullUrls)}
+                              className="group relative overflow-hidden bg-gradient-to-r from-indigo-50 via-blue-50/40 to-purple-50/30 dark:from-indigo-950/40 dark:via-blue-950/20 dark:to-purple-950/30 border-2 border-indigo-300/80 dark:border-indigo-800/80 hover:border-indigo-500 dark:hover:border-indigo-600 rounded-2xl p-2.5 sm:p-3 transition-all duration-200 hover:shadow-md cursor-pointer active:scale-[0.99] flex items-center justify-between gap-3"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-indigo-100 dark:bg-indigo-900/50 shrink-0 ring-2 ring-indigo-400/80 dark:ring-indigo-700 shadow-xs flex items-center justify-center">
+                                  <img 
+                                    src={firstProofUrl} 
+                                    alt="Bukti Transfer" 
+                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                  />
+                                  <div className="hidden absolute inset-0 bg-indigo-100 dark:bg-indigo-900/50 items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                    <ImageIcon className="w-5 h-5" />
+                                  </div>
+                                  <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-[9px] text-white px-1 py-0.2 rounded font-bold backdrop-blur-xs">
+                                    💳
+                                  </span>
+                                </div>
+
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs sm:text-sm font-black text-indigo-950 dark:text-indigo-100 truncate">
+                                      Bukti Transfer Anda
+                                    </span>
+                                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                      {count} Foto
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80 truncate mt-0.5">
+                                    Klik untuk melihat foto bukti transfer Anda
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  className="px-3 py-1.5 bg-indigo-600 group-hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 group-hover:gap-2"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>Lihat</span>
+                                </button>
+
+                                {group.overallStatus !== 'cancelled' && group.payment_status !== 'paid' && (
+                                  <button 
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveOrderForPaymentProof({
+                                        id: singleOrder.id,
+                                        checkoutId: group.checkoutId,
+                                        total_price: group.grandTotal,
+                                        displayId: group.checkoutId || `#${singleOrder.id}`,
+                                        canteenCount: group.orders.length
+                                      });
+                                      setShowPaymentProofModal(true);
+                                    }}
+                                    className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1 active:scale-95"
+                                  >
+                                    <span>+ Tambah</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* 4. Section Upload Pertama Kali (Jika belum ada bukti & belum lunas) */}
+                      {group.overallStatus !== 'cancelled' && group.payment_status === 'unpaid' && !group.proof_of_payment && (
+                        <div className="space-y-2">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setActiveOrderForPaymentProof({
+                                id: singleOrder.id,
+                                checkoutId: group.checkoutId,
+                                total_price: group.grandTotal,
+                                displayId: group.checkoutId || `#${singleOrder.id}`,
+                                canteenCount: group.orders.length
+                              });
+                              setShowPaymentProofModal(true);
+                            }}
+                            className="w-full flex items-center justify-between p-3.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-2xl transition-all font-bold shadow-md shadow-green-600/20 active:scale-[0.98] group cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2.5 text-left">
+                              <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+                                <Camera className="w-5 h-5 text-white" />
+                              </div>
+                              <div>
+                                <p className="text-xs sm:text-sm font-extrabold leading-tight">
+                                  {isMulti ? 'Unggah 1 Bukti Transfer Bersama' : 'Unggah Bukti Transfer Sekarang'}
+                                </p>
+                                <p className="text-[10px] text-white/80 font-normal mt-0.5">
+                                  {isMulti 
+                                    ? `Bayar total Rp ${Math.round(group.grandTotal).toLocaleString('id-ID')} untuk ${group.orders.length} toko` 
+                                    : 'Kirim foto bukti transfer agar pesanan segera diproses'}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="px-2.5 py-1 bg-white/20 group-hover:bg-white/30 rounded-xl text-xs font-black shrink-0 flex items-center gap-1">
+                              Upload ➔
+                            </span>
+                          </button>
+
+                          {!group.orders.every(o => isPaymentTime(o)) && (
+                            <p className="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-3 py-1.5 rounded-xl border border-amber-200 dark:border-amber-800/60 flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                              <span>Ada toko yang sedang tutup. Bukti transfer tetap dapat Anda kirim sekarang dan akan diverifikasi saat toko buka.</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Rincian Biaya & Total */}
+                  <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-2">
                     <button 
-                      onClick={() => handleCancelOrder(order.id)}
-                      disabled={cancelMutation.isPending}
-                      className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 rounded-xl text-xs font-bold transition-colors disabled:opacity-50"
+                      onClick={() => toggleOrderDetails(cardKey)}
+                      className="w-full flex items-center justify-between py-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
                     >
-                      <XCircle className="w-4 h-4" /> 
-                      {cancelMutation.isPending ? 'Membatalkan...' : 'Batalkan Pesanan'}
+                      <span className="font-semibold">Rincian Biaya & Ongkir</span>
+                      <span className="text-[10px] font-bold border px-2 py-0.5 rounded-full bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-600 dark:text-gray-300">
+                        {isExpanded ? 'Tutup ⌃' : 'Lihat ⌄'}
+                      </span>
                     </button>
+
+                    {isExpanded && (
+                      <div className="space-y-1.5 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
+                        <div className="flex justify-between">
+                          <span>Subtotal Produk {isMulti ? `(${group.orders.length} Toko)` : ''}</span>
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            Rp {Math.round(group.totalProductSubtotal).toLocaleString('id-ID')}
+                          </span>
+                        </div>
+                        {group.totalDeliveryFee > 0 && (
+                          <div className="flex justify-between">
+                            <span>Ongkos Kirim {isMulti ? `(${group.orders.length} Toko)` : '(Kurir)'}</span>
+                            <span className="font-semibold text-gray-900 dark:text-white">
+                              Rp {Math.round(group.totalDeliveryFee).toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                        )}
+                        {group.totalAdminFee > 0 && (
+                          <div className="flex justify-between">
+                            <span>Biaya Layanan & Admin {isMulti ? `(${group.orders.length} Toko)` : ''}</span>
+                            <span className="font-semibold text-gray-900 dark:text-white">
+                              Rp {Math.round(group.totalAdminFee).toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                        )}
+
+                        {isMulti && (
+                          <div className="pt-1.5 mt-1 border-t border-gray-200 dark:border-gray-700 space-y-1 text-[11px]">
+                            <span className="font-bold text-gray-700 dark:text-gray-300 block">Rincian Per Toko:</span>
+                            {group.orders.map(o => (
+                              <div key={o.id} className="flex justify-between text-gray-500 dark:text-gray-400">
+                                <span>{o.canteen?.name || `Toko #${o.canteen_id}`}</span>
+                                <span className="font-medium text-gray-800 dark:text-gray-200">
+                                  Rp {Math.round(parseFloat(o.total_price)).toLocaleString('id-ID')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center pt-1">
+                      <div>
+                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium">
+                          Total Pembayaran
+                        </p>
+                        {isMulti && (
+                          <span className="text-[10px] text-green-600 dark:text-green-400 font-semibold">
+                            (1x transfer untuk {group.orders.length} toko)
+                          </span>
+                        )}
+                      </div>
+                      <p className="font-black text-green-700 dark:text-green-400 text-base sm:text-lg">
+                        Rp {Math.round(group.grandTotal).toLocaleString('id-ID')}
+                      </p>
+                    </div>
+
+                    {/* Contact Buttons */}
+                    <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                      {!isMulti && singleOrder.canteen?.whatsapp_number && (
+                        <a 
+                          href={formatPhoneWA(singleOrder.canteen.whatsapp_number) + `?text=${encodeURIComponent(buildOrderWAText(singleOrder))}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-[0.98]"
+                        >
+                          <MessageCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> 
+                          <span>Hubungi Toko</span>
+                        </a>
+                      )}
+                      {(() => {
+                        const courierOrder = group.orders.find(o => o.courier?.phone);
+                        if (courierOrder && group.overallStatus !== 'cancelled') {
+                          return (
+                            <a 
+                              href={formatPhoneWA(courierOrder.courier.phone) + `?text=${encodeURIComponent(buildCourierWAText(group))}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-[0.98]"
+                            >
+                              <MessageCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" /> 
+                              <span>Hubungi Kurir</span>
+                            </a>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                    
+                    {/* Cancel Button */}
+                    {allPending && (
+                      <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                        <button 
+                          onClick={() => handleCancelGroup(group.orders)}
+                          disabled={cancelMutation.isPending}
+                          className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 rounded-xl text-xs font-bold transition-colors disabled:opacity-50"
+                        >
+                          <XCircle className="w-4 h-4" /> 
+                          {cancelMutation.isPending ? 'Membatalkan...' : `Batalkan Pesanan ${isMulti ? `(${group.orders.length} Toko)` : ''}`}
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+                </div>
+              );
+            })}
+          </div>
+        )}
     </div>
 
       {/* PRODUCT DETAIL FULL-SCREEN MODAL */}
@@ -1218,7 +1458,10 @@ export default function Pembayaran() {
             <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
               <div>
                 <h3 className="font-bold text-gray-900 dark:text-white text-lg">Upload Bukti Transfer</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Order #{activeOrderForPaymentProof.id}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {activeOrderForPaymentProof.displayId || `Order #${activeOrderForPaymentProof.id}`}
+                  {activeOrderForPaymentProof.canteenCount > 1 && ` • ${activeOrderForPaymentProof.canteenCount} Toko`}
+                </p>
               </div>
               <button onClick={() => {setShowPaymentProofModal(false); setPaymentProofFiles([]);}} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
                 <X className="w-5 h-5" />
@@ -1227,10 +1470,15 @@ export default function Pembayaran() {
             
             <div className="p-6 overflow-y-auto">
               <div className="mb-6 text-center">
-                <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">
                   Silakan scan QRIS di bawah ini untuk membayar sebesar
                 </p>
-                <p className="text-xl font-bold text-green-600 dark:text-green-400 mb-3">
+                {activeOrderForPaymentProof.canteenCount > 1 && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mb-2">
+                    (1 kali transfer untuk seluruh {activeOrderForPaymentProof.canteenCount} toko)
+                  </p>
+                )}
+                <p className="text-2xl font-black text-green-600 dark:text-green-400 mb-3">
                   Rp {parseFloat(activeOrderForPaymentProof.total_price).toLocaleString('id-ID')}
                 </p>
                 <div 
@@ -1387,7 +1635,11 @@ export default function Pembayaran() {
                   paymentProofFiles.forEach((file) => {
                     formData.append('proof_of_payment[]', file);
                   });
-                  uploadPaymentProofMutation.mutate({ id: activeOrderForPaymentProof.id, formData });
+                  uploadPaymentProofMutation.mutate({ 
+                    id: activeOrderForPaymentProof.id, 
+                    checkoutId: activeOrderForPaymentProof.checkoutId,
+                    formData 
+                  });
                 }}
                 className="flex-[2] py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm text-sm"
               >

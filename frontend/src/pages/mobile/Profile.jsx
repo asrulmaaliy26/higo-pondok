@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, Edit2, ShieldCheck, PlusCircle, CreditCard, Users, Bookmark, Activity, Ticket, Shield, LogOut, ChevronRight, Store, Camera, Save, X, Plus, BookOpen } from 'lucide-react';
+import { ArrowLeft, Edit2, ShieldCheck, PlusCircle, CreditCard, Users, Bookmark, Activity, Ticket, Shield, LogOut, ChevronRight, Store, Camera, Save, X, Plus, BookOpen, Calculator, Coins } from 'lucide-react';
 import { ROLES, getUserRole } from '../../config/roles';
 import { useAuthStore } from '../../store/authStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
 import santriData from '../../data/santri.json';
+import AdminAccountingModal from '../../components/modals/AdminAccountingModal';
+import { PRICING_CONFIG, formatRupiah } from '../../config/pricing';
 
 const uniqueJenjang = [...new Set(santriData.data.filter(r => r.length > 5 && r[4]).map(r => r[4]))].sort();
 const uniqueAsrama = [...new Set(santriData.data.filter(r => r.length > 10 && r[10]).map(r => r[10]))].sort();
@@ -42,6 +44,7 @@ export default function Profile() {
   const [showEditStoreModal, setShowEditStoreModal] = useState(false);
   const [showAddStoreModal, setShowAddStoreModal] = useState(false);
   const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+  const [showAccountingModal, setShowAccountingModal] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [selectedCanteenId, setSelectedCanteenId] = useState(null);
   const [imageFile, setImageFile] = useState(null);
@@ -188,7 +191,7 @@ export default function Profile() {
     formData.append('name', profileData.name);
     formData.append('description', profileData.description || '');
     const category = profileData.category || 'kauman';
-    const autoDeliveryFee = category === 'kota' ? 3500 : 2000;
+    const autoDeliveryFee = PRICING_CONFIG.BASE_DELIVERY_FEE;
     
     formData.append('open_time', profileData.open_time);
     formData.append('close_time', profileData.close_time);
@@ -328,10 +331,77 @@ export default function Profile() {
           </div>
         )}
 
+        {/* Banner Admin: Ringkasan Akuntansi Sistem */}
+        {userRole === ROLES.ADMIN && (
+          <div className="mb-5 sm:mb-6 bg-gradient-to-br from-green-900 via-emerald-900 to-green-950 text-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 shadow-lg border border-green-700/50 space-y-3 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-green-500/20 border border-green-400/30 flex items-center justify-center text-green-300">
+                  <Calculator className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white flex items-center gap-1.5">
+                    Sistem Akuntansi Pondok
+                    <span className="text-[10px] bg-green-500/30 text-green-300 font-extrabold px-2 py-0.5 rounded-full border border-green-400/20">
+                      Aktif
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-green-200/80">Formula pembagian kas &amp; kalkulator akuntansi</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Chips Info */}
+            <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-white/10">
+              <div className="bg-white/5 p-2 rounded-xl border border-white/10">
+                <span className="text-gray-300 text-[10px] block">Tarif Dasar Jasa:</span>
+                <span className="font-black text-white text-xs">Kurir 3.500 | Admin 1.500</span>
+              </div>
+              <div className="bg-white/5 p-2 rounded-xl border border-white/10">
+                <span className="text-gray-300 text-[10px] block">Beban &gt;5 Produk:</span>
+                <span className="font-black text-amber-300 text-xs">+2.000 / +3.000 per 5 item</span>
+              </div>
+              <div className="bg-white/5 p-2 rounded-xl border border-white/10">
+                <span className="text-gray-300 text-[10px] block">User &gt;3 Toko / Hari:</span>
+                <span className="font-black text-amber-300 text-xs">Pindah 2.000 ke Admin</span>
+              </div>
+              <div className="bg-white/5 p-2 rounded-xl border border-white/10">
+                <span className="text-gray-300 text-[10px] block">Laba Toko:</span>
+                <span className="font-black text-emerald-300 text-xs">HPJ - HPP (100% Toko)</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowAccountingModal(true)}
+              className="w-full py-2 px-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold text-xs shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
+            >
+              <Calculator className="w-4 h-4" />
+              Buka Panduan &amp; Kalkulator Akuntansi Lengkap
+            </button>
+          </div>
+        )}
+
         {/* Preferensi Section */}
         <div className="mb-5 sm:mb-6 animate-fade-in-up">
           <h3 className="px-1 text-xs sm:text-sm font-bold text-gray-600 dark:text-gray-400 mb-2 sm:mb-3">Preferensi</h3>
           <div className="bg-white dark:bg-gray-900 rounded-[20px] sm:rounded-[24px] overflow-hidden shadow-[0_2px_10px_rgb(0,0,0,0.02)] border border-gray-200 dark:border-gray-700">
+            {userRole === ROLES.ADMIN && (
+              <>
+                <MenuItem 
+                  icon={Calculator} 
+                  title="Logika & Aturan Akuntansi" 
+                  badge="Aturan & Simulasi" 
+                  badgeColor="bg-green-600"
+                  onClick={() => setShowAccountingModal(true)} 
+                />
+                <MenuItem 
+                  icon={Coins} 
+                  title="Rekapitulasi Keuangan & Penjualan" 
+                  onClick={() => navigate({ to: '/dashboard/admin/pesanan' })} 
+                  isLast={true}
+                />
+              </>
+            )}
             {userRole === ROLES.KANTIN && (
               <>
                 <MenuItem 
@@ -555,35 +625,35 @@ export default function Profile() {
                     </div>
                   </div>
                   <div>
-                    <label htmlFor="category" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Kategori Toko / Zona Lokasi</label>
-                    <p className="text-[10px] text-gray-400 mb-1">Menentukan tarif dasar ongkir & admin otomatis.</p>
+                    <label htmlFor="category" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Kategori Wilayah Toko</label>
+                    <p className="text-[10px] text-gray-400 mb-1">Zona jangkauan pengantaran kurir.</p>
                     <select
                       id="category"
                       value={profileData.category || 'kauman'}
                       onChange={e => setProfileData({
                         ...profileData, 
                         category: e.target.value,
-                        delivery_fee: e.target.value === 'kota' ? 3500 : 2000
+                        delivery_fee: PRICING_CONFIG.BASE_DELIVERY_FEE
                       })}
                       className="w-full mt-1 p-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 font-medium"
                     >
-                      <option value="kauman">Kauman (Ongkir Rp 2.000, Admin Rp 1.000)</option>
-                      <option value="kota">Kota (Ongkir Rp 3.500, Admin Rp 1.500)</option>
+                      <option value="kauman">Kauman / Sekitar Pondok</option>
+                      <option value="kota">Area Kota / Luar</option>
                     </select>
                   </div>
 
                   <div className="bg-gray-50 dark:bg-gray-800/60 p-3 rounded-lg border border-gray-200 dark:border-gray-700/60 space-y-1">
-                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Rincian Tarif Kirim Standar</label>
-                    <div className="flex items-center gap-2 text-xs font-bold pt-1">
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Rincian Tarif Layanan Terpadu</label>
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-bold pt-1">
                       <span className="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 px-2.5 py-1 rounded-md">
-                        🛵 Ongkir Dasar: Rp {(profileData.category === 'kota' ? 3500 : 2000).toLocaleString('id-ID')}
+                        🛵 Ongkir Kurir: {formatRupiah(PRICING_CONFIG.BASE_DELIVERY_FEE)}
                       </span>
                       <span className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-2.5 py-1 rounded-md">
-                        🛡️ Biaya Admin: Rp {(profileData.category === 'kota' ? 1500 : 1000).toLocaleString('id-ID')}
+                        🛡️ Biaya Admin: {formatRupiah(PRICING_CONFIG.BASE_ADMIN_FEE)}
                       </span>
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-1">
-                      *Tarif di atas berlaku otomatis sesuai kategori lokasi toko yang Anda pilih.
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                      *Tarif dasar berlaku untuk 1–5 item. Setiap kelipatan 5 item berikutnya dikenakan tambahan penyesuaian beban pesanan.
                     </p>
                   </div>
                 </div>
@@ -953,6 +1023,12 @@ export default function Profile() {
         </div>,
         document.body
       )}
+
+      {/* Modal Logika Akuntansi untuk Admin */}
+      <AdminAccountingModal 
+        isOpen={showAccountingModal} 
+        onClose={() => setShowAccountingModal(false)} 
+      />
 
     </div>
   );

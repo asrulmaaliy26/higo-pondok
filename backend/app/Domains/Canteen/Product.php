@@ -16,6 +16,7 @@ class Product extends Model
         'category',
         'description',
         'price',
+        'hpp',
         'discount_price',
         'stock',
         'sold_count',
@@ -25,14 +26,36 @@ class Product extends Model
         'is_available'
     ];
 
+    protected $appends = ['hpj'];
+
     protected function casts(): array
     {
         return [
             'price' => 'float',
+            'hpp' => 'float',
             'discount_price' => 'float',
             'stock' => 'integer',
             'is_available' => 'boolean',
         ];
+    }
+
+    public function getHpjAttribute(): float
+    {
+        return (float) ($this->attributes['price'] ?? 0);
+    }
+
+    public function setHpjAttribute($value): void
+    {
+        $this->attributes['price'] = $value;
+    }
+
+    public function getHppAttribute(): float
+    {
+        if (isset($this->attributes['hpp']) && (float)$this->attributes['hpp'] > 0) {
+            return (float) $this->attributes['hpp'];
+        }
+        $price = (float) ($this->attributes['price'] ?? 0);
+        return $price > 1000 ? ($price - 1000) : $price;
     }
 
     public function canteen()

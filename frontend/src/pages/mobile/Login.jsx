@@ -6,12 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import { Eye, EyeOff } from 'lucide-react';
 
 import AuthLayout from '../../components/layout/mobile/AuthLayout';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -90,17 +92,31 @@ export default function Login() {
                 <Label htmlFor="password">Password</Label>
                 <a href="#" className="text-sm font-medium text-green-600 hover:text-green-500">Lupa password?</a>
               </div>
-              <Input
-                id="password"
-                type="password"
-                required
-                autoCapitalize="none"
-                autoCorrect="off"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="mt-1"
-              />
+              <div className="relative mt-1">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none transition-colors"
+                  aria-label={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 

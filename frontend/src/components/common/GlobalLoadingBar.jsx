@@ -5,7 +5,11 @@ import { Loader2, Sparkles } from 'lucide-react';
 import { useLoadingStore } from '../../store/loadingStore';
 
 export default function GlobalLoadingBar() {
-  const isFetching = useIsFetching();
+  // Hanya tangkap query yang benar-benar belum memiliki data (initial pending fetch)
+  // Background polling atau refetch yang sudah memiliki data akan berjalan senyap
+  const isFetchingInitial = useIsFetching({
+    predicate: (query) => query.state.data === undefined && query.state.status === 'pending',
+  });
   const isMutating = useIsMutating();
   const activeRequests = useLoadingStore((state) => state.activeRequests);
   
@@ -14,7 +18,7 @@ export default function GlobalLoadingBar() {
     select: (s) => s.status === 'pending' || s.isLoading,
   });
 
-  const isLoading = isFetching > 0 || isMutating > 0 || activeRequests > 0 || Boolean(routerState);
+  const isLoading = isFetchingInitial > 0 || isMutating > 0 || activeRequests > 0 || Boolean(routerState);
 
   // Animasi progress bar halus
   const [progress, setProgress] = useState(0);

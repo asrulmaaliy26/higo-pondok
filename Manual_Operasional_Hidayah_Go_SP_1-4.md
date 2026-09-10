@@ -176,59 +176,73 @@ Area
 
 Cakupan
 
-Tarif Jasa Normal
+Tarif Jasa Normal (1–5 Item)
 
-Kauman
+Semua Toko / Merchant
 
-Warung/merchant sekitar pondok dan wilayah yang mudah dijangkau.
+Seluruh merchant/warung mitra, baik di wilayah sekitar pondok (Kauman) maupun area Kota Tulungagung.
 
-Rp3.000 per pemesan
+Rp5.000 per pemesan (Ongkir Driver Rp3.500 + Admin BUMP Rp1.500)
 
-Kota Tulungagung
-
-Merchant pusat kota atau area yang lebih jauh dari pondok.
-
-Rp5.000 per pemesan
-
-Tarif jasa dihitung per orang/pemesan, bukan per item satuan. Jika satu pemesan membeli 1-5 pcs/menu dari merchant yang sama, tarif jasa tetap satu kali tarif normal.
+Tarif jasa dihitung per pemesan per toko/merchant, bukan per item satuan. Jika satu pemesan membeli 1–5 pcs/menu dari merchant yang sama, tarif jasa tetap satu kali tarif dasar normal (Rp5.000).
 
 VI. KETENTUAN TARIF PEMESANAN
 
 Area
 
-Jumlah Pesanan per Orang
+Jumlah Pesanan per Toko
 
-Tarif Jasa
+Rincian Tarif Jasa
 
-Kauman
+Total Biaya Jasa
 
-1-5 pcs/menu dari tempat yang sama
+Semua Area
 
-Rp3.000
+1–5 pcs/menu dari tempat yang sama
 
-Kota
-
-1-5 pcs/menu dari tempat yang sama
+Driver Rp3.500 + Admin Rp1.500
 
 Rp5.000
 
-Kauman
+Semua Area
 
-Lebih dari 5 pcs/menu dari tempat yang sama
+6–10 pcs/menu (+1 kelipatan 5)
 
-Rp6.000
+Driver Rp5.500 (+2.000) + Admin Rp1.800 (+300)
 
-Kota
+Rp7.300
 
-Lebih dari 5 pcs/menu dari tempat yang sama
+Semua Area
 
-Rp10.000
+11–15 pcs/menu (+2 kelipatan 5)
 
-Jika 1 santri memesan 1 sampai 5 menu dari tempat yang sama, tarif jasa tetap normal.
+Driver Rp7.500 (+4.000) + Admin Rp2.100 (+600)
 
-Jika 1 santri memesan lebih dari 5 menu dari tempat yang sama, tarif jasa menjadi dua kali lipat.
+Rp9.600
 
-Jika 1 santri memesan dari dua merchant berbeda, tarif jasa dihitung berdasarkan jumlah merchant yang dituju.
+Semua Area
+
+16–20 pcs/menu (+3 kelipatan 5)
+
+Driver Rp9.500 (+6.000) + Admin Rp2.400 (+900)
+
+Rp11.900
+
+Semua Area
+
+Kelipatan 5 berikutnya (dst)
+
++Rp2.000 ke driver & +Rp300 ke admin
+
++Rp2.300 per kelipatan
+
+Ketentuan Pemesanan:
+
+Jika 1 santri memesan 1 sampai 5 menu dari toko yang sama, tarif jasa tetap tarif dasar normal (Rp5.000: Driver Rp3.500 + Admin Rp1.500).
+
+Jika 1 santri memesan lebih dari 5 menu dari toko yang sama, setiap kelipatan 5 menu berikutnya dikenakan tambahan biaya Rp2.000 untuk Driver dan Rp300 untuk Admin BUMP.
+
+Jika 1 santri memesan dari dua atau lebih merchant berbeda, tarif jasa dihitung berdasarkan masing-masing merchant secara terpisah (karena kurir berbelanja ke lokasi fisik yang berbeda).
 
 Harga makanan, minuman, atau obat belum termasuk tarif jasa Hidayah Go.
 
@@ -326,21 +340,21 @@ Total
 
 1 Mie Gacoan
 
-Rp11.000 + jasa kota Rp5.000
+Rp11.000 + jasa dasar Rp5.000 (Driver Rp3.500 + Admin Rp1.500)
 
 Rp16.000
 
 3 Mie Gacoan
 
-Rp11.000 x 3 + jasa kota Rp5.000
+Rp11.000 x 3 + jasa dasar Rp5.000 (Driver Rp3.500 + Admin Rp1.500)
 
 Rp38.000
 
 6 Mie Gacoan
 
-Rp11.000 x 6 + jasa kota Rp10.000
+Rp11.000 x 6 + jasa kelipatan 5 Rp7.300 (Driver Rp5.500 + Admin Rp1.800)
 
-Rp76.000
+Rp73.300
 
 D. McDonald's, Richeese Factory, MK Die, dan Minuman Kafe
 
@@ -670,47 +684,61 @@ Komplain hanya diterima jika disampaikan segera setelah pesanan diterima.
 
 XIV. PROFIT SHARING DAN REKAP HARIAN
 
-Pembagian Profit Sharing Tarif Jasa
+Pembagian Tarif Jasa dan Biaya Layanan
 
-Area
+Kategori / Jumlah Item per Toko
 
-Tarif Jasa
+Total Biaya Jasa
 
-Driver 80%
+Hak Driver
 
-BUMP 20%
+Hak Admin BUMP
 
-Kauman
-
-Rp3.000
-
-Rp2.400
-
-Rp600
-
-Kota
+1–5 pcs (Tarif Dasar Normal)
 
 Rp5.000
 
-Rp4.000
+Rp3.500
 
-Rp1.000
+Rp1.500
 
-Kauman >5 pcs
+6–10 pcs (+1 Kelipatan 5)
 
-Rp6.000
+Rp7.300
 
-Rp4.800
+Rp5.500 (+2.000)
 
-Rp1.200
+Rp1.800 (+300)
 
-Kota >5 pcs
+11–15 pcs (+2 Kelipatan 5)
 
-Rp10.000
+Rp9.600
 
-Rp8.000
+Rp7.500 (+4.000)
 
-Rp2.000
+Rp2.100 (+600)
+
+16–20 pcs (+3 Kelipatan 5)
+
+Rp11.900
+
+Rp9.500 (+6.000)
+
+Rp2.400 (+900)
+
+Kelipatan 5 berikutnya (dst)
+
++Rp2.300 per kelipatan
+
++Rp2.000 per kelipatan
+
++Rp300 per kelipatan
+
+Catatan Efisiensi Pengantaran Gabungan (Batching Order):
+
+Jika dalam 1 hari terdapat lebih dari 3 user/santri berbeda yang memesan pada merchant/toko yang sama:
+- 3 pemesan/user pertama pada toko tersebut: Ongkir kurir tetap UTUH (tidak ada potongan / Rp0).
+- Pemesan/user ke-4 dan seterusnya: Ongkir kurir terpotong sebesar Rp2.000 per pesanan dan dialihkan ke kas Admin BUMP.
 
 Format Rekap Harian Admin
 

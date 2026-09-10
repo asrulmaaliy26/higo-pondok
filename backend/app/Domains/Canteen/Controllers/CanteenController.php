@@ -94,12 +94,7 @@ class CanteenController extends Controller
             ->whereDate('updated_at', today())->get();
             
         foreach ($completedToday as $order) {
-            $itemsTotal = ($order->items && $order->items->count() > 0) ? $order->items->sum('subtotal') : (float) $order->total_price;
-            $todayIncome += $itemsTotal;
-            if (is_null($order->courier_id)) {
-                $delivery_fee = $order->total_price - $itemsTotal;
-                $todayIncome += max(0, $delivery_fee);
-            }
+            $todayIncome += $order->canteen_income;
         }
 
         $outOfStock = $canteen->products()->where(function($q) {

@@ -47,13 +47,14 @@ class OrderController extends Controller
             $isCustom = (bool) $request->is_custom;
 
             if ($isCustom) {
-                $category = $canteen->category ?? 'kauman';
-                $base_delivery_fee = ($category === 'kota') ? 3500 : 2000;
-                $admin_fee = ($category === 'kota') ? 1500 : 1000;
+                $pricing = Order::getPricingConfig();
+                $base_delivery_fee = $pricing['base_delivery_fee'];
+                $admin_fee = $pricing['base_admin_fee'];
 
                 $courierUser = User::where('name', 'like', '%kurir1%')->first() ?: User::whereHas('roles', fn($q) => $q->where('name', 'kurir'))->first();
 
                 $order = Order::create([
+                    'checkout_id' => $request->checkout_id ?: ('CHK-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(6))),
                     'user_id' => $user->id,
                     'canteen_id' => $canteen->id,
                     'courier_id' => $courierUser ? $courierUser->id : null,
@@ -77,21 +78,18 @@ class OrderController extends Controller
 
             $total_price = 0;
             
-            // Calculate total quantity of items
+            // Hitung tarif ongkir & admin berdasarkan kuantitas + urutan user di toko ini hari ini
             $totalQuantity = collect($request->items)->sum('quantity');
-
-            // Category pricing logic (Kauman vs Kota)
-            $category = $canteen->category ?? 'kauman';
-            $base_delivery_fee = ($category === 'kota') ? 3500 : 2000;
-            $admin_fee = ($category === 'kota') ? 1500 : 1000;
-
-            // Quantity multiplier (+ Rp 3.000 for every block of 5 extra items after the first 5)
-            $extra_blocks = max(0, (int) floor(($totalQuantity - 1) / 5));
-            $delivery_fee = $base_delivery_fee + ($extra_blocks * 3000);
+            $today = now('Asia/Jakarta')->format('Y-m-d');
+            $userIndex = Order::getUserDailyIndex($user->id, $canteen->id, $today);
+            $fees = Order::calculateUserRankedFees($totalQuantity, $userIndex);
+            $delivery_fee = $fees['delivery_fee'];
+            $admin_fee    = $fees['admin_fee'];
                 
             $courierUser = User::where('name', 'like', '%kurir1%')->first() ?: User::whereHas('roles', fn($q) => $q->where('name', 'kurir'))->first();
 
             $order = Order::create([
+                'checkout_id' => $request->checkout_id ?: ('CHK-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(6))),
                 'user_id' => $user->id,
                 'canteen_id' => $canteen->id,
                 'courier_id' => $courierUser ? $courierUser->id : null,
@@ -169,6 +167,121 @@ class OrderController extends Controller
         }
     }
 
+    /**
+     * Batch Checkout untuk Multi-Toko dalam 1 Keranjang
+     */
+    public function batchStore(Request $request)
+    {
+        $user = $request->user();
+
+        if (empty($user->phone) || empty($user->santri_name) || empty($user->santri_room) || empty($user->santri_class) || empty($user->santri_level)) {
+            return response()->json([
+                'message' => 'Profil santri Anda belum lengkap. Silakan lengkapi data profil (No. HP, Nama Santri, Kamar/Asrama, Kelas, Jenjang) sebelum membuat pesanan.',
+                'error_code' => 'INCOMPLETE_PROFILE'
+            ], 403);
+        }
+
+        $request->validate([
+            'delivery_location' => 'required|string|max:255',
+            'canteens' => 'required|array|min:1',
+            'canteens.*.canteen_id' => 'required|exists:canteens,id',
+            'canteens.*.items' => 'required|array|min:1',
+            'canteens.*.items.*.product_id' => 'required|exists:products,id',
+            'canteens.*.items.*.quantity' => 'required|integer|min:1',
+        ]);
+
+        $checkoutId = 'CHK-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(6));
+        $createdOrders = [];
+        $courierUser = User::where('name', 'like', '%kurir1%')->first() ?: User::whereHas('roles', fn($q) => $q->where('name', 'kurir'))->first();
+        $grandTotal = 0;
+
+        DB::beginTransaction();
+        try {
+            foreach ($request->canteens as $cData) {
+                $canteen = Canteen::findOrFail($cData['canteen_id']);
+
+                if (!$canteen->is_open) {
+                    throw new \Exception("Maaf, kantin '{$canteen->name}' sedang tutup. Tidak dapat membuat pesanan.");
+                }
+
+                // Hitung tarif ongkir & admin per kantin berdasarkan kuantitas + urutan user hari ini
+                $totalQuantity = collect($cData['items'])->sum('quantity');
+                $today = now('Asia/Jakarta')->format('Y-m-d');
+                $userIndex = Order::getUserDailyIndex($user->id, $canteen->id, $today);
+                $fees = Order::calculateUserRankedFees($totalQuantity, $userIndex);
+                $delivery_fee = $fees['delivery_fee'];
+                $admin_fee    = $fees['admin_fee'];
+
+                $order = Order::create([
+                    'checkout_id' => $checkoutId,
+                    'user_id' => $user->id,
+                    'canteen_id' => $canteen->id,
+                    'courier_id' => $courierUser ? $courierUser->id : null,
+                    'is_custom' => false,
+                    'custom_notes' => $cData['custom_notes'] ?? null,
+                    'status' => 'pending',
+                    'payment_status' => 'unpaid',
+                    'total_price' => 0,
+                    'admin_fee' => $admin_fee,
+                    'delivery_fee' => $delivery_fee,
+                    'delivery_location' => $request->delivery_location,
+                ]);
+
+                $subtotal_items = 0;
+                foreach ($cData['items'] as $item) {
+                    $product = Product::findOrFail($item['product_id']);
+                    if ($product->canteen_id !== $canteen->id) {
+                        throw new \Exception("Produk {$product->name} bukan milik kantin {$canteen->name}.");
+                    }
+                    if (!$product->is_available) {
+                        throw new \Exception("Maaf, produk {$product->name} sedang habis.");
+                    }
+
+                    $price = $product->discount_price ?: $product->price;
+                    $subtotal = $price * $item['quantity'];
+
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'product_id' => $product->id,
+                        'quantity' => $item['quantity'],
+                        'price' => $price,
+                        'subtotal' => $subtotal,
+                        'notes' => $item['notes'] ?? null,
+                    ]);
+
+                    $subtotal_items += $subtotal;
+                    $product->increment('sold_count', $item['quantity']);
+                    $product->increment('stock', $item['quantity']);
+                }
+
+                $orderTotal = $subtotal_items + $delivery_fee + $admin_fee;
+                $order->update([
+                    'total_price' => $orderTotal,
+                    'delivery_fee' => $delivery_fee,
+                    'admin_fee' => $admin_fee,
+                ]);
+                $grandTotal += $orderTotal;
+
+                $createdOrders[] = $order->load(['canteen', 'items.product']);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Pesanan berhasil dibuat untuk semua toko dalam 1 checkout!',
+                'checkout_id' => $checkoutId,
+                'grand_total' => $grandTotal,
+                'orders' => $createdOrders
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Gagal membuat pesanan batch.',
+                'error' => $e->getMessage()
+            ], 400);
+        }
+    }
+
     private function getActiveCanteen(Request $request)
     {
         $canteenId = $request->query('canteen_id') ?? $request->input('canteen_id');
@@ -242,11 +355,21 @@ class OrderController extends Controller
     {
         $order = $this->findCanteenOrder($request, $id);
         
+        if ($order->status === 'cancelled') {
+            return response()->json(['message' => 'Pesanan yang telah dibatalkan tidak dapat diubah status pembayarannya.'], 422);
+        }
+
         $request->validate([
             'payment_status' => 'required|in:unpaid,waiting_confirmation,paid',
         ]);
 
-        $order->update(['payment_status' => $request->payment_status]);
+        $paymentStatus = $request->payment_status;
+        $order->update(['payment_status' => $paymentStatus]);
+
+        // Jika memiliki checkout_id, sinkronkan status ke semua order lain dalam checkout yang sama
+        if (!empty($order->checkout_id)) {
+            Order::where('checkout_id', $order->checkout_id)->update(['payment_status' => $paymentStatus]);
+        }
 
         $msg = $request->payment_status === 'paid' 
             ? 'Pembayaran berhasil divalidasi dan ditandai Lunas!' 
@@ -328,65 +451,45 @@ class OrderController extends Controller
             $admin_fee = (float) $order->admin_fee;
             $delivery_fee = (float) $order->delivery_fee;
 
-            if ($order->courier_id) {
-                // System holds all money.
-                if ($canteen) {
-                    $canteenNet = $subtotal - $admin_fee;
-                    \App\Domains\Canteen\CanteenBalanceLedger::record(
-                        $canteen,
-                        'in',
-                        $canteenNet,
-                        "Penerimaan hasil pesanan #" . $order->id,
-                        $order->id
-                    );
-                    $canteen->increment('balance', $canteenNet);
-                    
-                    \App\Domains\Admin\PaymentLog::create([
-                        'user_id' => $canteen->user_id,
-                        'order_id' => $order->id,
-                        'amount' => $canteenNet,
-                        'type' => 'order_payment',
-                        'description' => "Penerimaan hasil pesanan #" . $order->id,
-                    ]);
-                }
+            // Saldo Bersih Kantin (Selisih HPJ dan HPP, ditambah ongkir jika tanpa kurir)
+            $canteenNet = (float) $order->canteen_income;
+            $delivery_fee = (float) $order->delivery_fee;
 
+            if ($canteen) {
+                \App\Domains\Canteen\CanteenBalanceLedger::record(
+                    $canteen,
+                    'in',
+                    $canteenNet,
+                    "Penerimaan laba bersih pesanan #" . $order->id . ($order->courier_id ? "" : " (Tanpa Kurir)"),
+                    $order->id
+                );
+                $canteen->increment('balance', $canteenNet);
+                
+                \App\Domains\Admin\PaymentLog::create([
+                    'user_id' => $canteen->user_id,
+                    'order_id' => $order->id,
+                    'amount' => $canteenNet,
+                    'type' => 'order_payment',
+                    'description' => "Penerimaan laba bersih pesanan #" . $order->id . ($order->courier_id ? "" : " (Tanpa Kurir)"),
+                ]);
+
+                $canteen->increment('sold_count', 1);
+            }
+
+            if ($order->courier_id) {
                 $courier = User::find($order->courier_id);
-                if ($courier) {
-                    $courier->increment('balance', $delivery_fee * 0.8);
+                if ($courier && $delivery_fee > 0) {
+                    // Kurir menerima 100% delivery_fee yang sudah terkoreksi di DB saat checkout.
+                    $courier->increment('balance', $delivery_fee);
                     
                     \App\Domains\Admin\PaymentLog::create([
-                        'user_id' => $courier->id,
-                        'order_id' => $order->id,
-                        'amount' => $delivery_fee * 0.8,
-                        'type' => 'courier_fee',
+                        'user_id'     => $courier->id,
+                        'order_id'    => $order->id,
+                        'amount'      => $delivery_fee,
+                        'type'        => 'courier_fee',
                         'description' => "Penerimaan ongkir pesanan #" . $order->id,
                     ]);
                 }
-            } else {
-                if ($canteen) {
-                    $canteenNet = $subtotal - $admin_fee + $delivery_fee;
-                    \App\Domains\Canteen\CanteenBalanceLedger::record(
-                        $canteen,
-                        'in',
-                        $canteenNet,
-                        "Penerimaan hasil pesanan #" . $order->id . " (Tanpa Kurir)",
-                        $order->id
-                    );
-                    $canteen->increment('balance', $canteenNet);
-                    
-                    \App\Domains\Admin\PaymentLog::create([
-                        'user_id' => $canteen->user_id,
-                        'order_id' => $order->id,
-                        'amount' => $canteenNet,
-                        'type' => 'order_payment',
-                        'description' => "Penerimaan hasil pesanan #" . $order->id . " (Tanpa Kurir)",
-                    ]);
-                }
-            }
-
-            if ($canteen) {
-                // Increment sold count on completion
-                $canteen->increment('sold_count', 1);
             }
 
             return response()->json(['message' => 'Pesanan berhasil diselesaikan', 'order' => $order]);
@@ -697,18 +800,17 @@ class OrderController extends Controller
                 }
             }
 
-            $subtotal = ($order->items && $order->items->count() > 0) ? $order->items->sum('subtotal') : (float) $order->total_price;
-            $admin_fee = (float) $order->admin_fee;
+            // Saldo Bersih Kantin (Selisih HPJ dan HPP)
+            $canteenNet = (float) $order->canteen_income;
             $delivery_fee = (float) $order->delivery_fee;
 
             if ($order->canteen) {
                 $canteen = $order->canteen;
-                $canteenNet = $subtotal - $admin_fee;
                 \App\Domains\Canteen\CanteenBalanceLedger::record(
                     $canteen,
                     'in',
                     $canteenNet,
-                    "Penerimaan hasil pesanan #" . $order->id,
+                    "Penerimaan laba bersih pesanan #" . $order->id,
                     $order->id
                 );
                 $canteen->increment('balance', $canteenNet);
@@ -718,21 +820,22 @@ class OrderController extends Controller
                     'order_id' => $order->id,
                     'amount' => $canteenNet,
                     'type' => 'order_payment',
-                    'description' => "Penerimaan hasil pesanan #" . $order->id,
+                    'description' => "Penerimaan laba bersih pesanan #" . $order->id,
                 ]);
 
                 $canteen->increment('sold_count', 1);
             }
 
             $courier = User::find($courierId);
-            if ($courier) {
-                $courier->increment('balance', $delivery_fee * 0.8);
+            if ($courier && $delivery_fee > 0) {
+                // Kurir menerima 100% delivery_fee yang sudah terkoreksi di DB saat checkout.
+                $courier->increment('balance', $delivery_fee);
                 
                 \App\Domains\Admin\PaymentLog::create([
-                    'user_id' => $courier->id,
-                    'order_id' => $order->id,
-                    'amount' => $delivery_fee * 0.8,
-                    'type' => 'courier_fee',
+                    'user_id'     => $courier->id,
+                    'order_id'    => $order->id,
+                    'amount'      => $delivery_fee,
+                    'type'        => 'courier_fee',
                     'description' => "Penerimaan ongkir pesanan #" . $order->id,
                 ]);
             }
@@ -746,10 +849,48 @@ class OrderController extends Controller
     {
         return DB::transaction(function () use ($id, $request) {
             $user = $request->user();
-            $order = Order::with('items.product')->where('id', $id)->lockForUpdate()->firstOrFail();
+            $order = Order::with(['items.product', 'canteen'])->where('id', $id)->lockForUpdate()->firstOrFail();
             $prevStatus = $order->status;
 
-            // If order was completed, adjust stock/sold_count
+            // If order was completed, revert balance and log it
+            if ($prevStatus === 'completed') {
+                $canteen = $order->canteen;
+                if ($canteen) {
+                    $canteenNet = (float) $order->canteen_income;
+                    \App\Domains\Canteen\CanteenBalanceLedger::record(
+                        $canteen,
+                        'out',
+                        $canteenNet,
+                        "Pembalikan pendapatan pesanan #" . $order->id . " karena dibatalkan oleh kurir",
+                        $order->id
+                    );
+                    $canteen->decrement('balance', min((float)$canteen->balance, $canteenNet));
+                    $canteen->decrement('sold_count', 1);
+
+                    \App\Domains\Admin\PaymentLog::create([
+                        'user_id' => $canteen->user_id,
+                        'order_id' => $order->id,
+                        'amount' => $canteenNet,
+                        'type' => 'order_cancel_reversal',
+                        'description' => "Pembalikan saldo kantin untuk pesanan #" . $order->id . " dibatalkan kurir",
+                    ]);
+                }
+
+                $courier = User::find($order->courier_id);
+                $deliveryFee = (float) $order->delivery_fee;
+                if ($courier && $deliveryFee > 0) {
+                    $courier->decrement('balance', min((float)$courier->balance, $deliveryFee));
+                    \App\Domains\Admin\PaymentLog::create([
+                        'user_id' => $courier->id,
+                        'order_id' => $order->id,
+                        'amount' => $deliveryFee,
+                        'type' => 'courier_fee_reversal',
+                        'description' => "Pembalikan ongkir kurir pesanan #" . $order->id . " karena dibatalkan",
+                    ]);
+                }
+            }
+
+            // If order was completed or processing, adjust stock/sold_count
             if ($prevStatus === 'completed' || $prevStatus === 'processing') {
                 foreach ($order->items as $item) {
                     if ($item->product) {
@@ -851,19 +992,81 @@ class OrderController extends Controller
             }
 
             $existingProofs = is_array($order->proof_of_payment) ? $order->proof_of_payment : [];
-            $mergedPaths = array_merge($existingProofs, $paths);
+            $mergedPaths = array_values(array_unique(array_merge($existingProofs, $paths)));
 
-            $order->update([
-                'proof_of_payment' => $mergedPaths,
-                'payment_status' => 'waiting_confirmation',
-            ]);
+            // Sinkronkan ke seluruh pesanan dalam checkout_id yang sama jika ada
+            if (!empty($order->checkout_id)) {
+                $linkedOrders = Order::where('checkout_id', $order->checkout_id)->lockForUpdate()->get();
+                foreach ($linkedOrders as $linked) {
+                    $linkedExisting = is_array($linked->proof_of_payment) ? $linked->proof_of_payment : [];
+                    $linkedMerged = array_values(array_unique(array_merge($linkedExisting, $paths)));
+                    $linked->update([
+                        'proof_of_payment' => $linkedMerged,
+                        'payment_status' => 'waiting_confirmation',
+                    ]);
+                }
+            } else {
+                $order->update([
+                    'proof_of_payment' => $mergedPaths,
+                    'payment_status' => 'waiting_confirmation',
+                ]);
+            }
 
             return $order;
         });
 
         return response()->json([
-            'message' => 'Bukti transfer berhasil diunggah! Menunggu konfirmasi & validasi pembayaran dari kantin.',
+            'message' => 'Bukti transfer berhasil diunggah! Menunggu konfirmasi & validasi pembayaran.',
             'order' => $order->load(['canteen', 'user', 'items.product', 'courier'])
+        ]);
+    }
+
+    /**
+     * Upload bukti bayar langsung per Checkout ID (Gabungan Multi-Toko)
+     */
+    public function uploadPaymentProofByCheckout(Request $request, $checkoutId)
+    {
+        $request->validate([
+            'proof_of_payment' => 'required|array|min:1|max:5',
+            'proof_of_payment.*' => 'required|file|max:15360',
+        ]);
+
+        $user = $request->user();
+
+        $orders = DB::transaction(function () use ($request, $checkoutId, $user) {
+            $query = Order::where('checkout_id', $checkoutId)->lockForUpdate();
+            if (!$user->hasRole('admin')) {
+                $query->where('user_id', $user->id);
+            }
+            $orders = $query->get();
+
+            if ($orders->isEmpty()) {
+                throw new \Exception("Pesanan dengan Kode Checkout {$checkoutId} tidak ditemukan.");
+            }
+
+            $targetUser = $orders->first()->user ?: $user;
+
+            $paths = [];
+            foreach ($request->file('proof_of_payment') as $file) {
+                $paths[] = $this->storeOptimizedImage($file, $targetUser, 'proofs');
+            }
+
+            foreach ($orders as $order) {
+                $existing = is_array($order->proof_of_payment) ? $order->proof_of_payment : [];
+                $merged = array_values(array_unique(array_merge($existing, $paths)));
+                $order->update([
+                    'proof_of_payment' => $merged,
+                    'payment_status' => 'waiting_confirmation',
+                ]);
+            }
+
+            return $orders;
+        });
+
+        return response()->json([
+            'message' => 'Bukti transfer berhasil diunggah untuk seluruh pesanan dalam checkout ini!',
+            'checkout_id' => $checkoutId,
+            'orders' => $orders->load(['canteen', 'user', 'items.product', 'courier'])
         ]);
     }
 
@@ -878,6 +1081,10 @@ class OrderController extends Controller
 
         $order = DB::transaction(function () use ($request, $id) {
             $order = $this->findCanteenOrder($request, $id, true);
+
+            if ($order->status === 'cancelled') {
+                abort(422, 'Pesanan yang telah dibatalkan tidak dapat diunggah bukti pembayarannya.');
+            }
 
             $files = $request->file('proof_of_payment');
             if (!is_array($files)) {
@@ -894,15 +1101,27 @@ class OrderController extends Controller
             }
 
             $existingProofs = is_array($order->proof_of_payment) ? $order->proof_of_payment : ($order->proof_of_payment ? [$order->proof_of_payment] : []);
-            $mergedPaths = array_merge($existingProofs, $paths);
+            $mergedPaths = array_values(array_unique(array_merge($existingProofs, $paths)));
 
             // Default to 'paid' when canteen uploads payment proof, or accept choice
             $newPaymentStatus = $request->input('payment_status', 'paid');
 
-            $order->update([
-                'proof_of_payment' => $mergedPaths,
-                'payment_status' => $newPaymentStatus,
-            ]);
+            if (!empty($order->checkout_id)) {
+                $linkedOrders = Order::where('checkout_id', $order->checkout_id)->lockForUpdate()->get();
+                foreach ($linkedOrders as $linked) {
+                    $linkedExisting = is_array($linked->proof_of_payment) ? $linked->proof_of_payment : [];
+                    $linkedMerged = array_values(array_unique(array_merge($linkedExisting, $paths)));
+                    $linked->update([
+                        'proof_of_payment' => $linkedMerged,
+                        'payment_status' => $newPaymentStatus,
+                    ]);
+                }
+            } else {
+                $order->update([
+                    'proof_of_payment' => $mergedPaths,
+                    'payment_status' => $newPaymentStatus,
+                ]);
+            }
 
             return $order;
         });
@@ -942,9 +1161,9 @@ class OrderController extends Controller
         $deliveryLocation = $request->delivery_location ?: 
             ("Santri: " . ($targetUser->santri_name ?: $targetUser->name) . " | " . $targetUser->santri_room . " | " . $targetUser->santri_class . "/" . $targetUser->santri_level);
 
-        $category = $canteen->category ?? 'kauman';
-        $admin_fee = ($category === 'kota') ? 1500 : 1000;
-        $delivery_fee = ($category === 'kota') ? 3500 : 2000;
+        $pricing = Order::getPricingConfig();
+        $admin_fee = $pricing['base_admin_fee'];
+        $delivery_fee = $pricing['base_delivery_fee'];
         $productPrice = (float) $request->total_price;
         $totalPrice = $productPrice > 0 ? ($productPrice + $admin_fee + $delivery_fee) : 0;
 
@@ -984,8 +1203,8 @@ class OrderController extends Controller
         $canteen = $order->canteen;
         $category = $canteen ? ($canteen->category ?? 'kauman') : 'kauman';
 
-        $admin_fee = ((float) $order->admin_fee > 0) ? (float) $order->admin_fee : (($category === 'kota') ? 1500 : 1000);
-        $delivery_fee = ((float) $order->delivery_fee > 0) ? (float) $order->delivery_fee : (($category === 'kota') ? 3500 : 2000);
+        $admin_fee = ((float) $order->admin_fee > 0) ? (float) $order->admin_fee : 1500;
+        $delivery_fee = ((float) $order->delivery_fee > 0) ? (float) $order->delivery_fee : 3500;
 
         $total_price = $productPrice > 0 ? ($productPrice + $admin_fee + $delivery_fee) : 0;
 
@@ -1011,10 +1230,11 @@ class OrderController extends Controller
             return response()->json(['message' => 'Kantin tidak ditemukan'], 404);
         }
 
-        $period = $request->get('period', 'day'); // day, week, month
-        
-        $query = Order::whereIn('status', ['processing', 'completed'])
-            ->with(['user', 'items.product', 'canteen']);
+        $period = $request->get('period', 'day');
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+
+        $query = Order::forRecap()->filterPeriod($period, $startDate, $endDate);
 
         if ($canteenId && $canteenId !== 'all') {
             if (!$userCanteenIds->contains($canteenId)) {
@@ -1025,125 +1245,19 @@ class OrderController extends Controller
             $query->whereIn('canteen_id', $userCanteenIds);
         }
 
-        if ($request->has('start_date') && $request->has('end_date') && !empty($request->start_date) && !empty($request->end_date)) {
-            $start = \Illuminate\Support\Carbon::parse($request->start_date, 'Asia/Jakarta')->startOfDay();
-            $end = \Illuminate\Support\Carbon::parse($request->end_date, 'Asia/Jakarta')->endOfDay();
-            $query->whereBetween('created_at', [$start, $end]);
-        } elseif ($period === 'all') {
-            // No date restriction
-        } elseif ($period === 'week') {
-            $query->whereBetween('created_at', [
-                now('Asia/Jakarta')->startOfWeek(),
-                now('Asia/Jakarta')->endOfWeek()
-            ]);
-        } elseif ($period === 'month') {
-            $query->whereMonth('created_at', now('Asia/Jakarta')->month)
-                  ->whereYear('created_at', now('Asia/Jakarta')->year);
-        } elseif ($period === 'year') {
-            $query->whereYear('created_at', now('Asia/Jakarta')->year);
-        } else {
-            // Default: day
-            $query->whereDate('created_at', now('Asia/Jakarta')->format('Y-m-d'));
-        }
+        $orders = $query->orderBy('created_at', 'asc')->orderBy('id', 'asc')->get();
 
-        $orders = $query->get();
+        return response()->json(Order::calculateRecap($orders, $period));
+    }
 
-        $totalProducts = 0;
-        $totalDeliveryFee = 0;
-        $totalAdminFee = 0;
-        $grandTotal = 0;
-
-        $canteenRecap = [];
-        $userRecap = [];
-        $productBreakdown = [];
-
-        foreach ($orders as $order) {
-            $deliveryFee = (float) $order->delivery_fee;
-            $adminFee = (float) $order->admin_fee;
-            $totalPrice = (float) $order->total_price;
-            $productsSubtotal = max(0, $totalPrice - $deliveryFee - $adminFee);
-
-            $totalProducts += $productsSubtotal;
-            $totalDeliveryFee += $deliveryFee;
-            $totalAdminFee += $adminFee;
-            $grandTotal += $totalPrice;
-
-            // Group by Canteen / Toko
-            $cId = $order->canteen_id;
-            $cName = $order->canteen ? $order->canteen->name : 'Toko #' . $cId;
-            if (!isset($canteenRecap[$cId])) {
-                $canteenRecap[$cId] = [
-                    'canteen_id' => $cId,
-                    'canteen_name' => $cName,
-                    'category' => $order->canteen->category ?? 'kauman',
-                    'total_products' => 0,
-                    'total_delivery_fee' => 0,
-                    'total_admin_fee' => 0,
-                    'grand_total' => 0,
-                    'order_count' => 0,
-                ];
-            }
-            $canteenRecap[$cId]['total_products'] += $productsSubtotal;
-            $canteenRecap[$cId]['total_delivery_fee'] += $deliveryFee;
-            $canteenRecap[$cId]['total_admin_fee'] += $adminFee;
-            $canteenRecap[$cId]['grand_total'] += $totalPrice;
-            $canteenRecap[$cId]['order_count'] += 1;
-
-            // Group by Santri / Wali
-            $userId = $order->user_id;
-            $santriName = $order->user ? ($order->user->santri_name ?: $order->user->name) : 'Santri #' . $userId;
-            $waliName = $order->user ? $order->user->name : 'Wali #' . $userId;
-
-            if (!isset($userRecap[$userId])) {
-                $userRecap[$userId] = [
-                    'user_id' => $userId,
-                    'santri_name' => $santriName,
-                    'wali_name' => $waliName,
-                    'santri_room' => $order->user->santri_room ?? '',
-                    'total_products' => 0,
-                    'total_delivery_fee' => 0,
-                    'total_admin_fee' => 0,
-                    'grand_total' => 0,
-                    'order_count' => 0,
-                ];
-            }
-
-            $userRecap[$userId]['total_products'] += $productsSubtotal;
-            $userRecap[$userId]['total_delivery_fee'] += $deliveryFee;
-            $userRecap[$userId]['total_admin_fee'] += $adminFee;
-            $userRecap[$userId]['grand_total'] += $totalPrice;
-            $userRecap[$userId]['order_count'] += 1;
-
-            // Product Breakdown
-            foreach ($order->items as $item) {
-                $prodId = $item->product_id;
-                $prodName = $item->product ? $item->product->name : 'Produk Khusus';
-                if (!isset($productBreakdown[$prodId])) {
-                    $productBreakdown[$prodId] = [
-                        'product_id' => $prodId,
-                        'name' => $prodName,
-                        'canteen_name' => $cName,
-                        'total_quantity' => 0,
-                        'total_subtotal' => 0,
-                    ];
-                }
-                $productBreakdown[$prodId]['total_quantity'] += $item->quantity;
-                $productBreakdown[$prodId]['total_subtotal'] += (float) $item->subtotal;
-            }
-        }
-
+    /**
+     * Dapatkan konfigurasi tarif & biaya aktif untuk frontend
+     */
+    public function pricingConfig(): \Illuminate\Http\JsonResponse
+    {
         return response()->json([
-            'period' => $period,
-            'summary' => [
-                'total_products' => $totalProducts,
-                'total_delivery_fee' => $totalDeliveryFee,
-                'total_admin_fee' => $totalAdminFee,
-                'grand_total' => $grandTotal,
-                'total_orders' => count($orders),
-            ],
-            'canteen_recap' => array_values($canteenRecap),
-            'user_recap' => array_values($userRecap),
-            'product_breakdown' => array_values($productBreakdown),
+            'success' => true,
+            'data'    => Order::getPricingConfig(),
         ]);
     }
 }

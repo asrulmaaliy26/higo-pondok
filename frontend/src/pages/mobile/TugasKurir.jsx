@@ -88,6 +88,21 @@ function getCurrentWeekIndex(year, month) {
   return idx >= 0 ? idx : 0;
 }
 
+function formatFullDate(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  return isNaN(d.getTime())
+    ? dateStr
+    : d.toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+}
+
 const formatRupiah = (val) => {
   const num = Math.round(Number(val) || 0);
   return num.toLocaleString('id-ID');
@@ -172,8 +187,7 @@ export default function TugasKurir() {
   const getFilterLabel = () => {
     if (filterMode === 'all') return 'Semua Waktu';
     if (filterMode === 'day') {
-      const d = new Date(filterDate);
-      return isNaN(d) ? filterDate : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      return formatFullDate(filterDate);
     }
     if (filterMode === 'week') {
       const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -216,6 +230,13 @@ export default function TugasKurir() {
     orders: [],
     title: ''
   });
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+
+  const handleManualRefresh = async () => {
+    setIsManualRefreshing(true);
+    await refetch();
+    setTimeout(() => setIsManualRefreshing(false), 400);
+  };
 
   const handlePrintSingleReceipt = (orderToPrint) => {
     setReceiptModalConfig({
@@ -786,7 +807,6 @@ export default function TugasKurir() {
             <div>
               <h1 className="text-base font-bold text-gray-900 dark:text-white leading-tight flex items-center gap-2">
                 Tugas Kurir
-                {isRefetching && <RefreshCw className="w-3.5 h-3.5 text-green-600 animate-spin" />}
               </h1>
               <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
                 {orders.length} Total Pesanan Terdaftar
@@ -796,14 +816,17 @@ export default function TugasKurir() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => refetch()}
+              onClick={handleManualRefresh}
               className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
               title="Refresh Data"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin text-green-600' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${isManualRefreshing ? 'animate-spin text-green-600' : ''}`} />
             </button>
             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800/60 rounded-full">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+              </span>
               <span className="text-[11px] font-bold text-green-700 dark:text-green-300">Live</span>
             </div>
           </div>
@@ -861,12 +884,28 @@ export default function TugasKurir() {
                 <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                   PILIH TANGGAL:
                 </label>
-                <input
-                  type="date"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
-                />
+                <div className="relative group">
+                  <input
+                    type="date"
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    onClick={(e) => {
+                      try {
+                        e.target.showPicker();
+                      } catch {
+                        // Fallback for older browsers
+                      }
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                    title="Klik untuk memilih hari / tanggal / bulan / tahun"
+                  />
+                  <div className="w-full flex items-center justify-between px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold group-hover:border-green-500 group-hover:bg-green-50/20 dark:group-hover:bg-green-950/20 transition-all shadow-xs">
+                    <span className="truncate">
+                      {formatFullDate(filterDate)}
+                    </span>
+                    <Calendar className="w-3.5 h-3.5 text-green-600 dark:text-green-400 shrink-0 ml-1.5 group-hover:scale-110 transition-transform" />
+                  </div>
+                </div>
               </div>
             )}
 

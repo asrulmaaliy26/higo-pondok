@@ -84,9 +84,10 @@ class OrderSeeder extends Seeder
                     continue;
                 }
 
+                $cfg = Order::getPricingConfig();
                 $isKota = strtolower($canteen->category ?? 'kauman') === 'kota';
-                $baseDeliveryFee = $isKota ? 3500 : 2000;
-                $adminFee = $isKota ? 1500 : 1000;
+                $baseDeliveryFee = $isKota ? $cfg['base_delivery_fee'] : 2000;
+                $adminFee = $isKota ? $cfg['base_admin_fee'] : 1000;
 
                 foreach ($users as $user) {
                     for ($orderNum = 1; $orderNum <= 2; $orderNum++) {
@@ -135,15 +136,16 @@ class OrderSeeder extends Seeder
                             $totalItemsCount++;
                         }
 
-                        // Tambahan ongkir untuk kelipatan 5 produk setelah 5 produk pertama
-                        $extraBlocks = max(0, (int) floor(($totalItemsQty - 1) / 5));
-                        $finalDeliveryFee = $baseDeliveryFee + ($extraBlocks * 3000);
-                        $grandTotal = $subtotalItems + $finalDeliveryFee + $adminFee;
+                        // Hitung ongkir & admin terpusat via model Order
+                        $fees = Order::calculateOrderFees($totalItemsQty);
+                        $finalDeliveryFee = $fees['delivery_fee'];
+                        $finalAdminFee = $fees['admin_fee'];
+                        $grandTotal = $subtotalItems + $finalDeliveryFee + $finalAdminFee;
 
                         $order->update([
                             'total_price' => $grandTotal,
                             'delivery_fee' => $finalDeliveryFee,
-                            'admin_fee' => $adminFee,
+                            'admin_fee' => $finalAdminFee,
                         ]);
 
                         $totalOrdersCount++;

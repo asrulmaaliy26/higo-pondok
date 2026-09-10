@@ -86,6 +86,21 @@ function getCurrentWeekIndex(year, month) {
   return idx >= 0 ? idx : 0;
 }
 
+function formatFullDate(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  return isNaN(d.getTime())
+    ? dateStr
+    : d.toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+}
+
 function getOrderPriorityScore(order) {
   // 1. Paling Bawah: Dibatalkan / Ditolak
   if (order.status === 'cancelled') {
@@ -192,7 +207,7 @@ export default function AdminPesanan() {
     return getCurrentWeekIndex(today.getFullYear(), today.getMonth());
   });
 
-  const [selectedCanteenFilter, setSelectedCanteenFilter] = useState('all');
+  const selectedCanteenFilter = 'all';
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -422,8 +437,7 @@ export default function AdminPesanan() {
   const getFilterLabel = () => {
     if (filterMode === 'all') return 'Semua Waktu';
     if (filterMode === 'day') {
-      const d = new Date(filterDate);
-      return isNaN(d) ? filterDate : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      return formatFullDate(filterDate);
     }
     if (filterMode === 'week') {
       const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -655,29 +669,29 @@ export default function AdminPesanan() {
   };
 
   return (
-    <div className="space-y-4 pb-24 animate-fade-in-up font-sans max-w-7xl mx-auto">
+    <div className="space-y-2.5 pb-20 animate-fade-in-up font-sans max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-white dark:bg-gray-900 p-3.5 sm:p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1.5 bg-white dark:bg-gray-900 p-2.5 sm:p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
               Rekapitulasi & Manajemen Pesanan
             </h1>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          <p className="text-[11px] text-gray-500 dark:text-gray-400">
             Pantau seluruh arus pesanan di semua kantin, periksa rekapitulasi omzet per tanggal, dan kelola/hapus pesanan bermasalah.
           </p>
         </div>
       </div>
 
-      {/* UNIFIED GLOBAL FILTER SECTION (DITARUH DI ATAS SEBELUM TAB) */}
-      <div className="bg-white dark:bg-gray-900 p-3 sm:p-3.5 rounded-2xl border border-green-300/80 dark:border-green-800 shadow-sm space-y-2.5">
-        <div className="flex items-center justify-between flex-wrap gap-1.5 border-b border-gray-200 dark:border-gray-700 pb-2">
+      {/* UNIFIED GLOBAL FILTER SECTION */}
+      <div className="bg-white dark:bg-gray-900 p-2.5 sm:p-3 rounded-xl border border-green-300/80 dark:border-green-800 shadow-xs space-y-2">
+        <div className="flex items-center justify-between flex-wrap gap-1 border-b border-gray-200 dark:border-gray-700 pb-1.5">
           <h3 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
             <Filter className="w-3.5 h-3.5 text-green-600" />
-            Filter Periode & Toko (Terpadu)
+            Filter Periode
           </h3>
-          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800">
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800">
             📅 Periode Aktif: <strong>{getFilterLabel()}</strong>
           </span>
         </div>
@@ -699,9 +713,9 @@ export default function AdminPesanan() {
                   setFilterWeekIndex(getCurrentWeekIndex(filterYear, filterMonth));
                 }
               }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all shadow-xs ${
+              className={`px-2 py-0.5 rounded-md text-[11px] font-bold whitespace-nowrap transition-all shadow-xs ${
                 filterMode === m.id
-                  ? 'bg-green-600 text-white shadow-sm ring-2 ring-green-600/20'
+                  ? 'bg-green-600 text-white shadow-xs ring-1 ring-green-600/30'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
               }`}
             >
@@ -711,39 +725,34 @@ export default function AdminPesanan() {
         </div>
 
         {/* Dynamic Inputs & Filters Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-0.5">
-          {/* 1. Filter Toko / Kantin */}
-          <div>
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
-              Pilih Toko / Kantin:
-            </label>
-            <select
-              value={selectedCanteenFilter}
-              onChange={(e) => setSelectedCanteenFilter(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-50 text-gray-800 border border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-green-500 focus:outline-none"
-            >
-              <option value="all">🏪 Semua Toko / Kantin</option>
-              {canteensList.map((c) => (
-                <option key={c.id} value={c.id}>
-                  🏪 {c.name} ({c.category === 'kota' ? 'Zona Kota' : 'Zona Kauman'})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 2. Date Input (Per Tanggal / Datepicker) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5 pt-0.5">
+          {/* 1. Date Input (Per Tanggal / Datepicker) - KIRI */}
           {filterMode === 'day' && (
             <div>
-              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                 Pilih Tanggal:
               </label>
-              <div className="relative">
+              <div className="relative group">
                 <input
                   type="date"
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  onClick={(e) => {
+                    try {
+                      e.target.showPicker();
+                    } catch {
+                      // Fallback for older browsers
+                    }
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                  title="Klik untuk memilih hari / tanggal / bulan / tahun"
                 />
+                <div className="w-full flex items-center justify-between px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold group-hover:border-green-500 group-hover:bg-green-50/20 dark:group-hover:bg-green-950/20 transition-all shadow-xs">
+                  <span className="truncate">
+                    {formatFullDate(filterDate)}
+                  </span>
+                  <Calendar className="w-3.5 h-3.5 text-green-600 dark:text-green-400 shrink-0 ml-1.5 group-hover:scale-110 transition-transform" />
+                </div>
               </div>
             </div>
           )}
@@ -752,7 +761,7 @@ export default function AdminPesanan() {
           {filterMode === 'week' && (
             <>
               <div>
-                <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                   Pilih Bulan:
                 </label>
                 <select
@@ -762,7 +771,7 @@ export default function AdminPesanan() {
                     setFilterMonth(newMonth);
                     setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
                   }}
-                  className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-medium focus:ring-2 focus:ring-green-500 focus:outline-none"
                 >
                   {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
                     (m, i) => (
@@ -775,13 +784,13 @@ export default function AdminPesanan() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                   Pilih Rentang Minggu:
                 </label>
                 <select
                   value={filterWeekIndex < getWeeksInMonth(filterYear, filterMonth).length ? filterWeekIndex : 0}
                   onChange={(e) => setFilterWeekIndex(parseInt(e.target.value))}
-                  className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-medium focus:ring-2 focus:ring-green-500 focus:outline-none"
                 >
                   {getWeeksInMonth(filterYear, filterMonth).map((w, i) => (
                     <option key={i} value={i}>
@@ -796,7 +805,7 @@ export default function AdminPesanan() {
           {/* Month Mode Input */}
           {filterMode === 'month' && (
             <div>
-              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                 Pilih Bulan:
               </label>
               <select
@@ -806,7 +815,7 @@ export default function AdminPesanan() {
                   setFilterMonth(newMonth);
                   setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
                 }}
-                className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-medium focus:ring-2 focus:ring-green-500 focus:outline-none"
               >
                 {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
                   (m, i) => (
@@ -822,7 +831,7 @@ export default function AdminPesanan() {
           {/* Year Mode or Month/Week Year Selector */}
           {(filterMode === 'week' || filterMode === 'month' || filterMode === 'year') && (
             <div>
-              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                 Pilih Tahun:
               </label>
               <select
@@ -832,7 +841,7 @@ export default function AdminPesanan() {
                   setFilterYear(newYear);
                   setFilterWeekIndex(getCurrentWeekIndex(newYear, filterMonth));
                 }}
-                className="w-full px-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none"
+                className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-medium focus:ring-2 focus:ring-green-500 focus:outline-none"
               >
                 {[2024, 2025, 2026, 2027, 2028].map((y) => (
                   <option key={y} value={y}>
@@ -845,13 +854,13 @@ export default function AdminPesanan() {
 
           {/* Status Filter */}
           <div>
-            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
               Filter Status:
             </label>
             <select
               value={selectedStatusFilter}
               onChange={(e) => setSelectedStatusFilter(e.target.value)}
-              className="w-full px-3.5 py-2.5 border rounded-xl text-xs font-semibold bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-green-500 focus:outline-none"
+              className="w-full px-2.5 py-1.5 border rounded-lg text-xs font-semibold bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-green-500 focus:outline-none"
             >
               <option value="all">📋 Semua Status</option>
               <option value="waiting_confirmation">⏳ Menunggu Validasi Bayar</option>
@@ -866,17 +875,17 @@ export default function AdminPesanan() {
 
           {/* Search Box */}
           <div className="sm:col-span-2 lg:col-span-2">
-            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
               Pencarian Cepat:
             </label>
             <div className="relative">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Ketik nama Santri / Wali / Toko / Order ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-3.5 py-2.5 border rounded-xl text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white focus:ring-2 focus:ring-green-500 focus:outline-none font-medium"
+                className="w-full pl-8 pr-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white focus:ring-2 focus:ring-green-500 focus:outline-none font-medium"
               />
             </div>
           </div>
@@ -884,11 +893,11 @@ export default function AdminPesanan() {
       </div>
 
       {/* MAIN TAB SWITCHER (DITARUH DI BAWAH FILTER) */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center justify-between gap-4 rounded-2xl shadow-sm overflow-x-auto no-scrollbar">
-        <div className="flex gap-4">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-3 py-1 flex items-center justify-between gap-3 rounded-xl shadow-xs overflow-x-auto no-scrollbar">
+        <div className="flex gap-3">
           <button
             onClick={() => setActiveTab('orders')}
-            className={`py-2 px-3 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
+            className={`py-1.5 px-2.5 text-xs sm:text-sm font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors ${
               activeTab === 'orders'
                 ? 'border-green-600 text-green-600 dark:text-green-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -899,7 +908,7 @@ export default function AdminPesanan() {
           </button>
           <button
             onClick={() => setActiveTab('recap')}
-            className={`py-2 px-3 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
+            className={`py-1.5 px-2.5 text-xs sm:text-sm font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors ${
               activeTab === 'recap'
                 ? 'border-green-600 text-green-600 dark:text-green-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -1270,39 +1279,74 @@ export default function AdminPesanan() {
           ) : (
             <>
               {/* Metric Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-                <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                  <span className="text-xs text-gray-500 font-medium block mb-1">Total Produk (Belanjaan)</span>
-                  <span className="text-lg sm:text-xl font-black text-gray-900 dark:text-white">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3.5">
+                <div className="bg-white dark:bg-gray-900 p-3.5 sm:p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xs">
+                  <span className="text-[11px] sm:text-xs text-gray-500 font-medium block mb-1">Total Belanja (HPJ)</span>
+                  <span className="text-base sm:text-xl font-black text-gray-900 dark:text-white">
                     Rp {(recapData?.summary?.total_products || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
-                <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                  <span className="text-xs text-gray-500 font-medium block mb-1">Total Ongkir</span>
-                  <span className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400">
-                    Rp {(recapData?.summary?.total_delivery_fee || 0).toLocaleString('id-ID')}
+                <div className="bg-amber-50/60 dark:bg-amber-950/20 p-3.5 sm:p-4 rounded-2xl border border-amber-200/80 dark:border-amber-800/40 shadow-xs">
+                  <span className="text-[11px] sm:text-xs text-amber-700 dark:text-amber-400 font-medium block mb-1">Total Modal (HPP)</span>
+                  <span className="text-base sm:text-xl font-black text-amber-700 dark:text-amber-300">
+                    Rp {(recapData?.summary?.total_hpp || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
-                <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                  <span className="text-xs text-gray-500 font-medium block mb-1">Total Biaya Admin</span>
-                  <span className="text-lg sm:text-xl font-black text-purple-600 dark:text-purple-400">
-                    Rp {(recapData?.summary?.total_admin_fee || 0).toLocaleString('id-ID')}
+                <div className="bg-emerald-50 dark:bg-emerald-950/40 p-3.5 sm:p-4 rounded-2xl border border-emerald-200 dark:border-emerald-800/50 shadow-xs">
+                  <span className="text-[11px] sm:text-xs text-emerald-700 dark:text-emerald-300 font-bold block mb-1">Total Laba Toko</span>
+                  <span className="text-base sm:text-xl font-black text-emerald-700 dark:text-emerald-300">
+                    Rp {(recapData?.summary?.total_profit || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
-                <div className="bg-green-50 dark:bg-green-950/40 p-4 rounded-2xl border border-green-200 dark:border-green-800/50 shadow-sm">
-                  <span className="text-xs text-green-700 dark:text-green-300 font-medium block mb-1">
+                <div className="bg-white dark:bg-gray-900 p-3.5 sm:p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xs flex flex-col justify-between">
+                  <div>
+                    <span className="text-[11px] sm:text-xs text-gray-500 font-medium block mb-1">Total Ongkir Kurir</span>
+                    <span className="text-base sm:text-xl font-black text-blue-600 dark:text-blue-400">
+                      Rp {(recapData?.summary?.total_delivery_fee || 0).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                  {(recapData?.summary?.total_courier_cut_to_admin || 0) > 0 && (
+                    <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-800 text-[10px] text-gray-400">
+                      Dialihkan ke admin: <span className="font-semibold text-amber-600 dark:text-amber-400">-Rp {(recapData?.summary?.total_courier_cut_to_admin || 0).toLocaleString('id-ID')}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="bg-white dark:bg-gray-900 p-3.5 sm:p-4 rounded-2xl border border-purple-200/60 dark:border-purple-800/40 shadow-xs flex flex-col justify-between">
+                  <div>
+                    <span className="text-[11px] sm:text-xs text-purple-700 dark:text-purple-400 font-medium block mb-1">Total Biaya Admin</span>
+                    <span className="text-base sm:text-xl font-black text-purple-600 dark:text-purple-400">
+                      Rp {(recapData?.summary?.total_admin_fee || 0).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                  <div className="mt-2 pt-1.5 border-t border-purple-100 dark:border-purple-900/40 space-y-0.5 text-[10px] sm:text-[11px]">
+                    <div className="flex justify-between text-gray-500 dark:text-gray-400">
+                      <span>• Admin Pokok:</span>
+                      <span className="font-semibold text-gray-700 dark:text-gray-300">
+                        Rp {(recapData?.summary?.total_base_admin_fee || 0).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-amber-700 dark:text-amber-400 font-medium">
+                      <span>• Pindahan Ongkir:</span>
+                      <span className="font-bold text-amber-700 dark:text-amber-300">
+                        +Rp {(recapData?.summary?.total_courier_cut_to_admin || 0).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-green-50 dark:bg-green-950/40 p-3.5 sm:p-4 rounded-2xl border border-green-200 dark:border-green-800/50 shadow-xs">
+                  <span className="text-[11px] sm:text-xs text-green-700 dark:text-green-300 font-medium block mb-1">
                     Grand Total ({recapData?.summary?.total_orders || 0} Order)
                   </span>
-                  <span className="text-lg sm:text-xl font-black text-green-700 dark:text-green-300">
+                  <span className="text-base sm:text-xl font-black text-green-700 dark:text-green-300">
                     Rp {(recapData?.summary?.grand_total || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
               </div>
 
               {/* Rekapitulasi Per Toko / Kantin */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50/50 dark:bg-blue-950/20">
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="p-3.5 sm:p-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50/50 dark:bg-blue-950/20">
+                  <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
                     <Store className="w-4 h-4 text-blue-600" />
                     Rekapitulasi Per Toko / Kantin
                   </h3>
@@ -1316,30 +1360,40 @@ export default function AdminPesanan() {
                     recapData.canteen_recap.map((c) => (
                       <div
                         key={c.canteen_id}
-                        className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors"
+                        className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors"
                       >
                         <div>
-                          <h4 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
+                          <h4 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
                             🏪 {c.canteen_name}
                             <span className="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold px-2 py-0.5 rounded capitalize">
                               Zona {c.category}
                             </span>
                           </h4>
-                          <p className="text-xs text-gray-500 mt-0.5">{c.order_count} Total Pesanan</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5">{c.order_count} Total Pesanan</p>
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap text-xs font-semibold">
-                          <span className="bg-gray-100 dark:bg-gray-800 px-2.5 py-1 rounded-lg text-gray-700 dark:text-gray-300">
+                        <div className="flex items-center gap-1.5 flex-wrap text-xs font-semibold">
+                          <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg text-gray-700 dark:text-gray-300">
                             Produk: Rp {c.total_products.toLocaleString('id-ID')}
                           </span>
-                          <span className="text-gray-400">|</span>
-                          <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-lg">
+                          <span className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-1 rounded-lg">
+                            HPP: Rp {(c.total_hpp || 0).toLocaleString('id-ID')}
+                          </span>
+                          <span className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-1 rounded-lg font-bold">
+                            Laba: +Rp {(c.total_profit || 0).toLocaleString('id-ID')}
+                          </span>
+                          <span className="text-gray-300 dark:text-gray-600">|</span>
+                          <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-lg">
                             Ongkir: Rp {c.total_delivery_fee.toLocaleString('id-ID')}
                           </span>
-                          <span className="text-gray-400">|</span>
-                          <span className="bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2.5 py-1 rounded-lg">
+                          <span className="bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded-lg">
                             Admin: Rp {c.total_admin_fee.toLocaleString('id-ID')}
+                            {(c.total_courier_cut_to_admin || 0) > 0 && (
+                              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-normal ml-1">
+                                (Pokok: {(c.total_base_admin_fee || 0).toLocaleString('id-ID')}, Pindahan: +{(c.total_courier_cut_to_admin || 0).toLocaleString('id-ID')})
+                              </span>
+                            )}
                           </span>
-                          <span className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 px-2.5 py-1 rounded-lg font-bold ml-auto sm:ml-0">
+                          <span className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 px-2 py-1 rounded-lg font-bold ml-auto sm:ml-0">
                             Total: Rp {c.grand_total.toLocaleString('id-ID')}
                           </span>
                         </div>
@@ -1350,10 +1404,10 @@ export default function AdminPesanan() {
               </div>
 
               {/* Rekapitulasi Per Santri / Wali */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">Rekapitulasi Per Wali / Santri</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="p-3.5 sm:p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
+                  <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">Rekapitulasi Per Wali / Santri</h3>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                     Format: Total Belanja Produk | Total Ongkir | Total Admin
                   </p>
                 </div>
@@ -1366,27 +1420,32 @@ export default function AdminPesanan() {
                     recapData.user_recap.map((u) => (
                       <div
                         key={u.user_id}
-                        className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors"
+                        className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors"
                       >
                         <div>
-                          <h4 className="font-bold text-gray-900 dark:text-white text-sm">{u.santri_name}</h4>
-                          <p className="text-xs text-gray-500">
+                          <h4 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">{u.santri_name}</h4>
+                          <p className="text-[11px] text-gray-500">
                             Wali: {u.wali_name} {u.santri_room ? `• ${u.santri_room}` : ''} ({u.order_count} pesanan)
                           </p>
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap text-xs font-semibold">
-                          <span className="bg-gray-100 dark:bg-gray-800 px-2.5 py-1 rounded-lg text-gray-700 dark:text-gray-300">
+                        <div className="flex items-center gap-1.5 flex-wrap text-xs font-semibold">
+                          <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg text-gray-700 dark:text-gray-300">
                             Produk: Rp {u.total_products.toLocaleString('id-ID')}
                           </span>
-                          <span className="text-gray-400">|</span>
-                          <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-lg">
+                          <span className="text-gray-300 dark:text-gray-600">|</span>
+                          <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-lg">
                             Ongkir: Rp {u.total_delivery_fee.toLocaleString('id-ID')}
                           </span>
-                          <span className="text-gray-400">|</span>
-                          <span className="bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2.5 py-1 rounded-lg">
+                          <span className="text-gray-300 dark:text-gray-600">|</span>
+                          <span className="bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded-lg">
                             Admin: Rp {u.total_admin_fee.toLocaleString('id-ID')}
+                            {(u.total_courier_cut_to_admin || 0) > 0 && (
+                              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-normal ml-1">
+                                (Pokok: {(u.total_base_admin_fee || 0).toLocaleString('id-ID')}, Pindahan: +{(u.total_courier_cut_to_admin || 0).toLocaleString('id-ID')})
+                              </span>
+                            )}
                           </span>
-                          <span className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 px-2.5 py-1 rounded-lg font-bold ml-auto sm:ml-0">
+                          <span className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 px-2 py-1 rounded-lg font-bold ml-auto sm:ml-0">
                             Total: Rp {u.grand_total.toLocaleString('id-ID')}
                           </span>
                         </div>
@@ -1397,9 +1456,9 @@ export default function AdminPesanan() {
               </div>
 
               {/* Rekapitulasi Produk Terjual */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">Rekapitulasi Kuantitas Produk Terjual</h3>
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="p-3.5 sm:p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
+                  <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">Rekapitulasi Kuantitas & Laba Produk Terjual</h3>
                 </div>
                 <div className="divide-y divide-gray-200 dark:divide-gray-700 max-h-96 overflow-y-auto">
                   {!recapData?.product_breakdown || recapData.product_breakdown.length === 0 ? (
@@ -1408,21 +1467,36 @@ export default function AdminPesanan() {
                     </div>
                   ) : (
                     recapData.product_breakdown.map((p) => (
-                      <div key={p.product_id} className="p-3.5 px-4 flex items-center justify-between text-sm">
+                      <div key={p.product_id} className="p-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm">
                         <div>
-                          <span className="font-medium text-gray-800 dark:text-gray-200">{p.name}</span>
-                          {p.canteen_name && (
-                            <span className="text-[10px] text-gray-500 dark:text-gray-400 ml-2 font-normal bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
-                              {p.canteen_name}
-                            </span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-gray-800 dark:text-gray-200">{p.name}</span>
+                            {p.is_custom && (
+                              <span className="text-[10px] bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded font-bold">
+                                Titip Beli
+                              </span>
+                            )}
+                            {p.canteen_name && (
+                              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                {p.canteen_name}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-2">
+                            <span>HPJ: <strong className="text-gray-700 dark:text-gray-300">Rp {(p.hpj || 0).toLocaleString('id-ID')}</strong></span>
+                            <span>•</span>
+                            <span>HPP (Modal): <strong className="text-amber-700 dark:text-amber-400">Rp {(p.hpp || 1000).toLocaleString('id-ID')}</strong></span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded text-xs">
                             {p.total_quantity}x terjual
                           </span>
-                          <span className="font-bold text-gray-900 dark:text-white">
-                            Rp {p.total_subtotal.toLocaleString('id-ID')}
+                          <span className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-2 py-0.5 rounded text-xs font-semibold">
+                            Subtotal: Rp {p.total_subtotal.toLocaleString('id-ID')}
+                          </span>
+                          <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 px-2 py-0.5 rounded text-xs font-bold">
+                            Laba Toko: +Rp {(p.total_profit || 0).toLocaleString('id-ID')}
                           </span>
                         </div>
                       </div>

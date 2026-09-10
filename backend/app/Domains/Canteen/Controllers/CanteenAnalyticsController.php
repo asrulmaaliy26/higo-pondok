@@ -38,8 +38,8 @@ class CanteenAnalyticsController extends Controller
         // Hitung Pendapatan Bulanan (Bulan ini)
         $thisMonthIncome = $this->calculateIncome($canteenIds, Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth());
 
-        // Hitung Saldo Total (Semua waktu)
-        $totalBalance = $this->calculateIncome($canteenIds, null, null);
+        // Saldo Kas Nyata Kantin (Saldo aktif di database)
+        $totalBalance = (float) $canteens->sum('balance');
 
         // Hitung Total Pesanan Selesai
         $completedOrdersCount = Order::whereIn('canteen_id', $canteenIds)
@@ -74,18 +74,13 @@ class CanteenAnalyticsController extends Controller
             ->take(15)
             ->get()
             ->map(function ($order) {
-                // Kalkulasi nominal bersih (tanpa ongkir jika ada kurir)
-                $income = $order->items()->sum('subtotal');
-                if (is_null($order->courier_id)) {
-                    $income += max(0, $order->total_price - $income);
-                }
-                
+                // Kalkulasi nominal bersih (tanpa ongkir jika ada kurir) via model Order
                 return [
                     'id' => $order->id,
-                    'order_number' => $order->id, // atau order_number jika ada
+                    'order_number' => $order->id,
                     'canteen_name' => $order->canteen->name ?? 'Unknown',
                     'customer_name' => $order->user->name ?? 'Unknown',
-                    'amount' => $income,
+                    'amount' => $order->canteen_income,
                     'date' => $order->updated_at->format('Y-m-d H:i')
                 ];
             });
@@ -113,18 +108,11 @@ class CanteenAnalyticsController extends Controller
             $query->whereBetween('updated_at', [$startDate, $endDate]);
         }
 
-        $orders = $query->with('items')->get();
+        $orders = $query->with(['items.product'])->get();
         $totalIncome = 0;
 
         foreach ($orders as $order) {
-            $itemsTotal = ($order->items && $order->items->count() > 0) ? $order->items->sum('subtotal') : (float) $order->total_price;
-            $totalIncome += $itemsTotal;
-            
-            // Jika tidak ada kurir (diantar sendiri / ambil di tempat), ongkir masuk ke pendapatan kantin
-            if (is_null($order->courier_id)) {
-                $delivery_fee = $order->total_price - $itemsTotal;
-                $totalIncome += max(0, $delivery_fee);
-            }
+            $totalIncome += $order->canteen_income;
         }
 
         return $totalIncome;

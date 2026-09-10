@@ -59,9 +59,12 @@ Route::middleware(['auth:sanctum', 'impersonate'])->group(function () {
 
     // User routes
     Route::post('/orders', [\App\Domains\Canteen\Controllers\OrderController::class, 'store']);
+    Route::post('/orders/batch', [\App\Domains\Canteen\Controllers\OrderController::class, 'batchStore']);
     Route::get('/orders', [\App\Domains\Canteen\Controllers\OrderController::class, 'userOrders']);
     Route::put('/orders/{id}/cancel', [\App\Domains\Canteen\Controllers\OrderController::class, 'userCancelOrder']);
     Route::post('/orders/{id}/payment-proof', [\App\Domains\Canteen\Controllers\OrderController::class, 'uploadPaymentProof']);
+    Route::post('/orders/checkout/{checkoutId}/payment-proof', [\App\Domains\Canteen\Controllers\OrderController::class, 'uploadPaymentProofByCheckout']);
 });
 
 Route::get('/banners', [\App\Domains\Canteen\Controllers\CanteenBannerController::class, 'index']);
+Route::get('/pricing-config', [\App\Domains\Canteen\Controllers\OrderController::class, 'pricingConfig']);

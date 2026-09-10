@@ -60,9 +60,9 @@ class UserSeeder extends Seeder
         // Seed some Products
         if ($canteen->products()->count() === 0) {
             $canteen->products()->createMany([
-                ['name' => 'Nasi Goreng Spesial', 'category' => 'Makanan Utama', 'price' => 15000, 'discount_price' => 12000, 'stock' => 20, 'is_available' => true, 'sold_count' => 450, 'rating' => 4.9, 'rating_count' => 120],
-                ['name' => 'Es Teh Manis', 'category' => 'Minuman', 'price' => 4000, 'discount_price' => null, 'stock' => 50, 'is_available' => true, 'sold_count' => 800, 'rating' => 4.7, 'rating_count' => 220],
-                ['name' => 'Ayam Geprek Level 5', 'category' => 'Makanan Utama', 'price' => 18000, 'discount_price' => null, 'stock' => 0, 'is_available' => false, 'sold_count' => 0, 'rating' => 0, 'rating_count' => 0],
+                ['name' => 'Nasi Goreng Spesial', 'category' => 'Makanan Utama', 'hpp' => 1000, 'price' => 15000, 'discount_price' => 12000, 'stock' => 20, 'is_available' => true, 'sold_count' => 450, 'rating' => 4.9, 'rating_count' => 120],
+                ['name' => 'Es Teh Manis', 'category' => 'Minuman', 'hpp' => 1000, 'price' => 4000, 'discount_price' => null, 'stock' => 50, 'is_available' => true, 'sold_count' => 800, 'rating' => 4.7, 'rating_count' => 220],
+                ['name' => 'Ayam Geprek Level 5', 'category' => 'Makanan Utama', 'hpp' => 1000, 'price' => 18000, 'discount_price' => null, 'stock' => 0, 'is_available' => false, 'sold_count' => 0, 'rating' => 0, 'rating_count' => 0],
             ]);
         }
 

@@ -24,6 +24,31 @@ import {
   Sparkles
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { PRICING_CONFIG } from '../../config/pricing';
+
+/**
+ * =====================================================
+ * KONFIGURASI ZONA TOKO — Ubah di sini untuk menambah
+ * atau mengurangi zona. Semua tampilan zona di halaman
+ * ini akan otomatis menyesuaikan.
+ *
+ * Format setiap zona:
+ *   id          : nilai yang disimpan di database (string, lowercase)
+ *   label       : nama tampilan
+ *   deliveryFee : ongkir kurir (dalam rupiah)
+ *   adminFee    : biaya admin (dalam rupiah)
+ * =====================================================
+ */
+export const CANTEEN_ZONES = [
+  { id: 'kauman', label: 'Zona Kauman', deliveryFee: 2000, adminFee: 1000 },
+  { id: 'kota',   label: 'Zona Kota',   deliveryFee: PRICING_CONFIG.BASE_DELIVERY_FEE, adminFee: PRICING_CONFIG.BASE_ADMIN_FEE },
+];
+
+/** Helper: cari objek zona berdasarkan id */
+const getZone = (id) => CANTEEN_ZONES.find(z => z.id === id) ?? CANTEEN_ZONES[0];
+
+/** Format angka ke Rp X.XXX */
+const rp = (n) => `Rp ${n.toLocaleString('id-ID')}`;
 
 export default function Pertokoan() {
   const queryClient = useQueryClient();
@@ -281,7 +306,9 @@ export default function Pertokoan() {
 
   const handleSaveBulkHours = (e) => {
     e.preventDefault();
-    const categoryName = bulkCategory === 'kauman' ? 'Zona Kauman' : bulkCategory === 'kota' ? 'Zona Kota' : 'Semua Toko';
+    const categoryName = bulkCategory === 'all'
+      ? 'Semua Toko'
+      : getZone(bulkCategory).label;
     if (window.confirm(`Terapkan jam operasional ${bulkOpenTime} - ${bulkCloseTime} ke ${categoryName}?`)) {
       bulkUpdateHoursMutation.mutate({
         open_time: bulkOpenTime,
@@ -310,8 +337,8 @@ export default function Pertokoan() {
     if (filterTab === 'force_closed') return c.status === 'approved' && c.is_force_closed;
     if (filterTab === 'schedule_closed') return c.status === 'approved' && !c.is_open && !c.is_force_closed;
     if (filterTab === 'pending') return c.status === 'pending';
-    if (filterTab === 'kauman') return c.category === 'kauman';
-    if (filterTab === 'kota') return c.category === 'kota';
+    // Filter zona dinamis dari CANTEEN_ZONES
+    if (CANTEEN_ZONES.some(z => z.id === filterTab)) return c.category === filterTab;
     return true;
   });
 
@@ -523,8 +550,7 @@ export default function Pertokoan() {
               { id: 'open', label: `Buka (${openCount})` },
               { id: 'schedule_closed', label: `Tutup Jadwal (${scheduleClosedCount})` },
               { id: 'force_closed', label: `Tutup Langsung (${forceClosedCount})` },
-              { id: 'kauman', label: 'Zona Kauman' },
-              { id: 'kota', label: 'Zona Kota' },
+              ...CANTEEN_ZONES.map(z => ({ id: z.id, label: z.label })),
               { id: 'pending', label: `Review (${pendingCount})` },
             ].map(tab => (
               <button
@@ -725,8 +751,9 @@ export default function Pertokoan() {
                   className="w-full rounded-2xl border-gray-200 dark:border-gray-700 dark:bg-gray-800 p-3 font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500"
                 >
                   <option value="all">Semua Toko ({totalCount} Toko)</option>
-                  <option value="kauman">Hanya Zona Kauman</option>
-                  <option value="kota">Hanya Zona Kota</option>
+                  {CANTEEN_ZONES.map(z => (
+                    <option key={z.id} value={z.id}>Hanya {z.label}</option>
+                  ))}
                 </select>
               </div>
 
@@ -985,17 +1012,20 @@ export default function Pertokoan() {
                   onChange={(e) => setDetailCategory(e.target.value)}
                   className="w-full rounded-2xl border-gray-200 dark:border-gray-700 dark:bg-gray-800 shadow-xs text-gray-900 dark:text-white text-xs sm:text-sm font-bold p-3 focus:ring-2 focus:ring-green-500"
                 >
-                  <option value="kauman">Zona Kauman (Ongkir Rp 2.000 + Admin Rp 1.000 = Rp 3.000)</option>
-                  <option value="kota">Zona Kota (Ongkir Rp 3.500 + Admin Rp 1.500 = Rp 5.000)</option>
+                  {CANTEEN_ZONES.map(z => (
+                    <option key={z.id} value={z.id}>
+                      {z.label} (Ongkir {rp(z.deliveryFee)} + Admin {rp(z.adminFee)} = {rp(z.deliveryFee + z.adminFee)})
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div className="bg-green-50 dark:bg-green-950/30 p-3.5 rounded-2xl border border-green-100 dark:border-green-900/50 text-xs font-semibold flex items-center justify-between flex-wrap gap-2">
                 <span className="text-green-800 dark:text-green-300">
-                  Tarif: 🛵 Ongkir Rp {detailCategory === 'kota' ? '3.500' : '2.000'} | 🛡️ Admin Rp {detailCategory === 'kota' ? '1.500' : '1.000'}
+                  Tarif: 🛵 Ongkir {rp(getZone(detailCategory).deliveryFee)} | 🛡️ Admin {rp(getZone(detailCategory).adminFee)}
                 </span>
                 <span className="text-green-700 dark:text-green-400 font-extrabold text-sm">
-                  Total Rp {detailCategory === 'kota' ? '5.000' : '3.000'}
+                  Total {rp(getZone(detailCategory).deliveryFee + getZone(detailCategory).adminFee)}
                 </span>
               </div>
 

@@ -108,6 +108,7 @@ export default function ThermalReceiptModal({
   // Calculate batch summaries
   const batchSummary = useMemo(() => {
     let products = 0;
+    let hpp = 0;
     let delivery = 0;
     let admin = 0;
 
@@ -118,16 +119,30 @@ export default function ThermalReceiptModal({
       admin += adminFee;
 
       if (o.items && o.items.length > 0) {
-        const sub = o.items.reduce((s, i) => s + parseFloat(i.subtotal || (parseFloat(i.price || 0) * (i.quantity || 1))), 0);
-        products += sub;
-      } else if (o.is_custom || o.custom_notes) {
+        o.items.forEach(i => {
+          const qty = parseInt(i.quantity || 1, 10);
+          const price = parseFloat(i.price || 0);
+          const sub = parseFloat(i.subtotal || (price * qty));
+          const defaultHpp = price > 1000 ? (price - 1000) : price;
+          const rawHpp = i.product?.hpp;
+          const unitHpp = (rawHpp !== undefined && rawHpp !== null && parseFloat(rawHpp) > 0)
+            ? parseFloat(rawHpp)
+            : defaultHpp;
+          const itemHpp = unitHpp * qty;
+          products += sub;
+          hpp += itemHpp;
+        });
+      } else {
         const custom = Math.max(0, parseFloat(o.total_price || 0) - deliveryFee - adminFee);
         products += custom;
+        hpp += custom > 1000 ? (custom - 1000) : custom;
       }
     });
 
     return {
       products,
+      hpp,
+      profit: products - hpp,
       delivery,
       admin,
       grandTotal: products + delivery + admin
@@ -505,22 +520,30 @@ export default function ThermalReceiptModal({
                   </div>
 
                   {/* SUMMARY CARDS KEUANGAN */}
-                  <div className="grid grid-cols-4 gap-3 bg-gray-50 p-3.5 rounded-xl border border-gray-200 text-xs">
-                    <div className="p-2.5 bg-white rounded-lg border border-gray-200 text-center">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs">
+                    <div className="p-2 bg-white rounded-lg border border-gray-200 text-center">
                       <span className="text-[10px] font-bold text-gray-400 block uppercase">Total Pesanan</span>
-                      <span className="text-base font-black text-gray-900">{filteredBatchOrders.length}</span>
+                      <span className="text-sm sm:text-base font-black text-gray-900">{filteredBatchOrders.length}</span>
                     </div>
-                    <div className="p-2.5 bg-white rounded-lg border border-gray-200 text-center">
-                      <span className="text-[10px] font-bold text-gray-400 block uppercase">Uang Belanja Produk</span>
-                      <span className="text-sm font-black text-gray-900">Rp {formatRupiah(batchSummary.products)}</span>
+                    <div className="p-2 bg-white rounded-lg border border-gray-200 text-center">
+                      <span className="text-[10px] font-bold text-gray-400 block uppercase">Belanja (HPJ)</span>
+                      <span className="text-xs sm:text-sm font-black text-gray-900">Rp {formatRupiah(batchSummary.products)}</span>
                     </div>
-                    <div className="p-2.5 bg-white rounded-lg border border-gray-200 text-center">
+                    <div className="p-2 bg-amber-50/70 rounded-lg border border-amber-200 text-center">
+                      <span className="text-[10px] font-bold text-amber-700 block uppercase">Modal (HPP)</span>
+                      <span className="text-xs sm:text-sm font-black text-amber-700">Rp {formatRupiah(batchSummary.hpp)}</span>
+                    </div>
+                    <div className="p-2 bg-emerald-50 rounded-lg border border-emerald-200 text-center">
+                      <span className="text-[10px] font-bold text-emerald-700 block uppercase">Laba Toko</span>
+                      <span className="text-xs sm:text-sm font-black text-emerald-700">Rp {formatRupiah(batchSummary.profit)}</span>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-gray-200 text-center">
                       <span className="text-[10px] font-bold text-gray-400 block uppercase">Total Ongkir</span>
-                      <span className="text-sm font-black text-blue-700">Rp {formatRupiah(batchSummary.delivery)}</span>
+                      <span className="text-xs sm:text-sm font-black text-blue-700">Rp {formatRupiah(batchSummary.delivery)}</span>
                     </div>
-                    <div className="p-2.5 bg-white rounded-lg border border-gray-200 text-center">
-                      <span className="text-[10px] font-bold text-gray-400 block uppercase">Grand Total Omzet</span>
-                      <span className="text-sm font-black text-green-700">Rp {formatRupiah(batchSummary.grandTotal)}</span>
+                    <div className="p-2 bg-green-50 rounded-lg border border-green-200 text-center">
+                      <span className="text-[10px] font-bold text-green-800 block uppercase">Grand Total Omzet</span>
+                      <span className="text-xs sm:text-sm font-black text-green-700">Rp {formatRupiah(batchSummary.grandTotal)}</span>
                     </div>
                   </div>
 
@@ -550,7 +573,7 @@ export default function ThermalReceiptModal({
                           filteredBatchOrders.map((o, idx) => {
                             const itemsSummary = o.items && o.items.length > 0
                               ? o.items.map(i => `${i.quantity}x ${i.product?.name || 'Produk'}`).join(', ')
-                              : (o.custom_notes || 'Pesanan Khusus');
+                              : (o.custom_notes ? `Titip Beli: ${o.custom_notes}` : 'Pesanan Khusus / Titip Beli');
 
                             return (
                               <tr key={idx} className="hover:bg-gray-50">

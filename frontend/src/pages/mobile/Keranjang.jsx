@@ -8,6 +8,7 @@ import api from '../../lib/axios';
 import { getStorageUrl } from '../../lib/axios';
 import { useCartStore } from '../../store/cartStore';
 import { useAuthStore } from '../../store/authStore';
+import { calculateOrderFees } from '../../config/pricing';
 
 export default function Keranjang() {
   const navigate = useNavigate();
@@ -32,17 +33,12 @@ export default function Keranjang() {
     const subtotal = itemList.reduce((s, i) => s + parseFloat(i.product.price) * i.quantity, 0);
     const qty = itemList.reduce((s, i) => s + i.quantity, 0);
     
-    // Category pricing (Kauman vs Kota)
-    const category = canteen.category || 'kauman';
-    const baseDeliveryFee = category === 'kota' ? 3500 : 2000;
-    const adminFee = category === 'kota' ? 1500 : 1000;
-
-    // Quantity multiplier (+ Rp 3.000 for every 5 extra items after first 5)
-    const extraBlocks = Math.max(0, Math.floor((qty - 1) / 5));
-    const deliveryFee = baseDeliveryFee + (extraBlocks * 3000);
+    // Perhitungan Terpusat (Opsi B: Ongkir Rp 3.000 + Admin Rp 2.000)
+    const feeDetails = calculateOrderFees(qty, 1, true);
+    const { deliveryFee, adminFee, extraBlocks, extraCourierFee, extraAdminFee } = feeDetails;
 
     const total = subtotal + deliveryFee + adminFee;
-    return { canteenId, canteen, itemList, subtotal, deliveryFee, adminFee, total, qty };
+    return { canteenId, canteen, itemList, subtotal, deliveryFee, adminFee, total, qty, extraBlocks, extraCourierFee, extraAdminFee };
   });
 
   const grandTotal = canteenSummaries.reduce((s, c) => s + c.total, 0);
@@ -56,71 +52,43 @@ export default function Keranjang() {
       return;
     }
     if (!finalLocation) {
-      window.alert('Silakan pilih atau ketik lokasi pengiriman Anda terlebih dahulu sebelum Checkout.');
+      toast.error('Silakan pilih atau ketik lokasi pengiriman Anda terlebih dahulu sebelum Checkout.');
       return;
     }
 
-
-
     setIsProcessing(true);
 
-    // Buat order 1 per kantin secara berurutan
-    const results = [];
-    for (const { canteenId, canteen, itemList, subtotal, deliveryFee, total } of canteenSummaries) {
-      try {
-        const payload = {
+    try {
+      const payload = {
+        delivery_location: finalLocation,
+        canteens: canteenSummaries.map(({ canteen, itemList }) => ({
           canteen_id: canteen.id,
-          delivery_location: finalLocation,
-          custom_notes: canteenNotes[canteenId] || '',
+          custom_notes: canteenNotes[canteen.id] || '',
           items: itemList.map(i => ({
             product_id: i.product.id,
             quantity: i.quantity,
             notes: i.notes || ''
           }))
-        };
-        const res = await api.post('/orders', payload);
-        results.push({ ok: true, canteen, order: res.data?.order, itemList, subtotal, deliveryFee, total });
-      } catch (err) {
-        const errorDetail = err.response?.data?.error;
-        const errorMessage = err.response?.data?.message;
-        results.push({ 
-          ok: false, 
-          canteen, 
-          error: errorDetail || errorMessage || 'Gagal' 
-        });
+        }))
+      };
+
+      const res = await api.post('/orders/batch', payload);
+
+      // Kosongkan keranjang untuk toko-toko yang berhasil dipesan
+      for (const { canteen } of canteenSummaries) {
+        clearCanteen(canteen.id);
       }
+
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast.success(res.data?.message || 'Pesanan berhasil dibuat!');
+      navigate({ to: '/dashboard/pembayaran' });
+    } catch (err) {
+      const errorDetail = err.response?.data?.error;
+      const errorMessage = err.response?.data?.message;
+      toast.error(errorDetail || errorMessage || 'Gagal membuat pesanan. Silakan coba lagi.');
+    } finally {
+      setIsProcessing(false);
     }
-
-    setIsProcessing(false);
-
-    const succeeded = results.filter(r => r.ok);
-    const failed = results.filter(r => !r.ok);
-
-    if (succeeded.length === 0) {
-      // Jika semua gagal (termasuk kalau cuma checkout 1 toko dan gagal),
-      // tampilkan alasan error dari API agar user tahu penyebabnya.
-      const errorMessage = failed.length > 0 && failed[0].error && failed[0].error !== 'Gagal'
-        ? failed[0].error
-        : 'Semua pesanan gagal dibuat. Coba lagi.';
-        
-      toast.error(errorMessage);
-      return;
-    }
-
-    if (failed.length > 0) {
-      toast.error(failed[0].error || `${failed.length} pesanan gagal: ${failed.map(f => f.canteen.name).join(', ')}`);
-    } else {
-      toast.success(`${succeeded.length} pesanan berhasil dibuat!`);
-    }
-
-    // Hapus kantin yang sukses dari keranjang
-    for (const r of succeeded) {
-      clearCanteen(r.canteen.id);
-    }
-
-    queryClient.invalidateQueries({ queryKey: ['orders'] });
-    toast.success('Pesanan masuk ke riwayat. Hubungi toko untuk konfirmasi via halaman Riwayat.');
-    navigate({ to: '/dashboard/pembayaran' });
   };
 
   if (canteenEntries.length === 0) {
@@ -180,7 +148,7 @@ export default function Keranjang() {
       <div className="px-4 pt-4 space-y-4 max-w-2xl mx-auto">
 
         {/* Per-canteen groups */}
-        {canteenSummaries.map(({ canteenId, canteen, itemList, subtotal, deliveryFee, adminFee, total }) => (
+        {canteenSummaries.map(({ canteenId, canteen, itemList, subtotal, deliveryFee, adminFee, total, qty, extraBlocks, extraCourierFee, extraAdminFee }) => (
           <div key={canteenId} className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
             {/* Canteen header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
@@ -260,13 +228,24 @@ export default function Keranjang() {
                 <span>Rp {subtotal.toLocaleString('id-ID')}</span>
               </div>
               <div className="flex justify-between text-gray-500 dark:text-gray-400">
-                <span>🛵 Ongkir</span>
+                <span>🛵 Ongkir Kurir</span>
                 <span>Rp {deliveryFee.toLocaleString('id-ID')}</span>
               </div>
               <div className="flex justify-between text-gray-500 dark:text-gray-400">
                 <span>🛡️ Biaya Admin Layanan</span>
                 <span>Rp {adminFee.toLocaleString('id-ID')}</span>
               </div>
+              {extraBlocks > 0 && (
+                <div className="text-[11px] text-green-800 dark:text-green-300 bg-green-50 dark:bg-green-950/40 px-2.5 py-1.5 rounded-lg flex flex-col gap-0.5 border border-green-200/60 dark:border-green-900/40">
+                  <div className="flex items-center justify-between font-medium">
+                    <span>📦 Biaya tambahan kelipatan 5 ({qty} item):</span>
+                    <span className="font-bold">+Rp {(extraCourierFee + extraAdminFee).toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="text-[10px] text-gray-500 dark:text-gray-400 flex justify-between">
+                    <span>(+Rp {extraCourierFee.toLocaleString('id-ID')} kurir, +Rp {extraAdminFee.toLocaleString('id-ID')} admin)</span>
+                  </div>
+                </div>
+              )}
               <div className="flex justify-between font-bold text-gray-900 dark:text-white pt-1 border-t border-gray-200 dark:border-gray-700">
                 <span>Total Toko</span>
                 <span className="text-green-600 dark:text-green-400">Rp {total.toLocaleString('id-ID')}</span>

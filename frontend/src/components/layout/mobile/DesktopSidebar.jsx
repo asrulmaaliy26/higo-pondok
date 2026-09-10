@@ -22,7 +22,7 @@ export default function DesktopSidebar({ sidebarMenus }) {
             <Link
               key={item.href}
               to={item.href}
-              activeOptions={{ exact: item.href === '/dashboard' }}
+              activeOptions={{ exact: true }}
               className="group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200"
               activeProps={{
                 className: "bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 font-bold"

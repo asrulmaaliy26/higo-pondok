@@ -124,17 +124,24 @@ export default function TokoSaya() {
       queryClient.invalidateQueries({ queryKey: ['products'] });
     },
     onSuccess: () => {
-      if (!editingProduct) setShowProductModal(false);
+      setShowProductModal(false);
+      setEditingProduct(null);
       toast.success(editingProduct ? 'Produk berhasil diupdate!' : 'Produk berhasil ditambahkan!');
     }
   });
 
   const handleSaveProduct = async (data, file) => {
     const formData = new FormData();
+    const priceVal = parseFloat(data.price || 0);
+    const fallbackHpp = priceVal > 1000 ? priceVal - 1000 : priceVal;
+    const finalHpp = data.hpp !== undefined && data.hpp !== '' ? parseFloat(data.hpp) : fallbackHpp;
+
     formData.append('name', data.name);
-    formData.append('category', data.category);
-    formData.append('price', parseFloat(data.price));
-    formData.append('stock', parseInt(data.stock, 10));
+    formData.append('category', data.category || '');
+    formData.append('price', priceVal);
+    formData.append('hpj', priceVal);
+    formData.append('hpp', finalHpp);
+    formData.append('stock', parseInt(data.stock || 0, 10));
     formData.append('is_available', data.is_available ? 1 : 0);
     
     if (file) {
@@ -396,13 +403,39 @@ export default function TokoSaya() {
                     </span>
                   </div>
                   
-                  <div className="mt-auto flex items-center justify-between">
-                    <div>
-                      <p className={`font-bold text-sm sm:text-base ${!product.is_available ? 'text-gray-400' : 'text-gray-900 dark:text-white'}`}>
-                        Rp {parseFloat(product.price).toLocaleString('id-ID')}
-                      </p>
-                    </div>
-                  </div>
+                  {(() => {
+                    const hpjVal = parseFloat(product.price || product.hpj || 0);
+                    const hppVal = parseFloat(
+                      product.hpp !== undefined && product.hpp !== null && parseFloat(product.hpp) > 0 
+                        ? product.hpp 
+                        : (hpjVal > 1000 ? hpjVal - 1000 : hpjVal)
+                    );
+                    const profitVal = hpjVal - hppVal;
+                    return (
+                      <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1">
+                        <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+                          <div>
+                            <span className="text-[10px] text-gray-400 block leading-tight">HPJ (Jual)</span>
+                            <span className={`font-bold text-sm ${!product.is_available ? 'text-gray-400' : 'text-green-700 dark:text-green-400'}`}>
+                              Rp {hpjVal.toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-gray-400 block leading-tight">HPP (Modal)</span>
+                            <span className="font-semibold text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800/50 inline-block">
+                              Rp {hppVal.toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] pt-0.5 text-gray-500 dark:text-gray-400">
+                          <span>Keuntungan / porsi:</span>
+                          <span className={`font-bold ${profitVal > 0 ? 'text-green-600 dark:text-green-400' : profitVal === 0 ? 'text-gray-500' : 'text-red-500'}`}>
+                            {profitVal > 0 ? `+Rp ${profitVal.toLocaleString('id-ID')}` : `Rp ${profitVal.toLocaleString('id-ID')}`}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   
                   {/* Management Actions */}
                   <div className="mt-3 flex gap-2">

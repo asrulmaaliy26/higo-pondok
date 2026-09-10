@@ -37,7 +37,17 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-    useLoadingStore.getState().startLoading();
+    // Hanya picu loading global untuk request mutasi (POST, PUT, PATCH, DELETE)
+    // atau jika config secara eksplisit menentukan showLoading: true.
+    // Polling dan background fetch GET akan berjalan senyap.
+    const isMutatingMethod = config.method && ['post', 'put', 'patch', 'delete'].includes(config.method.toLowerCase());
+    const shouldShowLoading = config.showLoading === true || (config.showLoading !== false && isMutatingMethod);
+
+    if (shouldShowLoading) {
+        useLoadingStore.getState().startLoading();
+        config._startedLoading = true;
+    }
+
     const store = useAuthStore.getState();
     if (store.token) {
         config.headers.Authorization = `Bearer ${store.token}`;
@@ -47,18 +57,24 @@ api.interceptors.request.use((config) => {
     }
     return config;
 }, (error) => {
-  useLoadingStore.getState().stopLoading();
-  return Promise.reject(error);
+    if (error.config?._startedLoading) {
+        useLoadingStore.getState().stopLoading();
+    }
+    return Promise.reject(error);
 });
 
 // Response Interceptor
 api.interceptors.response.use(
   (response) => {
-    useLoadingStore.getState().stopLoading();
+    if (response.config?._startedLoading) {
+      useLoadingStore.getState().stopLoading();
+    }
     return response;
   },
   (error) => {
-    useLoadingStore.getState().stopLoading();
+    if (error.config?._startedLoading) {
+      useLoadingStore.getState().stopLoading();
+    }
     // Global Error Handling
     if (error.response && error.response.status === 401) {
       // Token tidak valid atau sesi habis

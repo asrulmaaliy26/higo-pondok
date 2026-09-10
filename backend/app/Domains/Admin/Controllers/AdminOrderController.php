@@ -85,144 +85,19 @@ class AdminOrderController extends Controller
     public function recap(Request $request)
     {
         $canteenId = $request->query('canteen_id');
-        $period = $request->query('period', 'day'); // day, week, month, year, custom
+        $period = $request->query('period', 'day');
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
 
-        // Only count processing and completed orders for recap (sudah dilanjutkan)
-        $query = Order::whereIn('status', ['processing', 'completed'])
-            ->with(['user', 'items.product', 'canteen']);
+        $query = Order::forRecap()->filterPeriod($period, $startDate, $endDate);
 
         if ($canteenId && $canteenId !== 'all') {
             $query->where('canteen_id', $canteenId);
         }
 
-        if ($startDate && $endDate) {
-            $start = Carbon::parse($startDate, 'Asia/Jakarta')->startOfDay();
-            $end = Carbon::parse($endDate, 'Asia/Jakarta')->endOfDay();
-            $query->whereBetween('created_at', [$start, $end]);
-        } elseif ($period === 'all') {
-            // No date filter - all time
-        } else {
-            if ($period === 'week') {
-                $query->whereBetween('created_at', [
-                    now('Asia/Jakarta')->startOfWeek(),
-                    now('Asia/Jakarta')->endOfWeek()
-                ]);
-            } elseif ($period === 'month') {
-                $query->whereMonth('created_at', now('Asia/Jakarta')->month)
-                      ->whereYear('created_at', now('Asia/Jakarta')->year);
-            } elseif ($period === 'year') {
-                $query->whereYear('created_at', now('Asia/Jakarta')->year);
-            } else {
-                // Default: day (hari ini)
-                $query->whereDate('created_at', now('Asia/Jakarta')->format('Y-m-d'));
-            }
-        }
+        $orders = $query->orderBy('created_at', 'asc')->orderBy('id', 'asc')->get();
 
-        $orders = $query->get();
-
-        $totalProducts = 0;
-        $totalDeliveryFee = 0;
-        $totalAdminFee = 0;
-        $grandTotal = 0;
-
-        $canteenRecap = [];
-        $userRecap = [];
-        $productBreakdown = [];
-
-        foreach ($orders as $order) {
-            $deliveryFee = (float) $order->delivery_fee;
-            $adminFee = (float) $order->admin_fee;
-            $totalPrice = (float) $order->total_price;
-            $productsSubtotal = max(0, $totalPrice - $deliveryFee - $adminFee);
-
-            $totalProducts += $productsSubtotal;
-            $totalDeliveryFee += $deliveryFee;
-            $totalAdminFee += $adminFee;
-            $grandTotal += $totalPrice;
-
-            // Group by Canteen / Toko
-            $cId = $order->canteen_id;
-            $cName = $order->canteen ? $order->canteen->name : 'Toko #' . $cId;
-            if (!isset($canteenRecap[$cId])) {
-                $canteenRecap[$cId] = [
-                    'canteen_id' => $cId,
-                    'canteen_name' => $cName,
-                    'category' => $order->canteen->category ?? 'kauman',
-                    'total_products' => 0,
-                    'total_delivery_fee' => 0,
-                    'total_admin_fee' => 0,
-                    'grand_total' => 0,
-                    'order_count' => 0,
-                ];
-            }
-            $canteenRecap[$cId]['total_products'] += $productsSubtotal;
-            $canteenRecap[$cId]['total_delivery_fee'] += $deliveryFee;
-            $canteenRecap[$cId]['total_admin_fee'] += $adminFee;
-            $canteenRecap[$cId]['grand_total'] += $totalPrice;
-            $canteenRecap[$cId]['order_count'] += 1;
-
-            // Group by Santri / Wali
-            $userId = $order->user_id;
-            $santriName = $order->user ? ($order->user->santri_name ?: $order->user->name) : 'Santri #' . $userId;
-            $waliName = $order->user ? $order->user->name : 'Wali #' . $userId;
-
-            if (!isset($userRecap[$userId])) {
-                $userRecap[$userId] = [
-                    'user_id' => $userId,
-                    'santri_name' => $santriName,
-                    'wali_name' => $waliName,
-                    'santri_room' => $order->user->santri_room ?? '',
-                    'total_products' => 0,
-                    'total_delivery_fee' => 0,
-                    'total_admin_fee' => 0,
-                    'grand_total' => 0,
-                    'order_count' => 0,
-                ];
-            }
-            $userRecap[$userId]['total_products'] += $productsSubtotal;
-            $userRecap[$userId]['total_delivery_fee'] += $deliveryFee;
-            $userRecap[$userId]['total_admin_fee'] += $adminFee;
-            $userRecap[$userId]['grand_total'] += $totalPrice;
-            $userRecap[$userId]['order_count'] += 1;
-
-            // Product Breakdown
-            foreach ($order->items as $item) {
-                $prodId = $item->product_id;
-                $prodName = $item->product ? $item->product->name : 'Produk Khusus';
-                if (!isset($productBreakdown[$prodId])) {
-                    $productBreakdown[$prodId] = [
-                        'product_id' => $prodId,
-                        'name' => $prodName,
-                        'canteen_name' => $cName,
-                        'total_quantity' => 0,
-                        'total_subtotal' => 0,
-                    ];
-                }
-                $productBreakdown[$prodId]['total_quantity'] += $item->quantity;
-                $productBreakdown[$prodId]['total_subtotal'] += (float) $item->subtotal;
-            }
-        }
-
-        // Sort breakdowns
-        usort($productBreakdown, fn($a, $b) => $b['total_quantity'] <=> $a['total_quantity']);
-        usort($canteenRecap, fn($a, $b) => $b['grand_total'] <=> $a['grand_total']);
-        usort($userRecap, fn($a, $b) => $b['grand_total'] <=> $a['grand_total']);
-
-        return response()->json([
-            'period' => $period,
-            'summary' => [
-                'total_products' => $totalProducts,
-                'total_delivery_fee' => $totalDeliveryFee,
-                'total_admin_fee' => $totalAdminFee,
-                'grand_total' => $grandTotal,
-                'total_orders' => count($orders),
-            ],
-            'canteen_recap' => array_values($canteenRecap),
-            'user_recap' => array_values($userRecap),
-            'product_breakdown' => array_values($productBreakdown),
-        ]);
+        return response()->json(Order::calculateRecap($orders, $period));
     }
 
     /**
@@ -405,6 +280,44 @@ class AdminOrderController extends Controller
 
             $reason = $request->input('reason', 'Dibatalkan oleh Admin');
 
+            // If order was completed, revert balance and log it
+            if ($prevStatus === 'completed') {
+                $canteen = $order->canteen;
+                if ($canteen) {
+                    $canteenNet = (float) $order->canteen_income;
+                    \App\Domains\Canteen\CanteenBalanceLedger::record(
+                        $canteen,
+                        'out',
+                        $canteenNet,
+                        "Pembalikan laba pesanan #{$orderId} karena dibatalkan oleh Admin",
+                        $orderId
+                    );
+                    $canteen->decrement('balance', min((float)$canteen->balance, $canteenNet));
+                    $canteen->decrement('sold_count', 1);
+
+                    \App\Domains\Admin\PaymentLog::create([
+                        'user_id' => $canteen->user_id,
+                        'order_id' => $orderId,
+                        'amount' => $canteenNet,
+                        'type' => 'order_cancel_reversal',
+                        'description' => "Pembalikan saldo kantin untuk pesanan #{$orderId} dibatalkan Admin",
+                    ]);
+                }
+
+                $courier = \App\Domains\Auth\User::find($order->courier_id);
+                $deliveryFee = (float) $order->delivery_fee;
+                if ($courier && $deliveryFee > 0) {
+                    $courier->decrement('balance', min((float)$courier->balance, $deliveryFee));
+                    \App\Domains\Admin\PaymentLog::create([
+                        'user_id' => $courier->id,
+                        'order_id' => $orderId,
+                        'amount' => $deliveryFee,
+                        'type' => 'courier_fee_reversal',
+                        'description' => "Pembalikan ongkir kurir pesanan #{$orderId} dibatalkan Admin",
+                    ]);
+                }
+            }
+
             // If order was completed or processing, restore stock and decrement sold_count
             if ($prevStatus === 'completed' || $prevStatus === 'processing') {
                 foreach ($order->items as $item) {
@@ -463,6 +376,43 @@ class AdminOrderController extends Controller
             // Adjust product sold_count and stock if transitioning from/to completed or cancelled
             if ($newStatus && $prevStatus !== $newStatus) {
                 if ($newStatus === 'completed' && $prevStatus !== 'completed') {
+                    // 1. Kredit laba bersih ke kantin
+                    $canteen = $order->canteen;
+                    if ($canteen) {
+                        $canteenNet = (float) $order->canteen_income;
+                        \App\Domains\Canteen\CanteenBalanceLedger::record(
+                            $canteen,
+                            'in',
+                            $canteenNet,
+                            "Penerimaan laba bersih pesanan #{$orderId} (Diselesaikan oleh Admin)",
+                            $orderId
+                        );
+                        $canteen->increment('balance', $canteenNet);
+                        $canteen->increment('sold_count', 1);
+
+                        \App\Domains\Admin\PaymentLog::create([
+                            'user_id' => $canteen->user_id,
+                            'order_id' => $orderId,
+                            'amount' => $canteenNet,
+                            'type' => 'order_payment',
+                            'description' => "Penerimaan laba bersih pesanan #{$orderId} (Diselesaikan Admin)",
+                        ]);
+                    }
+
+                    // 2. Kredit ongkir ke kurir
+                    $courier = \App\Domains\Auth\User::find($order->courier_id);
+                    $deliveryFee = (float) $order->delivery_fee;
+                    if ($courier && $deliveryFee > 0) {
+                        $courier->increment('balance', $deliveryFee);
+                        \App\Domains\Admin\PaymentLog::create([
+                            'user_id' => $courier->id,
+                            'order_id' => $orderId,
+                            'amount' => $deliveryFee,
+                            'type' => 'courier_fee',
+                            'description' => "Penerimaan ongkir pesanan #{$orderId} (Diselesaikan Admin)",
+                        ]);
+                    }
+
                     foreach ($order->items as $item) {
                         if ($item->product) {
                             $item->product->increment('sold_count', $item->quantity);
@@ -470,6 +420,43 @@ class AdminOrderController extends Controller
                         }
                     }
                 } elseif ($prevStatus === 'completed' && $newStatus !== 'completed') {
+                    // 1. Revert laba bersih kantin
+                    $canteen = $order->canteen;
+                    if ($canteen) {
+                        $canteenNet = (float) $order->canteen_income;
+                        \App\Domains\Canteen\CanteenBalanceLedger::record(
+                            $canteen,
+                            'out',
+                            $canteenNet,
+                            "Pembalikan laba pesanan #{$orderId} karena status diubah dari Selesai ke " . ucfirst($newStatus) . " oleh Admin",
+                            $orderId
+                        );
+                        $canteen->decrement('balance', min((float)$canteen->balance, $canteenNet));
+                        $canteen->decrement('sold_count', 1);
+
+                        \App\Domains\Admin\PaymentLog::create([
+                            'user_id' => $canteen->user_id,
+                            'order_id' => $orderId,
+                            'amount' => $canteenNet,
+                            'type' => 'order_cancel_reversal',
+                            'description' => "Pembalikan laba kantin pesanan #{$orderId} diubah status oleh Admin",
+                        ]);
+                    }
+
+                    // 2. Revert ongkir kurir
+                    $courier = \App\Domains\Auth\User::find($order->courier_id);
+                    $deliveryFee = (float) $order->delivery_fee;
+                    if ($courier && $deliveryFee > 0) {
+                        $courier->decrement('balance', min((float)$courier->balance, $deliveryFee));
+                        \App\Domains\Admin\PaymentLog::create([
+                            'user_id' => $courier->id,
+                            'order_id' => $orderId,
+                            'amount' => $deliveryFee,
+                            'type' => 'courier_fee_reversal',
+                            'description' => "Pembalikan ongkir kurir pesanan #{$orderId} diubah status oleh Admin",
+                        ]);
+                    }
+
                     foreach ($order->items as $item) {
                         if ($item->product) {
                             $item->product->decrement('sold_count', $item->quantity);
@@ -482,6 +469,13 @@ class AdminOrderController extends Controller
 
             if ($newPaymentStatus && $prevPaymentStatus !== $newPaymentStatus) {
                 $order->payment_status = $newPaymentStatus;
+
+                // Sync payment status to all orders in the same checkout batch
+                if ($order->checkout_id) {
+                    Order::where('checkout_id', $order->checkout_id)
+                        ->where('id', '!=', $order->id)
+                        ->update(['payment_status' => $newPaymentStatus]);
+                }
             }
 
             $order->save();
@@ -534,6 +528,16 @@ class AdminOrderController extends Controller
                 'proof_of_payment' => $mergedPaths,
                 'payment_status' => $newPaymentStatus,
             ]);
+
+            // Sync payment proof and payment status to all orders in the same checkout batch
+            if ($order->checkout_id) {
+                Order::where('checkout_id', $order->checkout_id)
+                    ->where('id', '!=', $order->id)
+                    ->update([
+                        'proof_of_payment' => $mergedPaths,
+                        'payment_status' => $newPaymentStatus,
+                    ]);
+            }
 
             $canteenName = $order->canteen ? $order->canteen->name : "Kantin #{$order->canteen_id}";
             $customerName = $order->user ? ($order->user->santri_name ?: $order->user->name) : "User #{$order->user_id}";

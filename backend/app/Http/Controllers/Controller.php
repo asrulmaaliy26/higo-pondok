@@ -53,9 +53,9 @@ abstract class Controller
      * @param string $disk
      * @return string
      */
-    protected function storeOptimizedImage($file, $user, $subFolder = null, $disk = 'public')
+    protected function storeOptimizedImage($file, $user, $subFolder = null, $disk = 'public', $dirOverride = null)
     {
-        $dir = $this->getUserUploadPath($user, $subFolder);
+        $dir = $dirOverride ?: $this->getUserUploadPath($user, $subFolder);
         $mime = $file->getMimeType() ?: '';
         $isImage = str_starts_with($mime, 'image/');
         
@@ -139,5 +139,72 @@ abstract class Controller
             \Illuminate\Support\Facades\Log::warning("Image optimization fallback: " . $e->getMessage());
             return $file->store($dir, $disk);
         }
+    }
+
+    /**
+     * Dapatkan format folder bukti pesanan per hari, nama user, dan jenis bukti:
+     * Contoh:
+     *   - senin18Januari2025/ahmad_zaki/proof
+     *   - senin18Januari2025/ahmad_zaki/proff_delivery
+     *   - senin18Januari2025/ahmad_zaki/proff_kantin
+     * 
+     * @param \App\Domains\Canteen\Order $order
+     * @param string $proofType ('proof', 'proff_delivery', 'proff_kantin')
+     * @param string|\Carbon\Carbon|null $date
+     * @return string
+     */
+    protected function getOrderProofUploadPath($order, $proofType = 'proof', $date = null): string
+    {
+        $carbon = $date 
+            ? \Carbon\Carbon::parse($date)->setTimezone('Asia/Jakarta')
+            : ($order && $order->created_at ? \Carbon\Carbon::parse($order->created_at)->setTimezone('Asia/Jakarta') : \Carbon\Carbon::now('Asia/Jakarta'));
+
+        $days = ['minggu', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
+        $months = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+        ];
+
+        $dayName = $days[$carbon->dayOfWeek];
+        $dayNum = $carbon->day;
+        $monthName = $months[$carbon->month];
+        $year = $carbon->year;
+
+        $dateFolder = "{$dayName}{$dayNum}{$monthName}{$year}";
+
+        $targetUser = $order ? ($order->user ?? null) : null;
+        $userName = 'user';
+        if ($targetUser) {
+            $nameToUse = $targetUser->santri_name ?: $targetUser->name;
+            if ($nameToUse) {
+                $userName = strtolower(str_replace(' ', '_', $nameToUse));
+                $userName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $userName);
+                $userName = trim(preg_replace('/_+/', '_', $userName), '_') ?: 'user';
+            }
+        }
+
+        $subFolder = match(strtolower($proofType)) {
+            'delivery', 'proff_delivery', 'proof_delivery', 'proof_of_delivery' => 'proff_delivery',
+            'purchase', 'canteen', 'kantin', 'proff_kantin', 'proof_kantin', 'proof_of_purchase' => 'proff_kantin',
+            default => 'proof',
+        };
+
+        return "{$dateFolder}/{$userName}/{$subFolder}";
+    }
+
+    /**
+     * Simpan file bukti pesanan dengan format folder dinamis per hari dan nama user.
+     *
+     * @param \Illuminate\Http\UploadedFile $file
+     * @param \App\Domains\Canteen\Order $order
+     * @param string $proofType
+     * @param string $disk
+     * @return string
+     */
+    protected function storeOrderProofImage($file, $order, $proofType = 'proof', $disk = 'public')
+    {
+        $dir = $this->getOrderProofUploadPath($order, $proofType);
+        return $this->storeOptimizedImage($file, null, null, $disk, $dir);
     }
 }

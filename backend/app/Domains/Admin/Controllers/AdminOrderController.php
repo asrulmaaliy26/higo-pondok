@@ -514,7 +514,7 @@ class AdminOrderController extends Controller
             $paths = [];
             foreach ($files as $file) {
                 if ($file) {
-                    $paths[] = $this->storeOptimizedImage($file, $targetUser, 'proofs');
+                    $paths[] = $this->storeOrderProofImage($file, $order, 'proof');
                 }
             }
 

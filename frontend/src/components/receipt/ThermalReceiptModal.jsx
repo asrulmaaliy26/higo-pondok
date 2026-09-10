@@ -74,6 +74,40 @@ export const getSantriReceiptInfo = (user) => {
   };
 };
 
+export const getItemModalHpp = (item) => {
+  if (item?.hpp !== undefined && item?.hpp !== null && parseFloat(item.hpp) > 0) {
+    return parseFloat(item.hpp);
+  }
+  const rawProductHpp = item?.product?.hpp;
+  if (rawProductHpp !== undefined && rawProductHpp !== null && parseFloat(rawProductHpp) > 0) {
+    return parseFloat(rawProductHpp);
+  }
+  const price = parseFloat(item?.price || 0);
+  return price > 1000 ? (price - 1000) : price;
+};
+
+export const getItemModalTotalHpp = (item) => {
+  if (item?.total_hpp !== undefined && item?.total_hpp !== null && parseFloat(item.total_hpp) > 0) {
+    return parseFloat(item.total_hpp);
+  }
+  const qty = parseInt(item?.quantity || 1, 10);
+  return getItemModalHpp(item) * qty;
+};
+
+export const getOrderModalBelanja = (order) => {
+  if (!order) return 0;
+  if (order.hpp !== undefined && order.hpp !== null && parseFloat(order.hpp) > 0) {
+    return parseFloat(order.hpp);
+  }
+  if (order.items && order.items.length > 0) {
+    return order.items.reduce((sum, it) => sum + getItemModalTotalHpp(it), 0);
+  }
+  const deliveryFee = parseFloat(order.delivery_fee || 0);
+  const adminFee = parseFloat(order.admin_fee || 0);
+  const subtotal = Math.max(0, parseFloat(order.total_price || 0) - deliveryFee - adminFee);
+  return subtotal > 1000 ? (subtotal - 1000) : subtotal;
+};
+
 export default function ThermalReceiptModal({
   isOpen,
   onClose,
@@ -105,6 +139,30 @@ export default function ThermalReceiptModal({
     });
   }, [rawBatchOrders, mode]);
 
+  // Calculate single order summary
+  const singleSummary = useMemo(() => {
+    if (!order) return null;
+    const deliveryFee = parseFloat(order.delivery_fee || 0);
+    const adminFee = parseFloat(order.admin_fee || 0);
+    const totalPrice = parseFloat(order.total_price || 0);
+    const modalBelanja = getOrderModalBelanja(order);
+    let hpjSubtotal = 0;
+    if (order.items && order.items.length > 0) {
+      hpjSubtotal = order.items.reduce((s, i) => s + parseFloat(i.subtotal || (parseFloat(i.price || 0) * (i.quantity || 1))), 0);
+    } else {
+      hpjSubtotal = Math.max(0, totalPrice - deliveryFee - adminFee);
+    }
+
+    return {
+      hpjSubtotal,
+      modalBelanja,
+      deliveryFee,
+      adminFee,
+      totalPrice,
+      totalModalPlusOngkir: modalBelanja + deliveryFee,
+    };
+  }, [order]);
+
   // Calculate batch summaries
   const batchSummary = useMemo(() => {
     let products = 0;
@@ -117,25 +175,18 @@ export default function ThermalReceiptModal({
       const adminFee = parseFloat(o.admin_fee || 0);
       delivery += deliveryFee;
       admin += adminFee;
+      hpp += getOrderModalBelanja(o);
 
       if (o.items && o.items.length > 0) {
         o.items.forEach(i => {
           const qty = parseInt(i.quantity || 1, 10);
           const price = parseFloat(i.price || 0);
           const sub = parseFloat(i.subtotal || (price * qty));
-          const defaultHpp = price > 1000 ? (price - 1000) : price;
-          const rawHpp = i.product?.hpp;
-          const unitHpp = (rawHpp !== undefined && rawHpp !== null && parseFloat(rawHpp) > 0)
-            ? parseFloat(rawHpp)
-            : defaultHpp;
-          const itemHpp = unitHpp * qty;
           products += sub;
-          hpp += itemHpp;
         });
       } else {
         const custom = Math.max(0, parseFloat(o.total_price || 0) - deliveryFee - adminFee);
         products += custom;
-        hpp += custom > 1000 ? (custom - 1000) : custom;
       }
     });
 
@@ -145,6 +196,7 @@ export default function ThermalReceiptModal({
       profit: products - hpp,
       delivery,
       admin,
+      totalModalPlusOngkir: hpp + delivery,
       grandTotal: products + delivery + admin
     };
   }, [filteredBatchOrders]);
@@ -165,31 +217,72 @@ export default function ThermalReceiptModal({
         @media print {
           @page {
             size: ${isA4 ? 'A4 portrait' : paperWidth === '58mm' ? '58mm auto' : '80mm auto'};
-            margin: ${isA4 ? '10mm 12mm' : '0mm !important'};
+            margin: ${isA4 ? '8mm 10mm' : '0mm !important'};
+          }
+          #root {
+            display: none !important;
           }
           html, body {
             margin: 0 !important;
             padding: 0 !important;
             background: #ffffff !important;
-            width: ${isA4 ? '100%' : paperWidth === '58mm' ? '58mm' : '80mm'} !important;
+            color: #000000 !important;
+            width: 100% !important;
+            min-height: auto !important;
           }
-          body * {
-            visibility: hidden !important;
+          .no-print {
+            display: none !important;
           }
-          .thermal-receipt-printable, .thermal-receipt-printable * {
-            visibility: visible !important;
+          .receipt-modal-backdrop {
+            position: static !important;
+            display: block !important;
+            background: transparent !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            inset: auto !important;
+            box-shadow: none !important;
+            backdrop-filter: none !important;
+          }
+          .receipt-modal-card {
+            position: static !important;
+            display: block !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            border: none !important;
+            max-height: none !important;
+            overflow: visible !important;
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+          }
+          .receipt-modal-scroll {
+            display: block !important;
+            overflow: visible !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: transparent !important;
+            max-height: none !important;
+            height: auto !important;
+            width: 100% !important;
           }
           .thermal-receipt-printable {
-            position: ${isA4 ? 'relative' : 'absolute'} !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: ${isA4 ? '100%' : paperWidth === '58mm' ? '48mm' : '72mm'} !important;
-            max-width: ${isA4 ? '100%' : paperWidth === '58mm' ? '48mm' : '72mm'} !important;
-            margin: 0 !important;
-            padding: ${isA4 ? '0' : '1mm 1mm 4mm 1mm'} !important;
+            display: block !important;
+            position: relative !important;
+            left: auto !important;
+            top: auto !important;
+            margin: 0 auto !important;
+            padding: ${isA4 ? '0' : '2mm 1mm 6mm 1mm'} !important;
             box-sizing: border-box !important;
             background: #ffffff !important;
             color: #000000 !important;
+            width: ${isA4 ? '100%' : paperWidth === '58mm' ? '48mm' : '72mm'} !important;
+            max-width: ${isA4 ? '100%' : paperWidth === '58mm' ? '48mm' : '72mm'} !important;
             font-family: ${isA4 ? "'Inter', 'Segoe UI', Arial, sans-serif" : "'Consolas', 'Courier New', Courier, monospace"} !important;
             font-size: ${isA4 ? '9.5pt' : paperWidth === '58mm' ? '9.5pt' : '11pt'} !important;
             line-height: ${isA4 ? '1.35' : '1.2'} !important;
@@ -206,14 +299,14 @@ export default function ThermalReceiptModal({
             word-break: normal !important;
             overflow-wrap: break-word !important;
           }
-          .no-print {
-            display: none !important;
+          tr {
+            page-break-inside: avoid !important;
           }
         }
       `}</style>
 
-      <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
-        <div className={`bg-white dark:bg-gray-900 w-full ${isA4 ? 'max-w-5xl' : 'max-w-md'} rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] border border-gray-200 dark:border-gray-700 transition-all duration-200`}>
+      <div className="receipt-modal-backdrop fixed inset-0 z-[120] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+        <div className={`receipt-modal-card bg-white dark:bg-gray-900 w-full ${isA4 ? 'max-w-5xl' : 'max-w-md'} rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] border border-gray-200 dark:border-gray-700 transition-all duration-200`}>
           {/* MODAL HEADER */}
           <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50/80 dark:bg-gray-800/80 no-print flex-wrap gap-2">
             <div className="flex items-center gap-2">
@@ -287,7 +380,7 @@ export default function ThermalReceiptModal({
           </div>
 
           {/* RECEIPT PREVIEW (SCROLLABLE) */}
-          <div className="flex-1 overflow-y-auto p-4 bg-gray-200 dark:bg-gray-950 flex justify-center items-start">
+          <div className="receipt-modal-scroll flex-1 overflow-y-auto p-4 bg-gray-200 dark:bg-gray-950 flex justify-center items-start">
             <div 
               ref={receiptRef}
               style={{
@@ -389,11 +482,11 @@ export default function ThermalReceiptModal({
                     <table className="w-full text-left border-collapse border border-gray-200">
                       <thead>
                         <tr className="border-b-2 border-gray-800 text-[11px] font-bold uppercase text-gray-700 bg-gray-100">
-                          <th className="py-2.5 px-3 w-[45px] text-center shrink-0 border-r border-gray-200">No</th>
-                          <th className="py-2.5 px-3 min-w-[200px] border-r border-gray-200">Nama Menu / Produk</th>
-                          <th className="py-2.5 px-3 text-center w-[80px] shrink-0 border-r border-gray-200">Jumlah</th>
+                          <th className="py-2.5 px-3 w-[40px] text-center shrink-0 border-r border-gray-200">No</th>
+                          <th className="py-2.5 px-3 min-w-[180px] border-r border-gray-200">Nama Menu / Produk</th>
+                          <th className="py-2.5 px-3 text-center w-[60px] shrink-0 border-r border-gray-200">Jumlah</th>
                           <th className="py-2.5 px-3 text-right w-[120px] shrink-0 border-r border-gray-200">Harga Satuan</th>
-                          <th className="py-2.5 px-3 text-right w-[130px] shrink-0">Subtotal</th>
+                          <th className="py-2.5 px-3 text-right w-[120px] shrink-0">Total Harga</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200 text-xs">
@@ -414,8 +507,12 @@ export default function ThermalReceiptModal({
                                   )}
                                 </td>
                                 <td className="py-2.5 px-3 text-center font-bold border-r border-gray-200">{qty}</td>
-                                <td className="py-2.5 px-3 text-right border-r border-gray-200">Rp {formatRupiah(price)}</td>
-                                <td className="py-2.5 px-3 text-right font-bold">Rp {formatRupiah(sub)}</td>
+                                <td className="py-2.5 px-3 text-right border-r border-gray-200 font-medium text-gray-800">
+                                  Rp {formatRupiah(price)}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-bold text-gray-900">
+                                  Rp {formatRupiah(sub)}
+                                </td>
                               </tr>
                             );
                           })
@@ -425,12 +522,16 @@ export default function ThermalReceiptModal({
                             <td className="py-3 px-3 font-semibold border-r border-gray-200">
                               {order.custom_notes || 'Pesanan Khusus / Titip Beli'}
                               <span className="block text-[11px] text-gray-500 font-normal italic">
-                                *Pesanan khusus / custom order
+                                *Pesanan khusus / titip beli
                               </span>
                             </td>
                             <td className="py-3 px-3 text-center font-bold border-r border-gray-200">1</td>
-                            <td className="py-3 px-3 text-right border-r border-gray-200">Rp {formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}</td>
-                            <td className="py-3 px-3 text-right font-bold">Rp {formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}</td>
+                            <td className="py-3 px-3 text-right border-r border-gray-200 font-medium text-gray-800">
+                              Rp {formatRupiah(singleSummary?.hpjSubtotal || 0)}
+                            </td>
+                            <td className="py-3 px-3 text-right font-bold text-gray-900">
+                              Rp {formatRupiah(singleSummary?.hpjSubtotal || 0)}
+                            </td>
                           </tr>
                         )}
                       </tbody>
@@ -439,26 +540,26 @@ export default function ThermalReceiptModal({
 
                   {/* SUMMARY TOTAL BOX */}
                   <div className="flex justify-end pt-2">
-                    <div className="w-full sm:w-72 bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-2 text-xs">
-                      <div className="flex justify-between text-gray-600">
-                        <span>Subtotal Belanja:</span>
-                        <span className="font-semibold">
-                          Rp {formatRupiah(order.items?.reduce((s, i) => s + parseFloat(i.subtotal || i.price * i.quantity), 0) || (parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}
+                    <div className="w-full sm:w-80 bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-2 text-xs">
+                      <div className="flex justify-between text-gray-700">
+                        <span>Subtotal Menu:</span>
+                        <span className="font-semibold text-gray-900">
+                          Rp {formatRupiah(singleSummary?.hpjSubtotal || 0)}
                         </span>
                       </div>
                       <div className="flex justify-between text-gray-600">
                         <span>Biaya Pengantaran (Ongkir):</span>
-                        <span className="font-semibold">Rp {formatRupiah(order.delivery_fee || 0)}</span>
+                        <span className="font-semibold">Rp {formatRupiah(singleSummary?.deliveryFee || 0)}</span>
                       </div>
-                      {parseFloat(order.admin_fee || 0) > 0 && (
+                      {parseFloat(singleSummary?.adminFee || 0) > 0 && (
                         <div className="flex justify-between text-gray-600">
-                          <span>Biaya Layanan / Admin:</span>
-                          <span className="font-semibold">Rp {formatRupiah(order.admin_fee || 0)}</span>
+                          <span>Biaya Layanan:</span>
+                          <span className="font-semibold">Rp {formatRupiah(singleSummary?.adminFee || 0)}</span>
                         </div>
                       )}
-                      <div className="pt-2 border-t-2 border-gray-800 flex justify-between items-center text-sm font-black text-gray-900">
-                        <span>TOTAL BAYAR:</span>
-                        <span className="text-base text-green-700">Rp {formatRupiah(order.total_price || 0)}</span>
+                      <div className="pt-2 border-t-2 border-gray-900 flex justify-between items-center text-sm font-black text-gray-900">
+                        <span>TOTAL TAGIHAN:</span>
+                        <span className="text-base text-green-700">Rp {formatRupiah(singleSummary?.totalPrice || 0)}</span>
                       </div>
                     </div>
                   </div>
@@ -520,30 +621,26 @@ export default function ThermalReceiptModal({
                   </div>
 
                   {/* SUMMARY CARDS KEUANGAN */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs">
                     <div className="p-2 bg-white rounded-lg border border-gray-200 text-center">
                       <span className="text-[10px] font-bold text-gray-400 block uppercase">Total Pesanan</span>
                       <span className="text-sm sm:text-base font-black text-gray-900">{filteredBatchOrders.length}</span>
                     </div>
-                    <div className="p-2 bg-white rounded-lg border border-gray-200 text-center">
-                      <span className="text-[10px] font-bold text-gray-400 block uppercase">Belanja (HPJ)</span>
-                      <span className="text-xs sm:text-sm font-black text-gray-900">Rp {formatRupiah(batchSummary.products)}</span>
+                    <div className="p-2 bg-green-50/80 rounded-lg border border-green-200 text-center">
+                      <span className="text-[10px] font-bold text-green-800 block uppercase">Modal Belanja (HPP)</span>
+                      <span className="text-xs sm:text-sm font-black text-green-800">Rp {formatRupiah(batchSummary.hpp)}</span>
                     </div>
-                    <div className="p-2 bg-amber-50/70 rounded-lg border border-amber-200 text-center">
-                      <span className="text-[10px] font-bold text-amber-700 block uppercase">Modal (HPP)</span>
-                      <span className="text-xs sm:text-sm font-black text-amber-700">Rp {formatRupiah(batchSummary.hpp)}</span>
-                    </div>
-                    <div className="p-2 bg-emerald-50 rounded-lg border border-emerald-200 text-center">
-                      <span className="text-[10px] font-bold text-emerald-700 block uppercase">Laba Toko</span>
-                      <span className="text-xs sm:text-sm font-black text-emerald-700">Rp {formatRupiah(batchSummary.profit)}</span>
-                    </div>
-                    <div className="p-2 bg-white rounded-lg border border-gray-200 text-center">
-                      <span className="text-[10px] font-bold text-gray-400 block uppercase">Total Ongkir</span>
+                    <div className="p-2 bg-blue-50/80 rounded-lg border border-blue-200 text-center">
+                      <span className="text-[10px] font-bold text-blue-700 block uppercase">Total Ongkir Kurir</span>
                       <span className="text-xs sm:text-sm font-black text-blue-700">Rp {formatRupiah(batchSummary.delivery)}</span>
                     </div>
-                    <div className="p-2 bg-green-50 rounded-lg border border-green-200 text-center">
-                      <span className="text-[10px] font-bold text-green-800 block uppercase">Grand Total Omzet</span>
-                      <span className="text-xs sm:text-sm font-black text-green-700">Rp {formatRupiah(batchSummary.grandTotal)}</span>
+                    <div className="p-2 bg-emerald-100/70 rounded-lg border border-emerald-300 text-center">
+                      <span className="text-[10px] font-bold text-emerald-900 block uppercase">Total Modal + Ongkir</span>
+                      <span className="text-xs sm:text-sm font-black text-emerald-900">Rp {formatRupiah(batchSummary.totalModalPlusOngkir)}</span>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-gray-200 text-center">
+                      <span className="text-[10px] font-bold text-gray-500 block uppercase">Omzet Tagihan Santri</span>
+                      <span className="text-xs sm:text-sm font-bold text-gray-800">Rp {formatRupiah(batchSummary.grandTotal)}</span>
                     </div>
                   </div>
 
@@ -557,7 +654,7 @@ export default function ThermalReceiptModal({
                           <th className="py-2.5 px-2.5 border-r border-gray-300 min-w-[150px] w-[26%]">Santri & Asrama</th>
                           <th className="py-2.5 px-2 border-r border-gray-300 w-[110px] min-w-[100px]">Toko / Kantin</th>
                           <th className="py-2.5 px-2.5 border-r border-gray-300 min-w-[150px] w-[28%]">Detail Menu</th>
-                          <th className="py-2.5 px-2 border-r border-gray-300 text-right w-[85px] shrink-0 whitespace-nowrap">Total</th>
+                          <th className="py-2.5 px-2 border-r border-gray-300 text-right w-[95px] shrink-0 whitespace-nowrap">Modal / Tagihan</th>
                           <th className="py-2.5 px-2 border-r border-gray-300 text-center w-[55px] shrink-0 whitespace-nowrap">Bayar</th>
                           <th className="py-2.5 px-2 text-center w-[65px] shrink-0">Paraf</th>
                         </tr>
@@ -599,7 +696,8 @@ export default function ThermalReceiptModal({
                                   {itemsSummary}
                                 </td>
                                 <td className="py-2 px-2 border-r border-gray-300 text-right font-bold text-gray-900 whitespace-nowrap">
-                                  Rp {formatRupiah(o.total_price)}
+                                  <span className="block text-green-800 font-extrabold">Rp {formatRupiah(getOrderModalBelanja(o))}</span>
+                                  <span className="block text-[9px] text-gray-400 font-normal">Santri: Rp {formatRupiah(o.total_price)}</span>
                                 </td>
                                 <td className="py-2 px-2 border-r border-gray-300 text-center whitespace-nowrap">
                                   <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
@@ -715,12 +813,12 @@ export default function ThermalReceiptModal({
                           const sub = parseFloat(item.subtotal || price * qty);
                           return (
                             <div key={idx} className="space-y-0.5">
-                              <div className="flex justify-between items-start gap-1 font-semibold">
+                              <div className="flex justify-between items-start gap-1 font-bold">
                                 <span className="break-words">{item.product?.name || 'Produk'}</span>
-                                <span className="shrink-0 font-bold">{formatRupiah(sub)}</span>
+                                <span className="shrink-0 font-black">Rp {formatRupiah(sub)}</span>
                               </div>
                               <div className="text-[9px] text-gray-600 flex justify-between items-center">
-                                <span>{qty} x {formatRupiah(price)}</span>
+                                <span>{qty} x Rp {formatRupiah(price)}</span>
                                 {item.notes && <span className="italic text-[8.5px] truncate max-w-[120px]">({item.notes})</span>}
                               </div>
                             </div>
@@ -728,11 +826,13 @@ export default function ThermalReceiptModal({
                         })
                       ) : (
                         <div className="space-y-0.5">
-                          <div className="flex justify-between items-start gap-1 font-semibold">
+                          <div className="flex justify-between items-start gap-1 font-bold">
                             <span className="break-words">{order.custom_notes || 'Pesanan Khusus / Titip Beli'}</span>
-                            <span className="shrink-0 font-bold">{formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}</span>
+                            <span className="shrink-0 font-black">Rp {formatRupiah(singleSummary?.hpjSubtotal || 0)}</span>
                           </div>
-                          <div className="text-[9px] text-gray-600">1 x Pesanan Khusus</div>
+                          <div className="text-[9px] text-gray-600">
+                            1 x Rp {formatRupiah(singleSummary?.hpjSubtotal || 0)}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -742,21 +842,21 @@ export default function ThermalReceiptModal({
                   <div className="py-1 border-b border-dashed border-black text-[10px] space-y-0.5">
                     <div className="flex justify-between items-center">
                       <span className="text-gray-700">Subtotal:</span>
-                      <span>Rp {formatRupiah(order.items?.reduce((s, i) => s + parseFloat(i.subtotal || i.price * i.quantity), 0) || (parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}</span>
+                      <span className="font-semibold">Rp {formatRupiah(singleSummary?.hpjSubtotal || 0)}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-700">Ongkir:</span>
-                      <span>Rp {formatRupiah(order.delivery_fee || 0)}</span>
+                      <span className="font-semibold">Rp {formatRupiah(singleSummary?.deliveryFee || 0)}</span>
                     </div>
-                    {parseFloat(order.admin_fee || 0) > 0 && (
+                    {parseFloat(singleSummary?.adminFee || 0) > 0 && (
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">Admin:</span>
-                        <span>Rp {formatRupiah(order.admin_fee || 0)}</span>
+                        <span className="text-gray-700">Biaya Layanan:</span>
+                        <span className="font-semibold">Rp {formatRupiah(singleSummary?.adminFee || 0)}</span>
                       </div>
                     )}
                     <div className="flex justify-between items-center font-black text-[11px] pt-1 border-t border-dotted border-black">
                       <span>TOTAL:</span>
-                      <span>Rp {formatRupiah(order.total_price || 0)}</span>
+                      <span>Rp {formatRupiah(singleSummary?.totalPrice || 0)}</span>
                     </div>
                     <div className="flex justify-between items-center font-bold text-[9.5px] pt-0.5">
                       <span>STATUS:</span>
@@ -802,18 +902,22 @@ export default function ThermalReceiptModal({
                   </div>
 
                   {/* RINGKASAN KEUANGAN */}
-                  <div className="py-1 border-b border-dashed border-black text-[10px] space-y-0.5">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-700">Uang Produk:</span>
-                      <span>Rp {formatRupiah(batchSummary.products)}</span>
+                  <div className="py-1 border-b border-dashed border-black text-[10px] space-y-1">
+                    <div className="flex justify-between items-center font-bold">
+                      <span className="text-gray-800">Modal Belanja (HPP):</span>
+                      <span className="font-black">Rp {formatRupiah(batchSummary.hpp)}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-700">Total Ongkir:</span>
+                      <span className="text-gray-700">Total Ongkir Kurir:</span>
                       <span>Rp {formatRupiah(batchSummary.delivery)}</span>
                     </div>
-                    <div className="flex justify-between items-center font-black text-[11px] pt-1 border-t border-dotted border-black">
-                      <span>GRAND TOTAL:</span>
-                      <span>Rp {formatRupiah(batchSummary.grandTotal)}</span>
+                    <div className="flex justify-between items-center font-bold text-[10.5px]">
+                      <span>TOTAL MODAL + ONGKIR:</span>
+                      <span className="font-black">Rp {formatRupiah(batchSummary.totalModalPlusOngkir)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[9px] text-gray-600 pt-0.5 border-t border-dotted border-gray-300">
+                      <span>Total Tagihan Santri:</span>
+                      <span className="font-bold text-black">Rp {formatRupiah(batchSummary.grandTotal)}</span>
                     </div>
                   </div>
 
@@ -830,14 +934,21 @@ export default function ThermalReceiptModal({
                       ) : (
                         filteredBatchOrders.map((o, idx) => {
                           const statusLabel = o.status === 'pending' ? 'Menunggu' : o.status === 'processing' ? 'Sedang Diantar' : o.status === 'completed' ? 'Selesai' : o.status;
+                          const modalBelanja = getOrderModalBelanja(o);
                           return (
                             <div key={idx} className="border-b border-dotted border-gray-300 pb-1.5 space-y-0.5">
                               <div className="flex items-start justify-between gap-1 font-bold">
-                                <span className="break-words">[ ] #{o.id} {o.user?.santri_name || o.user?.name}</span>
-                                <span className="shrink-0">{formatRupiah(o.total_price)}</span>
+                                <span className="break-words">[ ] #ORD-{o.id} {o.user?.santri_name || o.user?.name}</span>
+                                <span className="shrink-0 text-right">
+                                  <span className="block font-black text-[10.5px]">Rp {formatRupiah(modalBelanja)}</span>
+                                </span>
                               </div>
                               <div className="text-[9px] text-gray-700 pl-2 space-y-0.5">
-                                <div className="break-words">📍 {o.user?.santri_room || '-'}</div>
+                                <div className="flex justify-between items-center text-gray-500">
+                                  <span>Modal: Rp {formatRupiah(modalBelanja)}</span>
+                                  <span>Santri: Rp {formatRupiah(o.total_price)}</span>
+                                </div>
+                                <div className="break-words">📍 {o.user?.santri_room || o.delivery_location || '-'}</div>
                                 <div className="break-words">🏪 {o.canteen?.name || 'Kantin'}</div>
                                 <div className="flex justify-between items-center pt-0.5 text-[8.5px]">
                                   <span>{o.payment_status === 'paid' ? 'LUNAS' : 'COD / TUNAI'}</span>

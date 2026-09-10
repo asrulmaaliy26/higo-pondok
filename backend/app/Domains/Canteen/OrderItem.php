@@ -23,6 +23,11 @@ class OrderItem extends Model
         'subtotal' => 'float',
     ];
 
+    protected $appends = [
+        'hpp',
+        'total_hpp',
+    ];
+
     public function order()
     {
         return $this->belongsTo(Order::class);
@@ -39,9 +44,6 @@ class OrderItem extends Model
     public function getHppAttribute(): float
     {
         if ($this->relationLoaded('product') && $this->product) {
-            return (float) ($this->product->hpp ?? ($this->price > 1000 ? ($this->price - 1000.0) : (float) $this->price));
-        }
-        if ($this->product) {
             return (float) ($this->product->hpp ?? ($this->price > 1000 ? ($this->price - 1000.0) : (float) $this->price));
         }
         $price = (float) $this->price;

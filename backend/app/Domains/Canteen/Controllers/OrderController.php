@@ -422,7 +422,7 @@ class OrderController extends Controller
         if ($request->hasFile('proof_of_delivery')) {
             $paths = [];
             foreach ($request->file('proof_of_delivery') as $file) {
-                $paths[] = $this->storeOptimizedImage($file, $request->user(), 'proofs');
+                $paths[] = $this->storeOrderProofImage($file, $order, 'proff_delivery');
             }
         }
 
@@ -671,7 +671,7 @@ class OrderController extends Controller
 
         $newPaths = [];
         foreach ($request->file('proof_of_purchase') as $file) {
-            $newPaths[] = $this->storeOptimizedImage($file, $request->user(), 'proofs');
+            $newPaths[] = $this->storeOrderProofImage($file, $order, 'proff_kantin');
         }
 
         $existing = is_array($order->proof_of_purchase) ? $order->proof_of_purchase : ($order->proof_of_purchase ? [$order->proof_of_purchase] : []);
@@ -711,7 +711,7 @@ class OrderController extends Controller
 
         $newPaths = [];
         foreach ($request->file('proof_of_delivery') as $file) {
-            $newPaths[] = $this->storeOptimizedImage($file, $request->user(), 'proofs');
+            $newPaths[] = $this->storeOrderProofImage($file, $order, 'proff_delivery');
         }
 
         $existing = is_array($order->proof_of_delivery) ? $order->proof_of_delivery : ($order->proof_of_delivery ? [$order->proof_of_delivery] : []);
@@ -988,7 +988,7 @@ class OrderController extends Controller
 
             $paths = [];
             foreach ($request->file('proof_of_payment') as $file) {
-                $paths[] = $this->storeOptimizedImage($file, $targetUser, 'proofs');
+                $paths[] = $this->storeOrderProofImage($file, $order, 'proof');
             }
 
             $existingProofs = is_array($order->proof_of_payment) ? $order->proof_of_payment : [];
@@ -1046,9 +1046,10 @@ class OrderController extends Controller
 
             $targetUser = $orders->first()->user ?: $user;
 
+            $targetOrder = $orders->first();
             $paths = [];
             foreach ($request->file('proof_of_payment') as $file) {
-                $paths[] = $this->storeOptimizedImage($file, $targetUser, 'proofs');
+                $paths[] = $this->storeOrderProofImage($file, $targetOrder, 'proof');
             }
 
             foreach ($orders as $order) {

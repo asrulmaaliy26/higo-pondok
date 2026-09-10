@@ -108,6 +108,42 @@ const formatRupiah = (val) => {
   return num.toLocaleString('id-ID');
 };
 
+// Helper Modal Belanja (HPP) satuan per item
+export const getItemModalHpp = (item) => {
+  if (item.hpp !== undefined && item.hpp !== null && parseFloat(item.hpp) > 0) {
+    return parseFloat(item.hpp);
+  }
+  const rawProductHpp = item.product?.hpp;
+  if (rawProductHpp !== undefined && rawProductHpp !== null && parseFloat(rawProductHpp) > 0) {
+    return parseFloat(rawProductHpp);
+  }
+  const price = parseFloat(item.price || 0);
+  return price > 1000 ? (price - 1000) : price;
+};
+
+// Helper Total Modal Belanja (HPP * qty) per baris item
+export const getItemModalTotalHpp = (item) => {
+  if (item.total_hpp !== undefined && item.total_hpp !== null && parseFloat(item.total_hpp) > 0) {
+    return parseFloat(item.total_hpp);
+  }
+  const qty = parseInt(item.quantity || 1, 10);
+  return getItemModalHpp(item) * qty;
+};
+
+// Helper Total Modal Belanja (HPP) per pesanan untuk dibelanjakan kurir di kasir toko
+export const getOrderModalBelanja = (order) => {
+  if (order.hpp !== undefined && order.hpp !== null && parseFloat(order.hpp) > 0) {
+    return parseFloat(order.hpp);
+  }
+  if (order.items && order.items.length > 0) {
+    return order.items.reduce((sum, it) => sum + getItemModalTotalHpp(it), 0);
+  }
+  const deliveryFee = parseFloat(order.delivery_fee || 0);
+  const adminFee = parseFloat(order.admin_fee || 0);
+  const subtotal = Math.max(0, parseFloat(order.total_price || 0) - deliveryFee - adminFee);
+  return subtotal > 1000 ? (subtotal - 1000) : subtotal;
+};
+
 // Optimistic Update Helper for React Query caches
 const mutateOrderInCaches = async (queryClient, queryKeyPrefix, targetId, updateFn) => {
   await queryClient.cancelQueries({ queryKey: [queryKeyPrefix] });
@@ -599,16 +635,11 @@ export default function TugasKurir() {
         };
       }
 
-      // Pure product cost (only products, excluding delivery fee and admin fee)
-      let orderProductCost = 0;
-      if (order.items && order.items.length > 0) {
-        orderProductCost = order.items.reduce((acc, it) => acc + (parseFloat(it.subtotal) || (parseFloat(it.price || 0) * parseInt(it.quantity || 1))), 0);
-      } else {
-        orderProductCost = Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0));
-      }
+      // Pure product modal cost (total modal belanja at store)
+      const orderModalCost = getOrderModalBelanja(order);
 
       map[canteenId].orders.push(order);
-      map[canteenId].totalCost += orderProductCost;
+      map[canteenId].totalCost += orderModalCost;
       map[canteenId].totalDeliveryFee += parseFloat(order.delivery_fee || 0);
 
       if (order.status === 'pending') {
@@ -672,7 +703,7 @@ export default function TugasKurir() {
       }
 
       map[canteenId].customersMap[custKey].orders.push(order);
-      map[canteenId].customersMap[custKey].totalCost += orderProductCost;
+      map[canteenId].customersMap[custKey].totalCost += orderModalCost;
 
       if (order.items && order.items.length > 0) {
         order.items.forEach(item => {
@@ -690,10 +721,10 @@ export default function TugasKurir() {
             map[canteenId].itemRecap[name] = { quantity: 0, total: 0 };
           }
           map[canteenId].itemRecap[name].quantity += qty;
-          map[canteenId].itemRecap[name].total += parseFloat(item.subtotal || (parseFloat(item.price || 0) * qty));
+          map[canteenId].itemRecap[name].total += getItemModalTotalHpp(item);
         });
       } else if (order.is_custom || order.custom_notes) {
-        const customProductPrice = Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0));
+        const customModalPrice = getOrderModalBelanja(order);
         map[canteenId].totalItemCount += 1;
         map[canteenId].customersMap[custKey].totalItemCount += 1;
         const customItem = {
@@ -702,8 +733,8 @@ export default function TugasKurir() {
           orderStatus: order.status,
           quantity: 1,
           product: { name: order.custom_notes || 'Pesanan Khusus' },
-          price: customProductPrice,
-          subtotal: customProductPrice,
+          price: customModalPrice,
+          subtotal: customModalPrice,
           notes: 'Pesanan Khusus',
         };
         map[canteenId].customersMap[custKey].items.push(customItem);
@@ -713,7 +744,7 @@ export default function TugasKurir() {
           map[canteenId].itemRecap[customName] = { quantity: 0, total: 0 };
         }
         map[canteenId].itemRecap[customName].quantity += 1;
-        map[canteenId].itemRecap[customName].total += customProductPrice;
+        map[canteenId].itemRecap[customName].total += customModalPrice;
       }
     });
 
@@ -757,23 +788,15 @@ export default function TugasKurir() {
     return filteredOrders.filter(o => o.status !== 'cancelled').length;
   }, [filteredOrders]);
 
-  // Financial summary for filtered orders (without admin fee)
+  // Financial summary for filtered orders (modal belanja & ongkir)
   const filteredSummary = useMemo(() => {
     let totalProducts = 0;
     let totalDeliveryFee = 0;
 
     filteredOrders.forEach(order => {
       const deliveryFee = parseFloat(order.delivery_fee || 0);
-      const adminFee = parseFloat(order.admin_fee || 0);
       totalDeliveryFee += deliveryFee;
-
-      if (order.items && order.items.length > 0) {
-        const itemSubtotal = order.items.reduce((s, i) => s + parseFloat(i.subtotal || (parseFloat(i.price || 0) * (i.quantity || 1))), 0);
-        totalProducts += itemSubtotal;
-      } else if (order.is_custom || order.custom_notes) {
-        const customProduct = Math.max(0, parseFloat(order.total_price || 0) - deliveryFee - adminFee);
-        totalProducts += customProduct;
-      }
+      totalProducts += getOrderModalBelanja(order);
     });
 
     const grandTotal = totalProducts + totalDeliveryFee;
@@ -1113,7 +1136,7 @@ export default function TugasKurir() {
               </button>
 
               <div className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs shadow-xs">
-                <span className="text-gray-500 dark:text-gray-400 font-medium">Uang Produk:</span>
+                <span className="text-gray-500 dark:text-gray-400 font-medium">Modal Belanja:</span>
                 <span className="font-extrabold text-gray-900 dark:text-white">
                   Rp {formatRupiah(filteredSummary.totalProducts)}
                 </span>
@@ -1127,7 +1150,7 @@ export default function TugasKurir() {
               </div>
 
               <div className="flex items-center gap-1 px-2.5 py-1 bg-green-50/80 dark:bg-green-950/40 border border-green-200 dark:border-green-800/60 rounded-lg text-xs shadow-xs">
-                <span className="text-green-700 dark:text-green-300 font-medium">Total:</span>
+                <span className="text-green-700 dark:text-green-300 font-medium">Modal + Ongkir:</span>
                 <span className="font-extrabold text-green-700 dark:text-green-400">
                   Rp {formatRupiah(filteredSummary.grandTotal)}
                 </span>
@@ -1289,7 +1312,7 @@ export default function TugasKurir() {
                                   {item.notes && <span className="text-gray-400 italic text-[10px]"> ({item.notes})</span>}
                                 </span>
                                 <span className="font-bold text-gray-900 dark:text-white shrink-0">
-                                  Rp {formatRupiah(item.subtotal || 0)}
+                                  Rp {formatRupiah(getItemModalTotalHpp(item))}
                                 </span>
                               </div>
                             ))
@@ -1297,7 +1320,7 @@ export default function TugasKurir() {
                             <div className="flex justify-between items-center text-[11px] text-gray-500">
                               <span>1x Pesanan Khusus</span>
                               <span className="font-bold text-gray-900 dark:text-white">
-                                Rp {formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}
+                                Rp {formatRupiah(getOrderModalBelanja(order))}
                               </span>
                             </div>
                           )}
@@ -1353,15 +1376,15 @@ export default function TugasKurir() {
                         )}
                       </div>
 
-                      {/* 5. FOOTER: TOTAL BILL & COURIER ACTIONS */}
+                      {/* 5. FOOTER: TOTAL MODAL BELANJA & COURIER ACTIONS */}
                       <div className="pt-1.5 border-t border-gray-200 dark:border-gray-700/80 space-y-1.5">
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0">
                             <span className="text-sm font-black text-green-700 dark:text-green-400 block leading-tight">
-                              Rp {formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.admin_fee || 0)))}
+                              Rp {formatRupiah(getOrderModalBelanja(order))}
                             </span>
                             <span className="text-[10px] text-gray-400 font-medium truncate block">
-                              Ongkir: Rp {formatRupiah(order.delivery_fee || 0)}
+                              Modal Toko • Ongkir: Rp {formatRupiah(order.delivery_fee || 0)}
                             </span>
                           </div>
 
@@ -1532,7 +1555,7 @@ export default function TugasKurir() {
                           </p>
 
                           <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                            Total Tagihan Toko: <strong className="text-green-600 dark:text-green-400">Rp {formatRupiah(canteen.totalCost)}</strong>
+                            Total Modal Belanja Toko: <strong className="text-green-600 dark:text-green-400">Rp {formatRupiah(canteen.totalCost)}</strong>
                           </p>
                         </div>
                       </div>

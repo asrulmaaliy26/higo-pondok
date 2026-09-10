@@ -69,6 +69,11 @@ class Order extends Model
         'is_custom' => 'boolean',
     ];
 
+    protected $appends = [
+        'hpp',
+        'canteen_profit',
+    ];
+
     public function user()
     {
         return $this->belongsTo(User::class);
@@ -233,9 +238,6 @@ class Order extends Model
         if ($this->relationLoaded('items') && $this->items && $this->items->isNotEmpty()) {
             return (float) $this->items->sum(fn($i) => $i->subtotal_amount);
         }
-        if ($this->items && $this->items->isNotEmpty()) {
-            return (float) $this->items->sum(fn($i) => $i->subtotal_amount);
-        }
 
         $cfg = self::getPricingConfig();
         $rawDelivery = (float) ($this->delivery_fee > 0 ? $this->delivery_fee : $cfg['base_delivery_fee']);
@@ -249,9 +251,6 @@ class Order extends Model
     public function getHppAttribute(): float
     {
         if ($this->relationLoaded('items') && $this->items && $this->items->isNotEmpty()) {
-            return (float) $this->items->sum(fn($i) => $i->total_hpp);
-        }
-        if ($this->items && $this->items->isNotEmpty()) {
             return (float) $this->items->sum(fn($i) => $i->total_hpp);
         }
 

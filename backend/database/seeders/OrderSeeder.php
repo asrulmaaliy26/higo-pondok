@@ -91,6 +91,11 @@ class OrderSeeder extends Seeder
 
                 foreach ($users as $user) {
                     for ($orderNum = 1; $orderNum <= 2; $orderNum++) {
+                        $orderDate = now()->subMinutes(rand(5, 120));
+                        $dateFolder = $this->getIndonesianDateFolder($orderDate);
+                        $userName = strtolower(str_replace(' ', '_', $user->santri_name ?: $user->name));
+                        $userName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $userName) ?: 'user';
+
                         // Buat pesanan baru
                         $order = Order::create([
                             'user_id' => $user->id,
@@ -100,13 +105,14 @@ class OrderSeeder extends Seeder
                             'custom_notes' => $sampleCustomNotes[array_rand($sampleCustomNotes)],
                             'status' => $orderNum === 1 ? 'pending' : 'processing',
                             'payment_status' => ($orderNum === 1) ? 'paid' : 'unpaid',
-                            'proof_of_purchase' => $orderNum === 2 ? ['samples/sample_struk.jpg'] : null,
-                            'proof_of_delivery' => $orderNum === 2 ? ['samples/sample_delivery.jpg'] : null,
+                            'proof_of_payment' => $orderNum === 1 ? ["{$dateFolder}/{$userName}/proof/sample_payment.jpg"] : null,
+                            'proof_of_purchase' => $orderNum === 2 ? ["{$dateFolder}/{$userName}/proff_kantin/sample_struk.jpg"] : null,
+                            'proof_of_delivery' => $orderNum === 2 ? ["{$dateFolder}/{$userName}/proff_delivery/sample_delivery.jpg"] : null,
                             'total_price' => 0,
                             'admin_fee' => $adminFee,
                             'delivery_fee' => $baseDeliveryFee,
                             'delivery_location' => $user->santri_room ?: $locations[array_rand($locations)],
-                            'created_at' => now()->subMinutes(rand(5, 120)),
+                            'created_at' => $orderDate,
                         ]);
 
                         $totalItemsQty = 0;
@@ -160,5 +166,27 @@ class OrderSeeder extends Seeder
             DB::rollBack();
             $this->command->error("Gagal menjalankan OrderSeeder: " . $e->getMessage());
         }
+    }
+
+    /**
+     * Dapatkan nama folder hari dan tanggal bahasa Indonesia.
+     * Contoh: senin18Januari2025
+     */
+    private function getIndonesianDateFolder($date = null): string
+    {
+        $carbon = $date ? \Carbon\Carbon::parse($date)->setTimezone('Asia/Jakarta') : \Carbon\Carbon::now('Asia/Jakarta');
+        $days = ['minggu', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
+        $months = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+        ];
+
+        $dayName = $days[$carbon->dayOfWeek];
+        $dayNum = $carbon->day;
+        $monthName = $months[$carbon->month];
+        $year = $carbon->year;
+
+        return "{$dayName}{$dayNum}{$monthName}{$year}";
     }
 }

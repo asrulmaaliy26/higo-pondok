@@ -17,6 +17,7 @@ export default function DetailKantin() {
 
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [imageError, setImageError] = useState(false);
   
   // Custom Order state
   const [showCustomModal, setShowCustomModal] = useState(false);
@@ -79,35 +80,48 @@ export default function DetailKantin() {
 
   return (
     <div className="bg-gray-50 h-full min-h-screen pb-32 dark:bg-gray-950 font-sans relative">
-      {/* HEADER BANNER */}
-      <div className="relative h-48 sm:h-56 bg-gray-200 dark:bg-gray-800">
-        {canteen.image ? (
-          <img src={getStorageUrl(canteen.image)} alt="Banner Toko" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gradient-to-r from-green-100 to-green-50 dark:from-gray-800 dark:to-gray-900">
-            <Store className="w-12 h-12 mb-2 opacity-50" />
-            <span className="text-xs font-medium opacity-50">Belum ada foto</span>
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+      {/* FLOATING TOP NAVIGATION (FIXED & PERSISTENT WHEN USER SCROLLS TO ORDER) */}
+      <div className="fixed top-0 left-0 right-0 z-40 p-3 sm:p-4 pointer-events-none flex items-center justify-between">
         <button
+          type="button"
           onClick={() => navigate({ to: '/dashboard/kantin' })}
-          className="absolute top-4 left-4 w-10 h-10 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white z-10"
+          className="pointer-events-auto w-10 h-10 bg-black/60 hover:bg-black/80 active:scale-95 backdrop-blur-md rounded-full flex items-center justify-center text-white shadow-lg border border-white/20 transition-all"
+          title="Kembali ke Daftar Toko"
         >
           <ChevronLeft className="w-6 h-6" />
         </button>
-        {/* Cart quick-access at top right */}
+
         {totalItems > 0 && (
           <button
+            type="button"
             onClick={handleGoToCart}
-            className="absolute top-4 right-4 w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white z-10 shadow-lg"
+            className="pointer-events-auto w-10 h-10 bg-green-600 hover:bg-green-700 active:scale-95 rounded-full flex items-center justify-center text-white shadow-lg border border-white/20 transition-all relative"
+            title="Lihat Keranjang"
           >
             <ShoppingCart className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white shadow-xs">
               {totalItems}
             </span>
           </button>
         )}
+      </div>
+
+      {/* HEADER BANNER */}
+      <div className="relative h-48 sm:h-56 bg-gray-200 dark:bg-gray-800">
+        {canteen.image && !imageError ? (
+          <img 
+            src={getStorageUrl(canteen.image)} 
+            alt={canteen.name || "Banner Toko"} 
+            onError={() => setImageError(true)}
+            className="w-full h-full object-cover" 
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gradient-to-r from-green-100 to-green-50 dark:from-gray-800 dark:to-gray-900">
+            <Store className="w-12 h-12 mb-2 opacity-50 text-green-700 dark:text-green-400" />
+            <span className="text-xs font-medium opacity-60 text-gray-600 dark:text-gray-300">Foto Toko</span>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 p-4">
           <h1 className="text-2xl font-bold text-white drop-shadow-md">{canteen.name}</h1>
           <div className="flex items-center gap-3 text-xs text-white/80 mt-1">

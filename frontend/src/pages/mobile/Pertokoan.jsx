@@ -662,6 +662,25 @@ export default function Pertokoan() {
 
                       {/* Action Buttons Group */}
                       <div className="flex items-center gap-1 shrink-0">
+                        {/* Direct Approve Canteen Button if Pending */}
+                        {canteen.status === 'pending' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Setujui pendaftaran toko "${canteen.name}" sekarang?`)) {
+                                approveCanteenMutation.mutate(canteen.id);
+                              }
+                            }}
+                            disabled={approveCanteenMutation.isPending}
+                            title="Setujui toko ini agar mulai aktif berjualan"
+                            className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs transition-all disabled:opacity-50"
+                          >
+                            <CheckCircle size={13} />
+                            <span>{approveCanteenMutation.isPending ? 'Proses...' : 'Setujui'}</span>
+                          </button>
+                        )}
+
                         {/* Direct Toggle Close / Open */}
                         {canteen.status === 'approved' && (
                           <button
@@ -921,9 +940,19 @@ export default function Pertokoan() {
             {/* Quick Status Bar */}
             <div className="p-4 sm:p-5 rounded-3xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex items-center justify-between flex-wrap gap-3 shadow-xs">
               <div>
-                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Status Operasional</span>
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Status Operasional & Izin Toko</span>
                 <div className="flex items-center gap-2 mt-1">
-                  {selectedCanteen.is_force_closed ? (
+                  {selectedCanteen.status === 'pending' ? (
+                    <span className="px-3 py-1 bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 text-xs font-bold rounded-full border border-amber-200 dark:border-amber-800 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                      Menunggu Persetujuan Admin (Review)
+                    </span>
+                  ) : selectedCanteen.status === 'rejected' ? (
+                    <span className="px-3 py-1 bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300 text-xs font-bold rounded-full border border-gray-300 dark:border-gray-700 flex items-center gap-1.5">
+                      <XCircle size={14} className="text-red-500" />
+                      Pendaftaran Ditolak / Nonaktif
+                    </span>
+                  ) : selectedCanteen.is_force_closed ? (
                     <span className="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300 text-xs font-bold rounded-full border border-red-200 dark:border-red-800">
                       ● Ditutup Langsung oleh Admin
                     </span>
@@ -939,27 +968,78 @@ export default function Pertokoan() {
                 </div>
               </div>
 
-              {selectedCanteen.status === 'approved' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const willForceClose = !selectedCanteen.is_force_closed;
-                    toggleDirectCloseMutation.mutate({
-                      id: selectedCanteen.id,
-                      force_close: willForceClose
-                    });
-                  }}
-                  disabled={toggleDirectCloseMutation.isPending}
-                  className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-xs transition-all ${
-                    selectedCanteen.is_force_closed
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                      : 'bg-red-600 hover:bg-red-700 text-white'
-                  }`}
-                >
-                  <Power size={15} />
-                  <span>{selectedCanteen.is_force_closed ? 'Buka Toko Ini' : 'Tutup Toko Ini Langsung'}</span>
-                </button>
-              )}
+              {/* Action Buttons: Approve / Reject / Toggle Close */}
+              <div className="flex items-center gap-2">
+                {selectedCanteen.status === 'pending' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Setujui toko "${selectedCanteen.name}" sekarang agar dapat aktif dan mulai berjualan?`)) {
+                          approveCanteenMutation.mutate(selectedCanteen.id);
+                        }
+                      }}
+                      disabled={approveCanteenMutation.isPending}
+                      className="px-4 py-2.5 rounded-2xl text-xs font-bold bg-green-600 hover:bg-green-700 active:scale-98 text-white flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+                    >
+                      <CheckCircle size={15} />
+                      <span>{approveCanteenMutation.isPending ? 'Menyetujui...' : 'Setujui Toko Ini'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Tolak pendaftaran toko "${selectedCanteen.name}"?`)) {
+                          rejectCanteenMutation.mutate(selectedCanteen.id);
+                        }
+                      }}
+                      disabled={rejectCanteenMutation.isPending}
+                      className="px-4 py-2.5 rounded-2xl text-xs font-bold bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800 border border-red-200 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                    >
+                      <XCircle size={15} />
+                      <span>{rejectCanteenMutation.isPending ? 'Menolak...' : 'Tolak Toko'}</span>
+                    </button>
+                  </>
+                )}
+
+                {selectedCanteen.status === 'rejected' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Aktifkan kembali toko "${selectedCanteen.name}"?`)) {
+                        approveCanteenMutation.mutate(selectedCanteen.id);
+                      }
+                    }}
+                    disabled={approveCanteenMutation.isPending}
+                    className="px-4 py-2.5 rounded-2xl text-xs font-bold bg-green-600 hover:bg-green-700 text-white flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+                  >
+                    <CheckCircle size={15} />
+                    <span>{approveCanteenMutation.isPending ? 'Memproses...' : 'Aktifkan Toko Ini'}</span>
+                  </button>
+                )}
+
+                {selectedCanteen.status === 'approved' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const willForceClose = !selectedCanteen.is_force_closed;
+                      toggleDirectCloseMutation.mutate({
+                        id: selectedCanteen.id,
+                        force_close: willForceClose
+                      });
+                    }}
+                    disabled={toggleDirectCloseMutation.isPending}
+                    className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-xs transition-all ${
+                      selectedCanteen.is_force_closed
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        : 'bg-red-600 hover:bg-red-700 text-white'
+                    }`}
+                  >
+                    <Power size={15} />
+                    <span>{selectedCanteen.is_force_closed ? 'Buka Toko Ini' : 'Tutup Toko Ini Langsung'}</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Profil Pemilik Toko */}

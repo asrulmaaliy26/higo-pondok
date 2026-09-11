@@ -182,6 +182,7 @@ export default function PesananToko() {
   const [isCompressingProof, setIsCompressingProof] = useState(false);
   
   const [selectedProofs, setSelectedProofs] = useState([]);
+  const [fullscreenImage, setFullscreenImage] = useState(null);
 
   // Receipt Modal State for Canteen
   const [receiptModalConfig, setReceiptModalConfig] = useState({
@@ -3033,21 +3034,35 @@ export default function PesananToko() {
                 return (
                   <div key={idx} className="w-full max-w-xl bg-gray-900/60 border border-white/5 rounded-2xl p-2.5 flex flex-col items-center gap-2">
                     <div className="w-full flex items-center justify-between px-2 text-xs text-gray-400">
-                      <span>Bukti {idx + 1}</span>
-                      <a 
-                        href={proof} 
-                        target="_blank" 
-                        rel="noreferrer" 
-                        className="text-green-400 hover:text-green-300 flex items-center gap-1 text-[11px]"
-                      >
-                        Buka Gambar Penuh <ExternalLink className="w-3 h-3" />
-                      </a>
+                      <span className="font-semibold text-white/90">Bukti {idx + 1}</span>
+                      <div className="flex items-center gap-1.5">
+                        <button 
+                          type="button"
+                          onClick={() => setFullscreenImage(proof)}
+                          className="px-2.5 py-1 bg-green-600/20 hover:bg-green-600/30 text-green-400 hover:text-green-300 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95 border border-green-500/30"
+                          title="Buka Pratinjau Layar Penuh"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Buka Gambar Penuh</span>
+                        </button>
+                        <a 
+                          href={proof} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+                          title="Buka di Tab Baru"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
                     </div>
                     <img 
                       src={proof}
                       alt={`Bukti ${idx + 1}`}
-                      className="w-full rounded-xl shadow-2xl object-contain bg-black/40"
+                      onClick={() => setFullscreenImage(proof)}
+                      className="w-full rounded-xl shadow-2xl object-contain bg-black/40 cursor-zoom-in hover:brightness-105 transition-all"
                       style={{ maxHeight: '75vh' }}
+                      title="Klik gambar untuk memperbesar"
                       onError={(e) => {
                         e.target.onerror = null;
                         e.target.style.display = 'none';
@@ -3088,6 +3103,68 @@ export default function PesananToko() {
                 </div>
               );
             })}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ULTRA FULLSCREEN IMAGE LIGHTBOX MODAL */}
+      {fullscreenImage && createPortal(
+        <div 
+          className="fixed inset-0 z-[150] bg-black/95 backdrop-blur-md flex flex-col animate-in fade-in duration-200"
+          onClick={() => setFullscreenImage(null)}
+        >
+          {/* Top Bar */}
+          <div 
+            className="flex items-center justify-between px-4 py-3 bg-black/80 border-b border-white/10 shrink-0 z-10"
+            onClick={e => e.stopPropagation()}
+          >
+            <span className="text-white text-xs font-semibold flex items-center gap-1.5">
+              <ImageIcon className="w-4 h-4 text-green-400" />
+              Pratinjau Layar Penuh
+            </span>
+            <div className="flex items-center gap-2">
+              <a 
+                href={fullscreenImage} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1.5 transition-all"
+                title="Buka di Tab Baru"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Tab Baru</span>
+              </a>
+              <a 
+                href={fullscreenImage} 
+                download
+                className="px-3 py-1.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
+                title="Unduh Gambar"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Unduh</span>
+              </a>
+              <button 
+                onClick={() => setFullscreenImage(null)}
+                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all active:scale-90 ml-1"
+                title="Tutup (Esc)"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Centered Large Image */}
+          <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-auto">
+            <img 
+              src={fullscreenImage} 
+              alt="Bukti Layar Penuh" 
+              className="max-w-full max-h-[85vh] sm:max-h-[90vh] object-contain rounded-xl shadow-2xl select-none"
+              onClick={e => e.stopPropagation()}
+            />
+          </div>
+          
+          <div className="py-2.5 text-center text-gray-400 text-xs shrink-0 bg-black/40">
+            Ketuk tombol ✕ atau area luar untuk menutup layar penuh
           </div>
         </div>,
         document.body

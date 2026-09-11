@@ -355,7 +355,7 @@ export default function Profile() {
             <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-white/10">
               <div className="bg-white/5 p-2 rounded-xl border border-white/10">
                 <span className="text-gray-300 text-[10px] block">Tarif Dasar Jasa:</span>
-                <span className="font-black text-white text-xs">Kurir 3.500 | Admin 1.500</span>
+                <span className="font-black text-white text-xs">Kurir {formatRupiah(PRICING_CONFIG.BASE_DELIVERY_FEE)} | Admin {formatRupiah(PRICING_CONFIG.BASE_ADMIN_FEE)}</span>
               </div>
               <div className="bg-white/5 p-2 rounded-xl border border-white/10">
                 <span className="text-gray-300 text-[10px] block">Beban &gt;5 Produk:</span>

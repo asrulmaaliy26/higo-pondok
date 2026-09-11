@@ -98,6 +98,7 @@ class OrderSeeder extends Seeder
 
                         // Buat pesanan baru
                         $order = Order::create([
+                            'checkout_id' => 'CHK-' . $orderDate->format('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(6)),
                             'user_id' => $user->id,
                             'canteen_id' => $canteen->id,
                             'courier_id' => $courierId,

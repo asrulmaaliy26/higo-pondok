@@ -267,7 +267,12 @@ export default function TokoSaya() {
       {/* HEADER BANNER */}
       <div className="relative h-48 sm:h-56 bg-gray-200 dark:bg-gray-800">
         {canteen?.image ? (
-          <img src={getStorageUrl(canteen.image)} alt="Banner Toko" className="w-full h-full object-cover" />
+          <img 
+            src={getStorageUrl(canteen.image)} 
+            alt={canteen.name || "Banner Toko"} 
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            className="w-full h-full object-cover" 
+          />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gradient-to-r from-green-100 to-green-50 dark:from-gray-800 dark:to-gray-900">
             <Store className="w-12 h-12 mb-2 opacity-50" />

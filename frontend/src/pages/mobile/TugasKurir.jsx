@@ -1167,8 +1167,12 @@ export default function TugasKurir() {
             {filteredOrders.length === 0 ? (
               <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 text-center border border-gray-200 dark:border-gray-700 shadow-xs">
                 <Package className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
-                <p className="text-gray-500 dark:text-gray-400 font-semibold text-sm">Tidak ada pesanan yang sesuai filter.</p>
-                <p className="text-xs text-gray-400 mt-1">Coba ganti filter tab status atau ubah kata kunci pencarian.</p>
+                <p className="text-gray-500 dark:text-gray-400 font-semibold text-sm">Tidak ada pesanan tugas untuk Anda.</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {orders.length === 0 
+                    ? 'Jika Anda belum memiliki toko yang ditugaskan oleh Admin, hubungi Admin untuk penugasan toko.' 
+                    : 'Coba ganti filter tab status atau ubah kata kunci pencarian.'}
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2.5">

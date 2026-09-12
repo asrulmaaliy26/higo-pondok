@@ -19,6 +19,8 @@ class StoreUserRequest extends FormRequest
             'password' => 'required|string|min:8',
             'role' => 'required|in:admin,user,kantin,kurir',
             'status' => 'required|in:active,inactive,pending',
+            'canteen_ids' => 'nullable|array',
+            'canteen_ids.*' => 'exists:canteens,id',
         ];
     }
 }

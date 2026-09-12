@@ -104,7 +104,7 @@ class Order extends Model
     public function scopeForRecap($query)
     {
         return $query->whereIn('status', ['processing', 'completed'])
-                     ->with(['user', 'items.product', 'canteen']);
+                     ->with(['user', 'items.product', 'canteen', 'courier']);
     }
 
     /**
@@ -345,6 +345,7 @@ class Order extends Model
 
         $canteenRecap = [];
         $userRecap = [];
+        $courierRecap = [];
         $productBreakdown = [];
 
         // Lacak urutan user unik per toko/kantin per tanggal (dalam 1 hari)
@@ -442,7 +443,29 @@ class Order extends Model
             $userRecap[$userId]['grand_total'] += $totalPrice;
             $userRecap[$userId]['order_count'] += 1;
 
-            // 3. Product Breakdown
+            // 3. Group by Courier / Kurir
+            $courierId = $order->courier_id ?: 0;
+            $courierName = $order->courier ? $order->courier->name : 'Tanpa Kurir (Antar Sendiri)';
+
+            if (!isset($courierRecap[$courierId])) {
+                $courierRecap[$courierId] = [
+                    'courier_id' => $courierId,
+                    'courier_name' => $courierName,
+                    'is_unassigned' => empty($order->courier_id),
+                    'total_delivery_fee' => 0,
+                    'total_courier_cut_to_admin' => 0,
+                    'net_delivery_fee' => 0,
+                    'grand_total' => 0,
+                    'order_count' => 0,
+                ];
+            }
+            $courierRecap[$courierId]['total_delivery_fee'] += $deliveryFee;
+            $courierRecap[$courierId]['total_courier_cut_to_admin'] += $courierCutToAdmin;
+            $courierRecap[$courierId]['net_delivery_fee'] += max(0, $deliveryFee - $courierCutToAdmin);
+            $courierRecap[$courierId]['grand_total'] += $totalPrice;
+            $courierRecap[$courierId]['order_count'] += 1;
+
+            // 4. Product Breakdown
             if ($order->items && $order->items->isNotEmpty()) {
                 foreach ($order->items as $item) {
                     $prodId = $item->product_id ?: ('item_' . $item->id);
@@ -505,6 +528,7 @@ class Order extends Model
         usort($productBreakdown, fn($a, $b) => $b['total_quantity'] <=> $a['total_quantity'] ?: $b['total_subtotal'] <=> $a['total_subtotal']);
         usort($canteenRecap, fn($a, $b) => $b['grand_total'] <=> $a['grand_total']);
         usort($userRecap, fn($a, $b) => $b['grand_total'] <=> $a['grand_total']);
+        usort($courierRecap, fn($a, $b) => $b['order_count'] <=> $a['order_count'] ?: $b['net_delivery_fee'] <=> $a['net_delivery_fee']);
 
         return [
             'period' => $period,
@@ -521,6 +545,7 @@ class Order extends Model
             ],
             'canteen_recap' => array_values($canteenRecap),
             'user_recap' => array_values($userRecap),
+            'courier_recap' => array_values($courierRecap),
             'product_breakdown' => array_values($productBreakdown),
         ];
     }

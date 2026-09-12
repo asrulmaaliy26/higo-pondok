@@ -784,6 +784,7 @@ export default function Pertokoan() {
                   </label>
                   <input
                     type="time"
+                    lang="id-ID"
                     value={bulkOpenTime}
                     onChange={(e) => setBulkOpenTime(e.target.value)}
                     required
@@ -796,6 +797,7 @@ export default function Pertokoan() {
                   </label>
                   <input
                     type="time"
+                    lang="id-ID"
                     value={bulkCloseTime}
                     onChange={(e) => setBulkCloseTime(e.target.value)}
                     required
@@ -876,6 +878,7 @@ export default function Pertokoan() {
                   </label>
                   <input
                     type="time"
+                    lang="id-ID"
                     value={quickOpenTime}
                     onChange={(e) => setQuickOpenTime(e.target.value)}
                     required
@@ -888,6 +891,7 @@ export default function Pertokoan() {
                   </label>
                   <input
                     type="time"
+                    lang="id-ID"
                     value={quickCloseTime}
                     onChange={(e) => setQuickCloseTime(e.target.value)}
                     required
@@ -1147,6 +1151,7 @@ export default function Pertokoan() {
                     <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Jam Buka</label>
                     <input
                       type="time"
+                      lang="id-ID"
                       value={detailOpenTime}
                       onChange={(e) => setDetailOpenTime(e.target.value)}
                       className="w-full rounded-2xl border-gray-200 dark:border-gray-700 dark:bg-gray-800 shadow-xs text-gray-900 dark:text-white font-bold p-2.5 text-center"
@@ -1157,6 +1162,7 @@ export default function Pertokoan() {
                     <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Jam Tutup</label>
                     <input
                       type="time"
+                      lang="id-ID"
                       value={detailCloseTime}
                       onChange={(e) => setDetailCloseTime(e.target.value)}
                       className="w-full rounded-2xl border-gray-200 dark:border-gray-700 dark:bg-gray-800 shadow-xs text-gray-900 dark:text-white font-bold p-2.5 text-center"

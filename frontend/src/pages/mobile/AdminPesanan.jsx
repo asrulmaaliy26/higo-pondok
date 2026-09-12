@@ -209,6 +209,7 @@ export default function AdminPesanan() {
 
   const selectedCanteenFilter = 'all';
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all');
+  const [selectedCourierFilter, setSelectedCourierFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Delete modal state (Soft Delete / Move to Trash)
@@ -355,6 +356,16 @@ export default function AdminPesanan() {
 
   const currentParams = getFilterParams();
 
+  // Query Couriers List for Filter Dropdown
+  const { data: rawCouriers = [] } = useQuery({
+    queryKey: ['admin_couriers_list'],
+    queryFn: async () => {
+      const res = await api.get('/admin/users?role=kurir&per_page=100');
+      return res.data?.data || res.data || [];
+    },
+    staleTime: 1000 * 60 * 5
+  });
+
   // Query Orders List
   const {
     data: rawOrders = [],
@@ -365,6 +376,7 @@ export default function AdminPesanan() {
     queryKey: [
       'admin_orders',
       selectedCanteenFilter,
+      selectedCourierFilter,
       selectedStatusFilter,
       currentParams.start_date,
       currentParams.end_date,
@@ -373,6 +385,7 @@ export default function AdminPesanan() {
     queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedCanteenFilter !== 'all') params.append('canteen_id', selectedCanteenFilter);
+      if (selectedCourierFilter !== 'all') params.append('courier_id', selectedCourierFilter);
       if (selectedStatusFilter !== 'all') params.append('status', selectedStatusFilter);
       if (currentParams.start_date) params.append('start_date', currentParams.start_date);
       if (currentParams.end_date) params.append('end_date', currentParams.end_date);
@@ -386,6 +399,19 @@ export default function AdminPesanan() {
   const rawOrdersList = Array.isArray(rawOrders)
     ? rawOrders
     : (Array.isArray(rawOrders?.data) ? rawOrders.data : []);
+
+  // Compute merged courier list (from DB user query + any couriers present in order relations)
+  const couriersList = React.useMemo(() => {
+    const list = Array.isArray(rawCouriers) ? [...rawCouriers] : [];
+    const existingIds = new Set(list.map((c) => c.id));
+    rawOrdersList.forEach((o) => {
+      if (o.courier && !existingIds.has(o.courier.id)) {
+        list.push(o.courier);
+        existingIds.add(o.courier.id);
+      }
+    });
+    return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [rawCouriers, rawOrdersList]);
 
   const orders = React.useMemo(() => {
     // Smart Priority Sorting:
@@ -407,7 +433,7 @@ export default function AdminPesanan() {
     });
   }, [rawOrdersList]);
 
-  // Query Recap Data (Uses the exact same date & store filter)
+  // Query Recap Data (Uses the exact same date & courier filter)
   const {
     data: recapData,
     isLoading: isLoadingRecap,
@@ -417,6 +443,7 @@ export default function AdminPesanan() {
     queryKey: [
       'admin_orders_recap',
       selectedCanteenFilter,
+      selectedCourierFilter,
       currentParams.period,
       currentParams.start_date,
       currentParams.end_date
@@ -424,6 +451,7 @@ export default function AdminPesanan() {
     queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedCanteenFilter !== 'all') params.append('canteen_id', selectedCanteenFilter);
+      if (selectedCourierFilter !== 'all') params.append('courier_id', selectedCourierFilter);
       if (currentParams.period) params.append('period', currentParams.period);
       if (currentParams.start_date) params.append('start_date', currentParams.start_date);
       if (currentParams.end_date) params.append('end_date', currentParams.end_date);
@@ -725,7 +753,7 @@ export default function AdminPesanan() {
         </div>
 
         {/* Dynamic Inputs & Filters Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5 pt-0.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-1.5 pt-0.5">
           {/* 1. Date Input (Per Tanggal / Datepicker) - KIRI */}
           {filterMode === 'day' && (
             <div>
@@ -873,8 +901,28 @@ export default function AdminPesanan() {
             </select>
           </div>
 
+          {/* Courier Filter */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
+              Filter Kurir:
+            </label>
+            <select
+              value={selectedCourierFilter}
+              onChange={(e) => setSelectedCourierFilter(e.target.value)}
+              className="w-full px-2.5 py-1.5 border rounded-lg text-xs font-semibold bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-green-500 focus:outline-none"
+            >
+              <option value="all">🚚 Semua Kurir</option>
+              <option value="unassigned">🚫 Tanpa Kurir / Antar Sendiri</option>
+              {couriersList.map((c) => (
+                <option key={c.id} value={c.id}>
+                  🛵 {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Search Box */}
-          <div className="sm:col-span-2 lg:col-span-2">
+          <div className="sm:col-span-2 lg:col-span-1 xl:col-span-2">
             <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
               Pencarian Cepat:
             </label>
@@ -1086,9 +1134,13 @@ export default function AdminPesanan() {
                               </span>
                             )}
                           </div>
-                          {order.courier?.name && (
-                            <span className="text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-0.5 shrink-0">
-                              <Truck className="w-3 h-3" /> {order.courier.name}
+                          {order.courier?.name ? (
+                            <span className="text-green-700 dark:text-green-400 font-bold flex items-center gap-1 shrink-0 bg-green-50 dark:bg-green-950/50 px-1.5 py-0.5 rounded-md border border-green-200 dark:border-green-800 text-[10px]">
+                              <Truck className="w-3 h-3 text-green-600 dark:text-green-400" /> {order.courier.name}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 dark:text-gray-500 font-medium flex items-center gap-0.5 shrink-0 text-[10px]">
+                              🚫 Tanpa Kurir
                             </span>
                           )}
                         </div>
@@ -1395,6 +1447,77 @@ export default function AdminPesanan() {
                           </span>
                           <span className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 px-2 py-1 rounded-lg font-bold ml-auto sm:ml-0">
                             Total: Rp {c.grand_total.toLocaleString('id-ID')}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Rekapitulasi Per Kurir */}
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="p-3.5 sm:p-4 border-b border-gray-200 dark:border-gray-700 bg-emerald-50/50 dark:bg-emerald-950/20 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-green-600" />
+                      Rekapitulasi Per Kurir
+                    </h3>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                      Jumlah order yang diantar dan akumulasi penerimaan ongkir kurir
+                    </p>
+                  </div>
+                  {selectedCourierFilter !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCourierFilter('all')}
+                      className="text-[11px] font-bold text-green-600 dark:text-green-400 hover:underline cursor-pointer"
+                    >
+                      Reset Filter Kurir
+                    </button>
+                  )}
+                </div>
+                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {!recapData?.courier_recap || recapData.courier_recap.length === 0 ? (
+                    <div className="p-6 text-center text-gray-500 text-sm">
+                      Belum ada data kurir pada periode <strong>{getFilterLabel()}</strong>.
+                    </div>
+                  ) : (
+                    recapData.courier_recap.map((cr) => (
+                      <div
+                        key={cr.courier_id}
+                        className={`p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors ${
+                          String(selectedCourierFilter) === String(cr.courier_id) ||
+                          (selectedCourierFilter === 'unassigned' && cr.is_unassigned)
+                            ? 'bg-green-50/60 dark:bg-green-950/30 border-l-4 border-green-500'
+                            : ''
+                        }`}
+                      >
+                        <div>
+                          <h4 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
+                            {cr.is_unassigned ? '🚫' : '🛵'} {cr.courier_name}
+                            {cr.is_unassigned && (
+                              <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-semibold px-2 py-0.5 rounded">
+                                Antar Sendiri
+                              </span>
+                            )}
+                          </h4>
+                          <p className="text-[11px] text-gray-500 mt-0.5">{cr.order_count} Pesanan Diantar</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap text-xs font-semibold">
+                          <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-lg">
+                            Ongkir: Rp {(cr.total_delivery_fee || 0).toLocaleString('id-ID')}
+                          </span>
+                          {(cr.total_courier_cut_to_admin || 0) > 0 && (
+                            <span className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-1 rounded-lg">
+                              Potongan Admin: -Rp {(cr.total_courier_cut_to_admin || 0).toLocaleString('id-ID')}
+                            </span>
+                          )}
+                          <span className="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 px-2 py-1 rounded-lg font-bold">
+                            Bersih Kurir: Rp {(cr.net_delivery_fee || 0).toLocaleString('id-ID')}
+                          </span>
+                          <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg text-gray-700 dark:text-gray-300 ml-auto sm:ml-0">
+                            Total Belanja: Rp {(cr.grand_total || 0).toLocaleString('id-ID')}
                           </span>
                         </div>
                       </div>

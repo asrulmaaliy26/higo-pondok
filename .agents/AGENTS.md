@@ -91,10 +91,11 @@ Proyek ini tidak menggunakan Blade atau Inertia, melainkan murni **React + Vite*
    - File utama seperti `Dashboard.jsx` di folder `pages` HANYA BOLEH bertugas memuat logika rute (Role Check) dan memanggil komponen spesifik.
    - Komponen Layout harus dipecah sekecil mungkin menjadi kepingan lego (misal: `TopHeader.jsx`, `MobileBottomNav.jsx`, `DesktopSidebar.jsx`). Ini wajib dilakukan agar *maintenance* fitur spesifik tidak merusak atau menyentuh kode milik fitur/peran lain.
 
-9. **Optimasi Performa (WAJIB DITERAPKAN TERUS-MENERUS)**:
-   - **Frontend (React)**: Seluruh rute halaman baru WAJIB diimpor menggunakan `React.lazy()` (Code Splitting) untuk menjaga ukuran *Initial Load* sekecil mungkin. Jangan gunakan *synchronous import* untuk halaman utama.
-   - **Frontend (React Query)**: Pastikan ada pengaturan `staleTime` (misal 5 menit) di `queryClient` secara global, atau pada *query* spesifik, agar data tidak terus-menerus di-fetch dari server ketika user hanya sekadar pindah tab/halaman.
-   - **Backend (Laravel)**: DILARANG keras membiarkan *N+1 Query Problem*. Selalu gunakan pola *Eager Loading* (`with('relasi')`) setiap kali mengembalikan daftar (list/pagination) data yang memiliki relasi.
+9. **Optimasi Performa Frontend & Backend (WAJIB DITERAPKAN TERUS-MENERUS)**:
+   - **Frontend Code Splitting (React.lazy)**: Seluruh rute halaman baru WAJIB diimpor menggunakan `React.lazy(() => import(...))` di `App.jsx` dan dibungkus `React.Suspense`. DILARANG KERAS mengimpor halaman secara sinkron (`import Page from ...`) di rute utama agar ukuran initial bundle tetap di bawah 350 KB.
+   - **Frontend Global Cache (React Query v5)**: `queryClient` WAJIB disetel dengan `staleTime: 1000 * 60 * 5` (5 menit) dan `gcTime: 1000 * 60 * 30` (30 menit) serta `refetchOnWindowFocus: false` agar perpindahan antar halaman/tab berlangsung instan (0 ms) tanpa spamming request ke backend.
+   - **Optimistic UI Updates**: Operasi perubahan status krusial (seperti proses pesanan, validasi pembayaran, update keranjang) WAJIB memanfaatkan `onMutate` untuk memanipulasi cache seketika sebelum respon server tiba, serta `onError` untuk rollback data jika gagal.
+   - **Backend Query Optimization**: DILARANG keras membiarkan *N+1 Query Problem*. Selalu gunakan pola *Eager Loading* (`with('relasi')`) setiap kali mengembalikan daftar (list/pagination) data yang memiliki relasi.
 
 10. **Penahan Benturan UI (Error Boundaries)**:
     - Wajib mengimplementasikan *Error Boundary* di level rute atau komponen besar. Ini untuk mencegah layar putih mati total (*Blank White Screen of Death*) jika terjadi *crash* pada logika komponen (misal: mengakses `.map()` pada data `undefined`). Selalu tampilkan *fallback* UI (pesan error ramah) agar pengguna tetap bisa menavigasi ke halaman lain.

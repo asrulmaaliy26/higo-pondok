@@ -27,6 +27,16 @@ class AdminOrderController extends Controller
             $query->where('canteen_id', $canteenId);
         }
 
+        // Filter by Courier / Kurir
+        $courierId = $request->query('courier_id');
+        if ($courierId && $courierId !== 'all') {
+            if ($courierId === 'none' || $courierId === 'unassigned') {
+                $query->whereNull('courier_id');
+            } else {
+                $query->where('courier_id', $courierId);
+            }
+        }
+
         // Filter by Order Status
         $status = $request->query('status');
         if ($status && $status !== 'all') {
@@ -85,6 +95,7 @@ class AdminOrderController extends Controller
     public function recap(Request $request)
     {
         $canteenId = $request->query('canteen_id');
+        $courierId = $request->query('courier_id');
         $period = $request->query('period', 'day');
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
@@ -93,6 +104,14 @@ class AdminOrderController extends Controller
 
         if ($canteenId && $canteenId !== 'all') {
             $query->where('canteen_id', $canteenId);
+        }
+
+        if ($courierId && $courierId !== 'all') {
+            if ($courierId === 'none' || $courierId === 'unassigned') {
+                $query->whereNull('courier_id');
+            } else {
+                $query->where('courier_id', $courierId);
+            }
         }
 
         $orders = $query->orderBy('created_at', 'asc')->orderBy('id', 'asc')->get();

@@ -23,6 +23,8 @@ class UpdateUserRequest extends FormRequest
             'role' => 'sometimes|in:admin,user,kantin,kurir',
             'status' => 'sometimes|in:active,inactive,pending',
             'penalty_points' => 'sometimes|integer|min:0',
+            'canteen_ids' => 'nullable|array',
+            'canteen_ids.*' => 'exists:canteens,id',
         ];
     }
 }

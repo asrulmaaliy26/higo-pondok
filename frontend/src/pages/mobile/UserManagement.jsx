@@ -4,7 +4,7 @@ import {
   Search, Plus, Edit2, Trash2, Filter, Shield, User, 
   Coffee, Bus, LogIn, X, AlertTriangle, Phone, GraduationCap, 
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw,
-  Home, BookOpen, Layers
+  Home, BookOpen, Layers, Store
 } from 'lucide-react';
 import { ROLES } from '../../config/roles';
 import { useAuthStore } from '../../store/authStore';
@@ -39,7 +39,8 @@ export default function UserManagement() {
     santri_level: '',
     password: '',
     role: 'user',
-    status: 'active'
+    status: 'active',
+    canteen_ids: []
   });
 
   const impersonate = useAuthStore(state => state.impersonate);
@@ -158,8 +159,30 @@ export default function UserManagement() {
     }
   };
 
+  // Fetch Canteens for Kurir assignment
+  const { data: canteensData } = useQuery({
+    queryKey: ['admin_available_canteens'],
+    queryFn: async () => {
+      const res = await api.get('/canteens');
+      return res.data?.data || res.data || [];
+    },
+    staleTime: 5 * 60 * 1000
+  });
+  const canteens = Array.isArray(canteensData) ? canteensData : [];
+  const [canteenSearchTerm, setCanteenSearchTerm] = useState('');
+
+  const filteredCanteens = React.useMemo(() => {
+    if (!canteenSearchTerm.trim()) return canteens;
+    const q = canteenSearchTerm.toLowerCase().trim();
+    return canteens.filter(c => 
+      c.name?.toLowerCase().includes(q) || 
+      c.category?.toLowerCase().includes(q)
+    );
+  }, [canteens, canteenSearchTerm]);
+
   const openAddModal = () => {
     setModalMode('add');
+    setCanteenSearchTerm('');
     setFormData({ 
       name: '', 
       email: '', 
@@ -170,7 +193,8 @@ export default function UserManagement() {
       santri_level: '', 
       password: '', 
       role: 'user', 
-      status: 'active' 
+      status: 'active',
+      canteen_ids: []
     });
     setIsModalOpen(true);
   };
@@ -178,6 +202,7 @@ export default function UserManagement() {
   const openEditModal = (user) => {
     setModalMode('edit');
     setEditingUserId(user.id);
+    setCanteenSearchTerm('');
     setFormData({
       name: user.name || '',
       email: user.email || '',
@@ -188,7 +213,8 @@ export default function UserManagement() {
       santri_level: user.santri_level || '',
       password: '', // Leave blank, only fill if changing
       role: user.role || 'user',
-      status: user.status || 'active'
+      status: user.status || 'active',
+      canteen_ids: user.canteen_ids || (user.assigned_canteens ? user.assigned_canteens.map(c => c.id) : [])
     });
     setIsModalOpen(true);
   };
@@ -196,6 +222,7 @@ export default function UserManagement() {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingUserId(null);
+    setCanteenSearchTerm('');
   };
 
   const handleSubmit = (e) => {
@@ -418,6 +445,27 @@ export default function UserManagement() {
                         )}
                       </div>
                     )}
+
+                    {/* Kurir Assigned Canteens */}
+                    {user.role === ROLES.KURIR && (
+                      <div className="bg-emerald-50/70 dark:bg-emerald-950/30 p-2 rounded-xl border border-emerald-200 dark:border-emerald-800 text-[11px] space-y-1">
+                        <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-bold">
+                          <Store className="w-3.5 h-3.5 shrink-0" />
+                          <span>Toko yang Ditugaskan:</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {user.assigned_canteens && user.assigned_canteens.length > 0 ? (
+                            user.assigned_canteens.map(c => (
+                              <span key={c.id} className="px-2 py-0.5 rounded-md bg-white dark:bg-gray-800 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-700 shadow-xs">
+                                {c.name}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-red-500 font-semibold text-[10px] italic">Belum ada toko yang ditugaskan (Tidak ada tugas)</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   {/* Card Footer: Registered date & Action buttons */}
@@ -549,7 +597,9 @@ export default function UserManagement() {
       {/* Modal CRUD User (Add & Edit) */}
       {isModalOpen && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 my-auto border border-gray-200 dark:border-gray-700 max-h-[92vh] flex flex-col">
+          <div className={`bg-white dark:bg-gray-900 rounded-3xl w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 my-auto border border-gray-200 dark:border-gray-700 max-h-[92vh] flex flex-col transition-all duration-300 ${
+            formData.role === 'kurir' ? 'max-w-2xl sm:max-w-3xl' : 'max-w-lg sm:max-w-xl'
+          }`}>
             <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50/80 dark:bg-gray-800/50">
               <h3 className="font-bold text-base sm:text-lg text-gray-900 dark:text-white flex items-center gap-2">
                 {modalMode === 'add' ? 'Tambah User Baru' : 'Edit Data User'}
@@ -678,6 +728,128 @@ export default function UserManagement() {
                   <option value="admin">Admin</option>
                 </select>
               </div>
+
+              {/* Toko Yang Dilayani Kurir (Khusus Role Kurir) */}
+              {formData.role === 'kurir' && (
+                <div className="p-4 bg-green-50/80 dark:bg-green-950/30 rounded-2xl border border-green-300/80 dark:border-green-800 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-green-200/80 dark:border-green-800/80 pb-2.5">
+                    <div>
+                      <span className="text-xs font-black text-green-900 dark:text-green-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Store className="w-4 h-4 text-green-600 dark:text-green-400" /> Toko yang Dilayani Kurir *
+                      </span>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                        Pilih toko yang menjadi tanggung jawab kurir ini. Kurir tanpa toko tidak akan menerima tugas pengantaran.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto flex-wrap">
+                      <span className="text-[11px] text-green-800 dark:text-green-300 font-extrabold bg-green-100 dark:bg-green-900/60 px-2.5 py-1 rounded-full border border-green-300 dark:border-green-700">
+                        {formData.canteen_ids?.length || 0} / {canteens.length} Toko Dipilih
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Search Bar & Quick Action Buttons */}
+                  <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between">
+                    <div className="relative flex-1">
+                      <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input 
+                        type="text"
+                        value={canteenSearchTerm}
+                        onChange={(e) => setCanteenSearchTerm(e.target.value)}
+                        placeholder="Cari nama toko / kategori zona..."
+                        className="w-full pl-9 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 font-medium transition-all"
+                      />
+                      {canteenSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setCanteenSearchTerm('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded-full"
+                          title="Hapus pencarian"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allFilteredIds = filteredCanteens.map(c => c.id);
+                          const merged = Array.from(new Set([...(formData.canteen_ids || []), ...allFilteredIds]));
+                          setFormData({ ...formData, canteen_ids: merged });
+                        }}
+                        disabled={filteredCanteens.length === 0}
+                        className="px-2.5 py-1.5 bg-white dark:bg-gray-800 hover:bg-green-100 dark:hover:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 rounded-lg text-[11px] font-bold transition-all disabled:opacity-40"
+                      >
+                        Pilih Semua ({filteredCanteens.length})
+                      </button>
+                      {(formData.canteen_ids?.length || 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, canteen_ids: [] })}
+                          className="px-2.5 py-1.5 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg text-[11px] font-bold transition-all"
+                        >
+                          Batal Semua
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 2-Column Wide Grid of Canteens */}
+                  <div className="max-h-64 sm:max-h-76 overflow-y-auto pr-1 pt-0.5">
+                    {canteens.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic py-4 text-center">Belum ada data toko terdaftar.</p>
+                    ) : filteredCanteens.length === 0 ? (
+                      <div className="py-6 text-center text-gray-500 dark:text-gray-400 bg-white/70 dark:bg-gray-800/40 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
+                        <p className="text-xs font-semibold">
+                          Tidak ditemukan toko dengan kata kunci "{canteenSearchTerm}".
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {filteredCanteens.map((c) => {
+                          const isChecked = (formData.canteen_ids || []).includes(c.id);
+                          return (
+                            <label
+                              key={c.id}
+                              className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all select-none ${
+                                isChecked
+                                  ? 'bg-green-100/90 dark:bg-green-900/60 border-green-500 text-green-950 dark:text-green-100 font-bold shadow-2xs ring-1 ring-green-500/30'
+                                  : 'bg-white dark:bg-gray-800/90 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const current = formData.canteen_ids || [];
+                                  if (e.target.checked) {
+                                    setFormData({ ...formData, canteen_ids: [...current, c.id] });
+                                  } else {
+                                    setFormData({ ...formData, canteen_ids: current.filter(id => id !== c.id) });
+                                  }
+                                }}
+                                className="w-4 h-4 text-green-600 rounded border-gray-300 focus:ring-green-500 shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="text-xs truncate block font-semibold">{c.name}</span>
+                                  {c.category && (
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0 font-bold uppercase">
+                                      {c.category}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="pt-3 flex gap-3">
                 <button 

@@ -97,5 +97,8 @@ class UserSeeder extends Seeder
             ['name' => 'Kurir Dummy', 'password' => $password]
         );
         $kurir->assignRole('kurir');
+        if ($canteen) {
+            $kurir->assignedCanteens()->syncWithoutDetaching([$canteen->id]);
+        }
     }
 }

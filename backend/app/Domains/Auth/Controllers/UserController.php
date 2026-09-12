@@ -16,7 +16,7 @@ class UserController extends Controller
      */
     public function index(Request $request)
     {
-        $query = User::with('roles')->latest();
+        $query = User::with(['roles', 'assignedCanteens:id,name'])->latest();
 
         // Search Filter
         if ($request->filled('search')) {
@@ -40,9 +40,10 @@ class UserController extends Controller
         $perPage = max(5, min(100, (int) $request->input('per_page', 15)));
         $users = $query->paginate($perPage);
 
-        // Transform collection to attach role
+        // Transform collection to attach role and canteen_ids
         $users->getCollection()->transform(function ($user) {
             $user->role = $user->roles->first()?->name ?? 'user';
+            $user->canteen_ids = $user->assignedCanteens ? $user->assignedCanteens->pluck('id')->toArray() : [];
             return $user;
         });
 
@@ -58,15 +59,21 @@ class UserController extends Controller
         $data['password'] = Hash::make($data['password']);
         
         $role = $data['role'] ?? 'user';
+        $canteenIds = $data['canteen_ids'] ?? null;
         unset($data['role']); // Remove role from data since it's not a column
         unset($data['status']); // Remove status if present (not a column)
+        unset($data['canteen_ids']);
 
         $user = User::create($data);
         $user->assignRole($role);
 
+        if ($role === 'kurir' && is_array($canteenIds)) {
+            $user->assignedCanteens()->sync($canteenIds);
+        }
+
         return response()->json([
             'message' => 'User berhasil ditambahkan',
-            'user' => $user
+            'user' => $user->load('assignedCanteens:id,name')
         ], 201);
     }
 
@@ -85,8 +92,10 @@ class UserController extends Controller
         }
 
         $role = $data['role'] ?? null;
+        $canteenIds = array_key_exists('canteen_ids', $data) ? $data['canteen_ids'] : null;
         unset($data['role']);
         unset($data['status']);
+        unset($data['canteen_ids']);
 
         $user->update($data);
         
@@ -94,9 +103,15 @@ class UserController extends Controller
             $user->syncRoles([$role]);
         }
 
+        if ($user->hasRole('kurir') || $role === 'kurir') {
+            if (is_array($canteenIds)) {
+                $user->assignedCanteens()->sync($canteenIds);
+            }
+        }
+
         return response()->json([
             'message' => 'User berhasil diupdate',
-            'user' => $user
+            'user' => $user->load('assignedCanteens:id,name')
         ]);
     }
 

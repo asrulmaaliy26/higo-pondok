@@ -10,40 +10,69 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
 
-// Pages & Layouts
-import Home from './pages/mobile/Home';
-import Login from './pages/mobile/Login';
-import Register from './pages/mobile/Register';
-import RegisterCanteen from './pages/mobile/RegisterCanteen';
-import RegisterDriver from './pages/mobile/RegisterDriver';
-import DashboardLayout from './components/layout/mobile/DashboardLayout';
-import Dashboard from './pages/mobile/Dashboard';
-import UserManagement from './pages/mobile/UserManagement';
-import Pertokoan from './pages/mobile/Pertokoan';
-import AdminPesanan from './pages/mobile/AdminPesanan';
-import AdminLogs from './pages/mobile/AdminLogs';
-import BukuPanduan from './pages/mobile/BukuPanduan';
-import TokoSaya from './pages/mobile/TokoSaya';
-import Profile from './pages/mobile/Profile';
-import Kantin from './pages/mobile/Kantin';
-import DetailKantin from './pages/mobile/DetailKantin';
-import PesananToko from './pages/mobile/PesananToko';
-import PromoVoucher from './pages/mobile/PromoVoucher';
-import Pembayaran from './pages/mobile/Pembayaran';
-import TugasKurir from './pages/mobile/TugasKurir';
-import Keranjang from './pages/mobile/Keranjang';
-
+// Role Guard & Loading Bar
 import RoleGuard from './components/RoleGuard';
 import GlobalLoadingBar from './components/common/GlobalLoadingBar';
 import { ROLES } from './config/roles';
 
-const queryClient = new QueryClient();
+// ==========================================
+// 1. HIGH-PERFORMANCE CODE SPLITTING (React.lazy)
+// ==========================================
+const Home = React.lazy(() => import('./pages/mobile/Home'));
+const Login = React.lazy(() => import('./pages/mobile/Login'));
+const Register = React.lazy(() => import('./pages/mobile/Register'));
+const RegisterCanteen = React.lazy(() => import('./pages/mobile/RegisterCanteen'));
+const RegisterDriver = React.lazy(() => import('./pages/mobile/RegisterDriver'));
+const DashboardLayout = React.lazy(() => import('./components/layout/mobile/DashboardLayout'));
+const Dashboard = React.lazy(() => import('./pages/mobile/Dashboard'));
+const UserManagement = React.lazy(() => import('./pages/mobile/UserManagement'));
+const Pertokoan = React.lazy(() => import('./pages/mobile/Pertokoan'));
+const AdminPesanan = React.lazy(() => import('./pages/mobile/AdminPesanan'));
+const AdminLogs = React.lazy(() => import('./pages/mobile/AdminLogs'));
+const BukuPanduan = React.lazy(() => import('./pages/mobile/BukuPanduan'));
+const TokoSaya = React.lazy(() => import('./pages/mobile/TokoSaya'));
+const Profile = React.lazy(() => import('./pages/mobile/Profile'));
+const Kantin = React.lazy(() => import('./pages/mobile/Kantin'));
+const DetailKantin = React.lazy(() => import('./pages/mobile/DetailKantin'));
+const PesananToko = React.lazy(() => import('./pages/mobile/PesananToko'));
+const PromoVoucher = React.lazy(() => import('./pages/mobile/PromoVoucher'));
+const Pembayaran = React.lazy(() => import('./pages/mobile/Pembayaran'));
+const TugasKurir = React.lazy(() => import('./pages/mobile/TugasKurir'));
+const Keranjang = React.lazy(() => import('./pages/mobile/Keranjang'));
+
+// ==========================================
+// 2. ULTRA-FAST QUERY CLIENT CONFIGURATION (Caching 5-30m)
+// ==========================================
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 Menit data fresh di memori (navigasi terasa 0 ms instan)
+      gcTime: 1000 * 60 * 30, // 30 Menit data dipertahankan di garbage collection
+      refetchOnWindowFocus: false, // Tidak spam API backend saat kursor klik window/tab
+      refetchOnReconnect: 'always',
+      retry: 1,
+    },
+  },
+});
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[50vh] w-full animate-fade-in">
+      <div className="flex flex-col items-center gap-2.5">
+        <div className="w-8 h-8 rounded-full border-3 border-green-500 border-t-transparent animate-spin" />
+        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Memuat...</span>
+      </div>
+    </div>
+  );
+}
 
 const rootRoute = createRootRoute({
   component: () => (
     <>
       <GlobalLoadingBar />
-      <Outlet />
+      <React.Suspense fallback={<PageLoader />}>
+        <Outlet />
+      </React.Suspense>
     </>
   ),
 });

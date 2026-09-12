@@ -7,12 +7,14 @@ import api, { getStorageUrl } from '../../lib/axios';
 import { SkeletonCard } from '../../components/ui/Skeleton';
 import { ProductFormModal } from '../../components/modals/ProductFormModal';
 import { useCanteenStore } from '../../store/canteenStore';
+import { useActiveOrdersCount } from '../../hooks/useActiveOrdersCount';
 
 export default function TokoSaya() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { activeCanteenId, setActiveCanteenId, isStoreSelected, setIsStoreSelected } = useCanteenStore();
   const [page, setPage] = useState(1);
+  const activeOrdersCount = useActiveOrdersCount();
 
   // Fetch all canteens owned by this user
   const { data: rawCanteensList } = useQuery({
@@ -309,10 +311,15 @@ export default function TokoSaya() {
                   <Clock className="w-3 h-3" /> {canteen?.open_time?.substring(0,5) || '09:00'} - {canteen?.close_time?.substring(0,5) || '17:00'}
                 </span>
                 <button 
-                  onClick={() => window.location.href = '/dashboard/toko-saya/pesanan'}
-                  className="text-xs font-medium text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400"
+                  onClick={() => navigate({ to: '/dashboard/toko-saya/pesanan' })}
+                  className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 flex items-center gap-1.5 transition-colors"
                 >
-                  Pesanan Masuk
+                  <span>Pesanan Masuk</span>
+                  {activeOrdersCount > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full leading-tight shadow-xs animate-pulse">
+                      {activeOrdersCount > 99 ? '99+' : activeOrdersCount}
+                    </span>
+                  )}
                 </button>
                 <button 
                   onClick={() => window.location.href = '/dashboard/profile'}

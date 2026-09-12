@@ -5,6 +5,7 @@ namespace App\Domains\Canteen;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Domains\Auth\User;
@@ -105,6 +106,11 @@ class Canteen extends Model
     public function vouchers(): HasMany
     {
         return $this->hasMany(Voucher::class);
+    }
+
+    public function couriers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'canteen_couriers', 'canteen_id', 'courier_id')->withTimestamps();
     }
 
     public function scopeApproved($query)

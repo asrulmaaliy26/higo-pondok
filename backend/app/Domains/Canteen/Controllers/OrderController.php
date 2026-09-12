@@ -51,13 +51,11 @@ class OrderController extends Controller
                 $base_delivery_fee = $pricing['base_delivery_fee'];
                 $admin_fee = $pricing['base_admin_fee'];
 
-                $courierUser = User::where('name', 'like', '%kurir1%')->first() ?: User::whereHas('roles', fn($q) => $q->where('name', 'kurir'))->first();
-
                 $order = Order::create([
                     'checkout_id' => $request->checkout_id ?: ('CHK-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(6))),
                     'user_id' => $user->id,
                     'canteen_id' => $canteen->id,
-                    'courier_id' => $courierUser ? $courierUser->id : null,
+                    'courier_id' => null,
                     'is_custom' => true,
                     'custom_notes' => $request->custom_notes,
                     'status' => 'pending',
@@ -85,14 +83,12 @@ class OrderController extends Controller
             $fees = Order::calculateUserRankedFees($totalQuantity, $userIndex);
             $delivery_fee = $fees['delivery_fee'];
             $admin_fee    = $fees['admin_fee'];
-                
-            $courierUser = User::where('name', 'like', '%kurir1%')->first() ?: User::whereHas('roles', fn($q) => $q->where('name', 'kurir'))->first();
 
             $order = Order::create([
                 'checkout_id' => $request->checkout_id ?: ('CHK-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(6))),
                 'user_id' => $user->id,
                 'canteen_id' => $canteen->id,
-                'courier_id' => $courierUser ? $courierUser->id : null,
+                'courier_id' => null,
                 'is_custom' => false,
                 'custom_notes' => $request->custom_notes ?: null,
                 'status' => 'pending',
@@ -192,7 +188,6 @@ class OrderController extends Controller
 
         $checkoutId = 'CHK-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(6));
         $createdOrders = [];
-        $courierUser = User::where('name', 'like', '%kurir1%')->first() ?: User::whereHas('roles', fn($q) => $q->where('name', 'kurir'))->first();
         $grandTotal = 0;
 
         DB::beginTransaction();
@@ -216,7 +211,7 @@ class OrderController extends Controller
                     'checkout_id' => $checkoutId,
                     'user_id' => $user->id,
                     'canteen_id' => $canteen->id,
-                    'courier_id' => $courierUser ? $courierUser->id : null,
+                    'courier_id' => null,
                     'is_custom' => false,
                     'custom_notes' => $cData['custom_notes'] ?? null,
                     'status' => 'pending',
@@ -317,7 +312,7 @@ class OrderController extends Controller
     {
         $canteenId = $request->query('canteen_id') ?? $request->input('canteen_id');
         
-        $query = Order::with(['user', 'items.product', 'courier', 'canteen'])
+        $query = Order::with(['user', 'items.product', 'courier', 'canteen.couriers:users.id,users.name'])
             ->orderBy('created_at', 'desc');
 
         if ($canteenId && $canteenId !== 'all') {
@@ -383,6 +378,91 @@ class OrderController extends Controller
         ]);
     }
 
+    // For Canteen: Batch Update order status (Lanjutkan Semua / Selesaikan Semua / Tolak Semua)
+    public function batchUpdateOrderStatus(Request $request)
+    {
+        $request->validate([
+            'order_ids' => 'required|array|min:1',
+            'order_ids.*' => 'integer',
+            'status' => 'required|in:pending,processing,completed,cancelled',
+        ]);
+
+        $user = $request->user();
+        $status = $request->status;
+
+        return DB::transaction(function () use ($request, $user, $status) {
+            $query = Order::with(['canteen', 'user', 'items.product', 'courier'])
+                ->whereIn('id', $request->order_ids)
+                ->lockForUpdate();
+
+            if (!$user->hasRole('admin')) {
+                $userCanteenIds = $user->canteens()->pluck('id');
+                if ($userCanteenIds->isEmpty()) {
+                    return response()->json(['message' => 'Anda belum memiliki kantin'], 403);
+                }
+                $query->whereIn('canteen_id', $userCanteenIds);
+            }
+
+            $orders = $query->get();
+            $updatedOrders = [];
+            $skippedOrders = [];
+
+            foreach ($orders as $order) {
+                if ($status === 'processing') {
+                    $canteen = $order->canteen;
+                    $assignedCouriers = DB::table('canteen_couriers')
+                        ->where('canteen_id', $order->canteen_id)
+                        ->pluck('courier_id')
+                        ->toArray();
+
+                    if (empty($assignedCouriers)) {
+                        $skippedOrders[] = [
+                            'id' => $order->id,
+                            'canteen_id' => $order->canteen_id,
+                            'canteen_name' => $canteen ? $canteen->name : "Toko #{$order->canteen_id}",
+                            'reason' => 'Toko belum memiliki kurir yang ditugaskan oleh Admin.'
+                        ];
+                        continue;
+                    }
+
+                    if (!$order->courier_id) {
+                        $order->courier_id = $assignedCouriers[0];
+                    }
+                }
+
+                $order->update([
+                    'status' => $status,
+                    'courier_id' => $order->courier_id
+                ]);
+
+                $updatedOrders[] = $order->load(['canteen.couriers:users.id,users.name', 'user', 'items.product', 'courier']);
+            }
+
+            $successCount = count($updatedOrders);
+            $skippedCount = count($skippedOrders);
+
+            if ($successCount > 0 && $skippedCount === 0) {
+                $message = 'Status semua pesanan berhasil diperbarui!';
+            } elseif ($successCount > 0 && $skippedCount > 0) {
+                $skippedNames = implode(', ', array_unique(array_column($skippedOrders, 'canteen_name')));
+                $message = "{$successCount} pesanan berhasil diproses. Namun toko {$skippedNames} belum memiliki kurir yang ditugaskan Admin.";
+            } elseif ($successCount === 0 && $skippedCount > 0) {
+                $skippedNames = implode(', ', array_unique(array_column($skippedOrders, 'canteen_name')));
+                $message = "Toko {$skippedNames} belum memiliki kurir yang ditugaskan oleh Admin. Pesanan tidak dapat diteruskan ke kurir.";
+            } else {
+                $message = 'Tidak ada pesanan yang diubah.';
+            }
+
+            return response()->json([
+                'message' => $message,
+                'updated_orders' => $updatedOrders,
+                'skipped_orders' => $skippedOrders,
+                'success_count' => $successCount,
+                'skipped_count' => $skippedCount
+            ]);
+        });
+    }
+
     // For Canteen: Update order status (Lanjutkan / Process / Cancel)
     public function updateOrderStatus(Request $request, $id)
     {
@@ -392,8 +472,36 @@ class OrderController extends Controller
 
         return DB::transaction(function () use ($id, $request) {
             $order = $this->findCanteenOrder($request, $id, true);
-            $order->update(['status' => $request->status]);
-            return response()->json(['message' => 'Status pesanan berhasil diperbarui', 'order' => $order]);
+
+            if ($request->status === 'processing') {
+                $canteen = $order->canteen;
+                $assignedCouriers = DB::table('canteen_couriers')
+                    ->where('canteen_id', $order->canteen_id)
+                    ->pluck('courier_id')
+                    ->toArray();
+
+                if (empty($assignedCouriers)) {
+                    $canteenName = $canteen ? $canteen->name : "Toko";
+                    return response()->json([
+                        'message' => "Toko \"{$canteenName}\" belum memiliki kurir yang ditugaskan oleh Admin. Pesanan tidak dapat diteruskan ke kurir.",
+                        'error_code' => 'NO_COURIER_ASSIGNED'
+                    ], 422);
+                }
+
+                if (!$order->courier_id) {
+                    $order->courier_id = $assignedCouriers[0];
+                }
+            }
+
+            $order->update([
+                'status' => $request->status,
+                'courier_id' => $order->courier_id
+            ]);
+
+            return response()->json([
+                'message' => 'Status pesanan berhasil diperbarui',
+                'order' => $order->load(['canteen.couriers:users.id,users.name', 'user', 'items.product', 'courier'])
+            ]);
         });
     }
 
@@ -496,10 +604,28 @@ class OrderController extends Controller
         });
     }
 
-    // For Canteen: Get list of couriers
+    // For Canteen: Get list of couriers assigned to this canteen
     public function getCouriers(Request $request)
     {
-        $couriers = User::role('kurir')->where('is_working', true)->get(['id', 'name', 'phone']);
+        $canteenId = $request->query('canteen_id') ?? $request->input('canteen_id');
+        if (!$canteenId) {
+            $canteen = $request->user()->canteens()->first();
+            $canteenId = $canteen?->id;
+        }
+
+        if (!$canteenId) {
+            return response()->json([]);
+        }
+
+        $canteen = Canteen::find($canteenId);
+        if (!$canteen) {
+            return response()->json([]);
+        }
+
+        $couriers = $canteen->couriers()
+            ->where('is_working', true)
+            ->get(['users.id', 'users.name', 'users.phone']);
+
         return response()->json($couriers);
     }
 
@@ -517,14 +643,49 @@ class OrderController extends Controller
                 return response()->json(['message' => 'Pesanan tidak bisa diproses karena status saat ini: ' . $order->status], 400);
             }
 
-            $courierId = ($request->courier_id === 'self' || $request->courier_id === '' || $request->courier_id === 'null') ? null : $request->courier_id;
+            $canteen = $order->canteen;
+            $assignedCouriers = $canteen ? $canteen->couriers()->pluck('users.id')->toArray() : [];
+            $inputCourierId = $request->courier_id;
+            $isSelf = ($inputCourierId === 'self');
+
+            // Jika bukan self delivery dan toko tidak punya kurir sama sekali:
+            if (!$isSelf && empty($assignedCouriers)) {
+                return response()->json([
+                    'message' => 'Toko belum memiliki kurir yang ditugaskan oleh Admin. Pesanan tidak dapat diteruskan ke kurir.',
+                    'error_code' => 'NO_COURIER_ASSIGNED'
+                ], 422);
+            }
+
+            // Jika kurir_id tidak dikirim (atau auto-assign):
+            // Jika toko memiliki tepat 1 kurir, otomatis gunakan kurir tersebut
+            if (!$isSelf && (empty($inputCourierId) || $inputCourierId === 'auto' || $inputCourierId === 'null')) {
+                if (count($assignedCouriers) === 1) {
+                    $courierId = $assignedCouriers[0];
+                } else {
+                    return response()->json([
+                        'message' => 'Silakan pilih salah satu kurir toko yang tersedia untuk mengantar pesanan ini.'
+                    ], 422);
+                }
+            } elseif ($isSelf) {
+                $courierId = null;
+            } else {
+                $courierId = (int) $inputCourierId;
+                if (!in_array($courierId, $assignedCouriers)) {
+                    return response()->json([
+                        'message' => 'Kurir yang dipilih bukan merupakan kurir yang terdaftar untuk toko ini.'
+                    ], 422);
+                }
+            }
 
             $order->update([
                 'courier_id' => $courierId,
                 'status' => 'processing'
             ]);
 
-            return response()->json(['message' => 'Pesanan berhasil diproses', 'order' => $order]);
+            return response()->json([
+                'message' => 'Pesanan berhasil diproses dan diteruskan' . ($courierId ? ' ke kurir' : ' (antar sendiri)'),
+                'order' => $order->load(['canteen', 'user', 'items.product', 'courier'])
+            ]);
         });
     }
 
@@ -559,12 +720,20 @@ class OrderController extends Controller
     // For Courier: View all orders or filtered by scope/status/canteen/date/search
     public function courierOrders(Request $request)
     {
-        $courierId = $request->user()->id;
+        $user = $request->user();
+        $courierId = $user->id;
         $scope = $request->query('scope', 'all'); // 'all', 'assigned', 'pending', 'processing', 'completed', 'cancelled'
         $search = $request->query('search');
         $canteenId = $request->query('canteen_id');
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
+
+        if (!$user->hasRole('admin')) {
+            $assignedCanteenIds = $user->assignedCanteens()->pluck('canteens.id')->toArray();
+            if (empty($assignedCanteenIds)) {
+                return response()->json([]);
+            }
+        }
 
         $query = Order::with(['canteen', 'user', 'items.product', 'courier'])
             ->orderByRaw("CASE 
@@ -576,9 +745,18 @@ class OrderController extends Controller
             END ASC")
             ->orderBy('created_at', 'desc');
 
+        if (!$user->hasRole('admin')) {
+            $query->whereIn('canteen_id', $assignedCanteenIds)
+                  ->where('courier_id', $courierId);
+        }
+
         if ($scope === 'assigned') {
             $query->where('courier_id', $courierId);
         } elseif ($scope === 'pending') {
+            // Pending orders belum diteruskan oleh kantin
+            if (!$user->hasRole('admin')) {
+                return response()->json([]);
+            }
             $query->where('status', 'pending');
         } elseif ($scope === 'processing') {
             $query->where('status', 'processing');
@@ -923,10 +1101,10 @@ class OrderController extends Controller
             $order->status = 'cancelled';
             $order->save();
 
-            // Restore sold_count, and restore stock
+            // Restore sold_count, and decrement stock
             foreach ($order->items as $item) {
                 if ($item->product) {
-                    $item->product->increment('stock', $item->quantity);
+                    $item->product->decrement('stock', $item->quantity);
                     $item->product->decrement('sold_count', $item->quantity);
                 }
             }

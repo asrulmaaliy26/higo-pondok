@@ -62,6 +62,11 @@ class User extends Authenticatable
         return $this->hasMany(\App\Domains\Canteen\Canteen::class);
     }
 
+    public function assignedCanteens(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(\App\Domains\Canteen\Canteen::class, 'canteen_couriers', 'courier_id', 'canteen_id')->withTimestamps();
+    }
+
     protected static function booted()
     {
         static::deleting(function (User $user) {

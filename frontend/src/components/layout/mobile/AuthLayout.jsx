@@ -8,10 +8,14 @@ export default function AuthLayout({ children, title, subtitle }) {
       <div className="flex w-full flex-col justify-center px-4 py-12 sm:px-6 lg:w-1/2 lg:px-20 xl:px-24">
         <div className="mx-auto w-full max-w-md animate-fade-in-up">
           <div className="mb-10 text-center lg:text-left">
-            <Link to="/" className="inline-block">
-              <span className="text-3xl font-extrabold tracking-tight text-green-600 dark:text-green-400">
-                Higo Pondok
-              </span>
+            <Link to="/" className="inline-flex items-center gap-3">
+              <img src="/logo-transparent.png" alt="HiGO" className="h-12 w-12 object-contain" />
+              <div>
+                <span className="text-3xl font-black tracking-tight text-gray-900 dark:text-white">
+                  Hi<span className="text-green-600">GO</span>
+                </span>
+                <span className="block text-xs font-semibold text-gray-500 uppercase tracking-widest">Higo Pondok</span>
+              </div>
             </Link>
             <h2 className="mt-6 text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
               {title}

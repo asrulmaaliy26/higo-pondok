@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, Edit2, ShieldCheck, PlusCircle, CreditCard, Users, Bookmark, Activity, Ticket, Shield, LogOut, ChevronRight, Store, Camera, Save, X, Plus, BookOpen, Calculator, Coins } from 'lucide-react';
+import { ArrowLeft, Edit2, ShieldCheck, PlusCircle, CreditCard, Users, Bookmark, Activity, Ticket, Shield, LogOut, ChevronRight, Store, Camera, Save, X, Plus, BookOpen, Calculator, Coins, Smartphone } from 'lucide-react';
 import { ROLES, getUserRole } from '../../config/roles';
 import { useAuthStore } from '../../store/authStore';
+import { usePwaStore } from '../../store/pwaStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
@@ -22,6 +23,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const userRole = getUserRole(user);
 
+  const { isStandalone, installApp } = usePwaStore();
   const queryClient = useQueryClient();
   const [filterGender, setFilterGender] = useState('');
   const [showEditUserModal, setShowEditUserModal] = useState(false);
@@ -436,6 +438,19 @@ export default function Profile() {
         <div className="mb-5 sm:mb-6 animate-fade-in-up delay-75">
           <h3 className="px-1 text-xs sm:text-sm font-bold text-gray-600 dark:text-gray-400 mb-2 sm:mb-3">Aktivitas di Higo Pondok</h3>
           <div className="bg-white dark:bg-gray-900 rounded-[20px] sm:rounded-[24px] overflow-hidden shadow-[0_2px_10px_rgb(0,0,0,0.02)] border border-gray-200 dark:border-gray-700">
+            <MenuItem 
+              icon={Smartphone} 
+              title="Pasang Aplikasi (PWA)" 
+              badge={isStandalone ? "Sudah Terpasang" : "Pasang di HP"} 
+              badgeColor={isStandalone ? "bg-emerald-600" : "bg-green-600"}
+              onClick={() => {
+                if (isStandalone) {
+                  toast.success('Higo Pondok sudah terpasang di HP Anda!');
+                } else {
+                  installApp();
+                }
+              }} 
+            />
             <MenuItem icon={Activity} title="Alur Kerja Saya" onClick={() => setShowWorkflowModal(true)} />
             <MenuItem icon={CreditCard} title="Aktivitas Pembayaran" onClick={() => navigate({ to: '/dashboard/pembayaran' })} />
             <MenuItem icon={BookOpen} title="Buku Panduan & SOP" onClick={() => navigate({ to: '/dashboard/panduan' })} />

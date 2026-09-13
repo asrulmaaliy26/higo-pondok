@@ -9,10 +9,12 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
+import { usePwaStore } from './store/pwaStore';
 
-// Role Guard & Loading Bar
+// Role Guard, Loading Bar & PWA Prompt
 import RoleGuard from './components/RoleGuard';
 import GlobalLoadingBar from './components/common/GlobalLoadingBar';
+import PwaInstallPrompt from './components/common/PwaInstallPrompt';
 import { ROLES } from './config/roles';
 
 // ==========================================
@@ -73,6 +75,7 @@ const rootRoute = createRootRoute({
       <React.Suspense fallback={<PageLoader />}>
         <Outlet />
       </React.Suspense>
+      <PwaInstallPrompt />
     </>
   ),
 });
@@ -322,10 +325,12 @@ const router = createRouter({
 
 function App() {
   const initTheme = useThemeStore((state) => state.initTheme);
+  const initPwa = usePwaStore((state) => state.initPwa);
 
   React.useEffect(() => {
     initTheme();
-  }, [initTheme]);
+    initPwa();
+  }, [initTheme, initPwa]);
 
   return (
     <QueryClientProvider client={queryClient}>

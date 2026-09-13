@@ -1,23 +1,23 @@
 import React from 'react';
 import { Link } from '@tanstack/react-router';
-import { Shield, Zap, Users, ChevronRight, BookOpen } from 'lucide-react';
+import { Shield, Zap, Users, ChevronRight, BookOpen, Smartphone } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { usePwaStore } from '../../store/pwaStore';
 import ThemeToggle from '../../components/ui/ThemeToggle';
 
 export default function Home() {
   const token = useAuthStore((state) => state.token);
+  const { isStandalone, installApp } = usePwaStore();
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-950 font-sans selection:bg-green-200">
       {/* Navbar */}
       <nav className="fixed top-0 w-full z-50 glass border-b border-gray-200/50 dark:border-gray-800/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex-shrink-0 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-green-600 flex items-center justify-center">
-                <BookOpen className="w-5 h-5 text-white" />
-              </div>
-              <span className="font-bold text-xl text-gray-900 dark:text-white tracking-tight">
-                Higo Pondok
+            <div className="flex-shrink-0 flex items-center gap-2.5">
+              <img src="/logo-transparent.png" alt="HiGO" className="h-9 w-9 object-contain" />
+              <span className="font-black text-xl text-gray-900 dark:text-white tracking-tight">
+                Hi<span className="text-green-600">GO</span> <span className="font-semibold text-base text-gray-600 dark:text-gray-300">Pondok</span>
               </span>
             </div>
             <div className="hidden md:flex space-x-8">
@@ -73,6 +73,16 @@ export default function Home() {
               {token ? "Ke Dashboard" : "Mulai Sekarang"}
               <ChevronRight className="ml-2 -mr-1 w-5 h-5" />
             </Link>
+            {!isStandalone && (
+              <button
+                type="button"
+                onClick={installApp}
+                className="inline-flex items-center justify-center px-6 py-3.5 border border-green-600/30 text-base font-medium rounded-full text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-950/50 hover:bg-green-100 dark:hover:bg-green-900/50 shadow-sm transition-all hover:-translate-y-0.5"
+              >
+                <Smartphone className="w-5 h-5 mr-2 text-green-600 dark:text-green-400" />
+                Pasang di HP
+              </button>
+            )}
             <a href="#fitur" className="inline-flex items-center justify-center px-8 py-3.5 border border-gray-300 dark:border-gray-700 text-base font-medium rounded-full text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
               Pelajari Fitur
             </a>
@@ -145,9 +155,11 @@ export default function Home() {
       {/* Footer */}
       <footer className="bg-gray-50 dark:bg-gray-950 border-t border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-green-600" />
-            <span className="text-xl font-bold text-gray-900 dark:text-white">Higo Pondok</span>
+          <div className="flex items-center gap-2.5">
+            <img src="/logo-transparent.png" alt="HiGO" className="h-8 w-8 object-contain" />
+            <span className="text-xl font-black text-gray-900 dark:text-white">
+              Hi<span className="text-green-600">GO</span> <span className="font-semibold text-base text-gray-600 dark:text-gray-300">Pondok</span>
+            </span>
           </div>
           <p className="text-gray-500 text-sm">
             &copy; {new Date().getFullYear()} Higo Pondok. Hak Cipta Dilindungi.

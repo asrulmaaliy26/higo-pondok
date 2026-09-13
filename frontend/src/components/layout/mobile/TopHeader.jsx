@@ -8,9 +8,10 @@ export default function TopHeader({ user, isNoTopHeaderPage }) {
   return (
     <header className="flex h-16 shrink-0 items-center justify-between lg:justify-end border-b border-gray-200 bg-white/70 backdrop-blur-lg dark:bg-gray-900/70 dark:border-gray-800 px-4 sm:px-6 lg:px-8 shadow-sm">
       {/* Mobile App Title (Visible only on mobile header) */}
-      <div className="lg:hidden flex items-center">
-        <h1 className="text-lg font-bold text-green-600 dark:text-green-400">
-          Higo Pondok
+      <div className="lg:hidden flex items-center gap-2">
+        <img src="/logo-transparent.png" alt="HiGO" className="h-8 w-8 object-contain" />
+        <h1 className="text-lg font-black text-gray-900 dark:text-white tracking-tight">
+          Hi<span className="text-green-600">GO</span> <span className="font-semibold text-sm text-gray-600 dark:text-gray-300">Pondok</span>
         </h1>
       </div>
       

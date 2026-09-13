@@ -16,8 +16,11 @@ export default function DesktopSidebar({ sidebarMenus }) {
   return (
     <aside className="hidden lg:flex flex-col inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 shrink-0">
       <div className="flex h-16 shrink-0 items-center justify-between px-6 border-b border-gray-200 dark:border-gray-700">
-        <Link to="/" className="text-2xl font-bold text-green-600 dark:text-green-400">
-          Higo Pondok
+        <Link to="/" className="flex items-center gap-2.5">
+          <img src="/logo-transparent.png" alt="HiGO" className="h-9 w-9 object-contain" />
+          <span className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
+            Hi<span className="text-green-600">GO</span> <span className="font-semibold text-base text-gray-600 dark:text-gray-300">Pondok</span>
+          </span>
         </Link>
       </div>
 

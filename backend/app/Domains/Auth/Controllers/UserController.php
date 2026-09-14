@@ -97,6 +97,7 @@ class UserController extends Controller
         unset($data['status']);
         unset($data['canteen_ids']);
 
+        $passwordChanged = isset($data['password']);
         $user->update($data);
         
         if ($role) {
@@ -107,6 +108,12 @@ class UserController extends Controller
             if (is_array($canteenIds)) {
                 $user->assignedCanteens()->sync($canteenIds);
             }
+        }
+
+        // Jika password diganti oleh admin, cabut semua token user itu
+        // agar dipaksa login ulang dengan password yang baru.
+        if ($passwordChanged) {
+            $user->tokens()->delete();
         }
 
         return response()->json([

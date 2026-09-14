@@ -139,8 +139,10 @@ class AuthController extends Controller
             }
         }
         
+        $passwordChanged = false;
         if ($request->filled('password')) {
             $user->password = Hash::make($request->password);
+            $passwordChanged = true;
         }
 
         if ($request->hasFile('avatar')) {
@@ -152,6 +154,13 @@ class AuthController extends Controller
         }
         
         $user->save();
+
+        // Jika password diganti, cabut semua token lama kecuali token yang sedang aktif
+        // agar sesi di device lain dipaksa login ulang dengan password baru.
+        if ($passwordChanged) {
+            $currentTokenId = $request->user()->currentAccessToken()->id;
+            $user->tokens()->where('id', '!=', $currentTokenId)->delete();
+        }
 
         return response()->json([
             'message' => 'Profil berhasil diperbarui',

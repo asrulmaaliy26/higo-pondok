@@ -48,7 +48,7 @@ export default function KurirDashboard({ user }) {
   const completedCount = completedToday.length;
 
   const totalEarnings = orders.filter(o => o.status === 'completed' && o.courier_id === user?.id).reduce((sum, o) => {
-     return sum + (parseFloat(o.delivery_fee || 0) * 0.8);
+     return sum + parseFloat(o.delivery_fee || 0);
   }, 0);
 
   const stats = [

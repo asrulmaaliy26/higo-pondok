@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { ChevronLeft, ShoppingBag, CheckCircle, Clock, Truck, MessageCircle, X, Image as ImageIcon, ChevronDown, ChevronRight, Store, Upload, Trash2, RotateCcw, FileText, Filter, Search, AlertTriangle, AlertCircle, Download, ExternalLink, Printer, User, UploadCloud, Camera, FileUp, Plus, Calendar, Eye } from 'lucide-react';
+import { ChevronLeft, ShoppingBag, CheckCircle, Clock, Truck, MessageCircle, X, Image as ImageIcon, ChevronDown, ChevronRight, Store, Upload, Trash2, RotateCcw, FileText, Filter, Search, AlertTriangle, AlertCircle, Download, ExternalLink, Printer, User, UploadCloud, Camera, FileUp, Plus, Calendar, Eye, Calculator } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getStorageUrl } from '../../lib/axios';
 import { useCanteenStore } from '../../store/canteenStore';
 import { getFileType, isImageFile, isHeifFile, isPdfFile, formatFileSize, getFileNameFromPath, compressImageFiles } from '../../lib/fileUtils';
 import ThermalReceiptModal from '../../components/receipt/ThermalReceiptModal';
+import AdminAccountingModal from '../../components/modals/AdminAccountingModal';
 import santriData from '../../data/santri.json';
 import { PRICING_CONFIG } from '../../config/pricing';
 
@@ -203,6 +204,7 @@ export default function PesananToko() {
   
   const [selectedProofs, setSelectedProofs] = useState([]);
   const [fullscreenImage, setFullscreenImage] = useState(null);
+  const [showAccountingModal, setShowAccountingModal] = useState(false);
 
   // Receipt Modal State for Canteen
   const [receiptModalConfig, setReceiptModalConfig] = useState({
@@ -1260,9 +1262,16 @@ export default function PesananToko() {
         {/* 6. Footer: Total Price & Canteen Operational Actions */}
         <div className="pt-2.5 border-t border-gray-200 dark:border-gray-700/80 flex items-center justify-between gap-2 flex-wrap">
           <div className="min-w-0">
-            <span className="text-sm sm:text-base font-black text-green-700 dark:text-green-400 block leading-tight">
-              Rp {formatRupiah(order.total_price)}
-            </span>
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-sm sm:text-base font-black text-green-700 dark:text-green-400 block leading-tight">
+                Rp {formatRupiah(order.total_price)}
+              </span>
+              <div className="text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/80 px-2 py-0.5 rounded-md border border-gray-200/60 dark:border-gray-700/60 flex items-center gap-1.5 flex-wrap">
+                <span>Makanan: <strong className="text-gray-900 dark:text-white">Rp {formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}</strong></span>
+                <span>•</span>
+                <span>Ongkir: <strong className="text-blue-600 dark:text-blue-400">Rp {formatRupiah(order.delivery_fee)}</strong></span>
+              </div>
+            </div>
             {Boolean(order.is_custom) && parseFloat(order.total_price) === 0 && (
               <span className="text-[10px] sm:text-xs text-amber-600 font-semibold block">Harga belum diset</span>
             )}
@@ -1695,9 +1704,14 @@ export default function PesananToko() {
                   </div>
                 )}
 
-                {/* Subtotal Toko & Custom Price Setting */}
+                {/* Produk Toko & Custom Price Setting */}
                 <div className="flex items-center justify-between pt-1 border-t border-gray-200/50 dark:border-gray-700/50 text-[10px] sm:text-xs">
-                  <span className="text-gray-500 dark:text-gray-400 font-semibold">Subtotal Toko:</span>
+                  <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 font-semibold">
+                    <span>Produk Toko:</span>
+                    <span className="text-[9.5px] font-normal text-gray-400">
+                      (Ongkir: Rp {formatRupiah(o.delivery_fee)})
+                    </span>
+                  </div>
                   <div className="flex items-center gap-1.5">
                     {Boolean(o.is_custom) && o.payment_status !== 'paid' && (o.status === 'pending' || o.status === 'processing') && (
                       <button 
@@ -1715,7 +1729,7 @@ export default function PesananToko() {
                       </button>
                     )}
                     <span className="font-bold text-gray-900 dark:text-white">
-                      Rp {formatRupiah(o.total_price)}
+                      Rp {formatRupiah(Math.max(0, parseFloat(o.total_price || 0) - parseFloat(o.delivery_fee || 0) - parseFloat(o.admin_fee || 0)))}
                     </span>
                   </div>
                 </div>
@@ -1734,6 +1748,9 @@ export default function PesananToko() {
               <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-semibold">
                 ({group.orders.length} Toko)
               </span>
+              <div className="text-[9.5px] sm:text-[10px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/80 px-1.5 py-0.5 rounded border border-gray-200/50 dark:border-gray-700/50 flex items-center gap-1">
+                <span>Ongkir: <strong className="text-blue-600 dark:text-blue-400">Rp {formatRupiah(group.totalDeliveryFee)}</strong></span>
+              </div>
             </div>
           </div>
 
@@ -1859,6 +1876,14 @@ export default function PesananToko() {
             </div>
           </div>
           <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end flex-wrap">
+            <button
+              onClick={() => setShowAccountingModal(true)}
+              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs active:scale-95"
+              title="Lihat Logika & Rumus Akuntansi"
+            >
+              <Calculator className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Akuntansi & Ongkir</span>
+            </button>
             <button
               onClick={handlePrintBatchReceipt}
               className="px-2.5 py-1.5 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs active:scale-95"
@@ -2130,31 +2155,62 @@ export default function PesananToko() {
               </div>
             ) : (
               <>
+                {/* Banner Logika Akuntansi & Ongkir */}
+                <div className="bg-gradient-to-br from-green-900 via-emerald-900 to-green-950 text-white rounded-2xl p-4 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-green-700/50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-green-500/20 border border-green-400/30 flex items-center justify-center text-green-300 shrink-0">
+                      <Calculator className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                        Sistem & Logika Akuntansi Toko
+                        <span className="text-[10px] bg-green-500/30 text-green-300 font-extrabold px-2 py-0.5 rounded-full border border-green-400/20">
+                          Transparan
+                        </span>
+                      </h4>
+                      <p className="text-xs text-green-200/80">
+                        Total Belanja (HPJ) & Laba Bersih adalah hak toko Anda. Ongkir adalah hak petugas kurir pengantar santri.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowAccountingModal(true)}
+                    className="py-2 px-3.5 bg-green-600 hover:bg-green-500 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5 shrink-0 active:scale-95"
+                  >
+                    <Calculator className="w-4 h-4" />
+                    Panduan & Kalkulator Akuntansi
+                  </button>
+                </div>
+
                 {/* Summary Metric Cards (Khusus Kantin: Total Belanja, Total Modal, Laba Toko, Total Ongkir) */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
                   <div className="bg-white dark:bg-gray-900 p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
-                    <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium block mb-0.5">Total Belanja (HPJ)</span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium block mb-0.5">Omzet Menu (HPJ)</span>
                     <span className="text-base sm:text-lg font-black text-gray-900 dark:text-white">
                       Rp {(recapData?.summary?.total_products || 0).toLocaleString('id-ID')}
                     </span>
+                    <span className="text-[10px] text-gray-400 block mt-0.5">Penjualan Makanan</span>
                   </div>
                   <div className="bg-amber-50/60 dark:bg-amber-950/20 p-3.5 rounded-xl border border-amber-200/80 dark:border-amber-800/40 shadow-xs">
                     <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium block mb-0.5">Total Modal (HPP)</span>
                     <span className="text-base sm:text-lg font-black text-amber-700 dark:text-amber-300">
                       Rp {(recapData?.summary?.total_hpp || 0).toLocaleString('id-ID')}
                     </span>
+                    <span className="text-[10px] text-amber-600/80 dark:text-amber-400/80 block mt-0.5">Modal Belanja Riil</span>
                   </div>
                   <div className="bg-emerald-50 dark:bg-emerald-950/40 p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/50 shadow-xs">
                     <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-bold block mb-0.5">Laba Bersih Toko</span>
                     <span className="text-base sm:text-lg font-black text-emerald-700 dark:text-emerald-300">
                       Rp {(recapData?.summary?.total_profit || 0).toLocaleString('id-ID')}
                     </span>
+                    <span className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 block mt-0.5">100% Hak Toko</span>
                   </div>
-                  <div className="bg-white dark:bg-gray-900 p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
-                    <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium block mb-0.5">Total Ongkir</span>
+                  <div className="bg-blue-50/60 dark:bg-blue-950/20 p-3.5 rounded-xl border border-blue-200/80 dark:border-blue-800/40 shadow-xs">
+                    <span className="text-[11px] text-blue-700 dark:text-blue-400 font-medium block mb-0.5">Total Ongkir Kurir</span>
                     <span className="text-base sm:text-lg font-black text-blue-600 dark:text-blue-400">
                       Rp {(recapData?.summary?.total_delivery_fee || 0).toLocaleString('id-ID')}
                     </span>
+                    <span className="text-[10px] text-blue-600/80 dark:text-blue-400/80 block mt-0.5">Hak Driver/Kurir</span>
                   </div>
                 </div>
 
@@ -2169,33 +2225,38 @@ export default function PesananToko() {
                     </div>
                     <div className="divide-y divide-gray-200 dark:divide-gray-700">
                       {recapData.canteen_recap.map(c => (
-                        <div key={c.canteen_id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
-                          <div>
-                            <h4 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
-                              🏪 {c.canteen_name}
-                              <span className="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold px-2 py-0.5 rounded capitalize">
-                                Zona {c.category}
-                              </span>
-                            </h4>
-                            <p className="text-[11px] text-gray-500 mt-0.5">{c.order_count} Total Pesanan</p>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-wrap text-xs font-semibold">
-                            <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg text-gray-700 dark:text-gray-300">
-                              Produk: Rp {c.total_products.toLocaleString('id-ID')}
-                            </span>
-                            <span className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-1 rounded-lg">
-                              HPP: Rp {(c.total_hpp || 0).toLocaleString('id-ID')}
-                            </span>
-                            <span className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-1 rounded-lg font-bold">
-                              Laba: +Rp {(c.total_profit || 0).toLocaleString('id-ID')}
-                            </span>
-                            <span className="text-gray-300 dark:text-gray-600">|</span>
-                            <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-lg">
-                              Ongkir: Rp {c.total_delivery_fee.toLocaleString('id-ID')}
-                            </span>
-                            <span className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 px-2 py-1 rounded-lg font-bold ml-auto sm:ml-0">
+                        <div key={c.canteen_id} className="p-3.5 space-y-2 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                            <div>
+                              <h4 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
+                                🏪 {c.canteen_name}
+                                <span className="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold px-2 py-0.5 rounded capitalize">
+                                  Zona {c.category}
+                                </span>
+                              </h4>
+                              <p className="text-[11px] text-gray-500 mt-0.5">{c.order_count} Total Pesanan</p>
+                            </div>
+                            <div className="text-xs sm:text-sm font-black text-green-700 dark:text-green-400 self-start sm:self-auto">
                               Total Belanja: Rp {c.total_products.toLocaleString('id-ID')}
-                            </span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-semibold">
+                            <div className="bg-gray-50 dark:bg-gray-800/80 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700/60">
+                              <span className="text-[10px] text-gray-400 block mb-0.5">Produk & Modal (HPP)</span>
+                              <div className="text-gray-800 dark:text-gray-200">Rp {c.total_products.toLocaleString('id-ID')}</div>
+                              <div className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">HPP: Rp {(c.total_hpp || 0).toLocaleString('id-ID')}</div>
+                            </div>
+                            <div className="bg-emerald-50/80 dark:bg-emerald-950/30 p-2 rounded-lg border border-emerald-200/70 dark:border-emerald-800/50">
+                              <span className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 block mb-0.5">Laba Bersih Toko</span>
+                              <div className="text-emerald-700 dark:text-emerald-300 font-black">+Rp {(c.total_profit || 0).toLocaleString('id-ID')}</div>
+                              <div className="text-[10px] text-emerald-600/70 dark:text-emerald-400/70 font-normal">100% Hak Toko</div>
+                            </div>
+                            <div className="bg-blue-50/80 dark:bg-blue-950/30 p-2 rounded-lg border border-blue-200/70 dark:border-blue-800/50">
+                              <span className="text-[10px] text-blue-600/80 dark:text-blue-400/80 block mb-0.5">Ongkir Kurir</span>
+                              <div className="text-blue-700 dark:text-blue-300 font-bold">Rp {c.total_delivery_fee.toLocaleString('id-ID')}</div>
+                              <div className="text-[10px] text-blue-500/80 dark:text-blue-400/70 font-normal">Hak Antar Santri</div>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -2210,7 +2271,7 @@ export default function PesananToko() {
                       Rekap Per Wali / Santri
                     </h3>
                     <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                      Format ringkas: Total Belanja | Total Ongkir
+                      Format ringkas: Total Belanja | Total Ongkir Kurir
                     </p>
                   </div>
                   <div className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -2229,7 +2290,7 @@ export default function PesananToko() {
                             </span>
                             <span className="text-gray-300 dark:text-gray-600">|</span>
                             <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-lg">
-                              Ongkir: Rp {u.total_delivery_fee.toLocaleString('id-ID')}
+                              Ongkir Kurir: Rp {u.total_delivery_fee.toLocaleString('id-ID')}
                             </span>
                           </div>
                         </div>
@@ -3085,10 +3146,10 @@ export default function PesananToko() {
                 const canteenCat = activeOrderForSetPrice.canteen?.category || 'kauman';
                 const delFee = parseFloat(activeOrderForSetPrice.delivery_fee) > 0 
                   ? parseFloat(activeOrderForSetPrice.delivery_fee) 
-                  : (canteenCat === 'kota' ? PRICING_CONFIG.BASE_DELIVERY_FEE : 2000);
+                  : PRICING_CONFIG.BASE_DELIVERY_FEE;
                 const admFee = parseFloat(activeOrderForSetPrice.admin_fee) > 0 
                   ? parseFloat(activeOrderForSetPrice.admin_fee) 
-                  : (canteenCat === 'kota' ? PRICING_CONFIG.BASE_ADMIN_FEE : 1000);
+                  : PRICING_CONFIG.BASE_ADMIN_FEE;
                 const grandTotal = prodPrice > 0 ? (prodPrice + delFee + admFee) : 0;
 
                 return (
@@ -3728,6 +3789,12 @@ export default function PesananToko() {
         orders={receiptModalConfig.orders}
         courierName={receiptModalConfig.order?.courier?.name || 'Kantin Pondok'}
         title={receiptModalConfig.title}
+      />
+
+      {/* MODAL SISTEM & LOGIKA AKUNTANSI UNTUK KANTIN */}
+      <AdminAccountingModal
+        isOpen={showAccountingModal}
+        onClose={() => setShowAccountingModal(false)}
       />
     </div>
   );

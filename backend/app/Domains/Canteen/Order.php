@@ -292,21 +292,25 @@ class Order extends Model
         // 3 user pertama tidak terkena potongan (0), user ke-4 dst terkena potongan ke admin
         $discountRate = ($userDailyIndex > $cfg['user_threshold_limit']) ? $cfg['user_threshold_courier_cut'] : 0.0;
 
-        $rawDeliveryFee = (float) ($this->delivery_fee > 0 ? $this->delivery_fee : $baseDeliveryStandard);
-        $rawAdminFee = (float) ($this->admin_fee > 0 ? $this->admin_fee : $baseAdminStandard);
+        $dbDeliveryFee = (float) ($this->delivery_fee > 0 ? $this->delivery_fee : $baseDeliveryStandard);
+        $dbAdminFee = (float) ($this->admin_fee > 0 ? $this->admin_fee : $baseAdminStandard);
 
-        if ($rawAdminFee > $baseAdminStandard) {
-            // Sudah tersimpan potongan sebelumnya di database
-            $courierCutToAdmin = $rawAdminFee - $baseAdminStandard;
-            $deliveryFee = $rawDeliveryFee;
-            $adminFee = $rawAdminFee;
+        if ($dbAdminFee > $baseAdminStandard) {
+            // Sudah tersimpan potongan sebelumnya di database (misal saat checkout user ke-4+)
+            // dbAdminFee = 4.000, baseAdminStandard = 2.000 -> courierCutToAdmin = 2.000
+            // dbDeliveryFee = 1.000 -> rawDeliveryFee kotor = 1.000 + 2.000 = 3.000
+            $courierCutToAdmin = $dbAdminFee - $baseAdminStandard;
+            $rawDeliveryFee = $dbDeliveryFee + $courierCutToAdmin;
+            $deliveryFee = $dbDeliveryFee; // Bersih kurir
+            $adminFee = $dbAdminFee;
             $baseAdminFee = $baseAdminStandard;
         } else {
             // Hitung potongan dinamis berdasarkan urutan user hari ini
+            $rawDeliveryFee = $dbDeliveryFee;
             $courierCutToAdmin = min($rawDeliveryFee, $discountRate);
-            $deliveryFee = max(0, $rawDeliveryFee - $courierCutToAdmin);
-            $adminFee = $rawAdminFee + $courierCutToAdmin;
-            $baseAdminFee = $rawAdminFee;
+            $deliveryFee = max(0, $rawDeliveryFee - $courierCutToAdmin); // Bersih kurir
+            $adminFee = $dbAdminFee + $courierCutToAdmin;
+            $baseAdminFee = $dbAdminFee;
         }
 
         $totalPrice = (float) $this->total_price;
@@ -320,7 +324,7 @@ class Order extends Model
             'hpp' => $orderHpp,
             'canteen_profit' => $canteenProfit,
             'raw_delivery_fee' => $rawDeliveryFee,
-            'raw_admin_fee' => $rawAdminFee,
+            'raw_admin_fee' => $dbAdminFee,
             'delivery_fee' => $deliveryFee,
             'admin_fee' => $adminFee,
             'base_admin_fee' => $baseAdminFee,
@@ -459,9 +463,9 @@ class Order extends Model
                     'order_count' => 0,
                 ];
             }
-            $courierRecap[$courierId]['total_delivery_fee'] += $deliveryFee;
+            $courierRecap[$courierId]['total_delivery_fee'] += $metrics['raw_delivery_fee'];
             $courierRecap[$courierId]['total_courier_cut_to_admin'] += $courierCutToAdmin;
-            $courierRecap[$courierId]['net_delivery_fee'] += max(0, $deliveryFee - $courierCutToAdmin);
+            $courierRecap[$courierId]['net_delivery_fee'] += $deliveryFee;
             $courierRecap[$courierId]['grand_total'] += $totalPrice;
             $courierRecap[$courierId]['order_count'] += 1;
 

@@ -333,8 +333,8 @@ export default function Profile() {
           </div>
         )}
 
-        {/* Banner Admin: Ringkasan Akuntansi Sistem */}
-        {userRole === ROLES.ADMIN && (
+        {/* Banner Admin & Kantin: Ringkasan Akuntansi Sistem */}
+        {(userRole === ROLES.ADMIN || userRole === ROLES.KANTIN) && (
           <div className="mb-5 sm:mb-6 bg-gradient-to-br from-green-900 via-emerald-900 to-green-950 text-white rounded-[20px] sm:rounded-[24px] p-4 sm:p-5 shadow-lg border border-green-700/50 space-y-3 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -417,6 +417,13 @@ export default function Profile() {
                   icon={Ticket} 
                   title="Pengajuan Promo Toko" 
                   onClick={() => navigate({ to: '/dashboard/toko-saya/promo' })} 
+                />
+                <MenuItem 
+                  icon={Calculator} 
+                  title="Logika & Aturan Akuntansi" 
+                  badge="Aturan & Simulasi" 
+                  badgeColor="bg-green-600"
+                  onClick={() => setShowAccountingModal(true)} 
                   isLast={true}
                 />
               </>

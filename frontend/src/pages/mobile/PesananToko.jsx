@@ -2685,60 +2685,63 @@ export default function PesananToko() {
 
       {/* UPLOAD RECEIPT / BUKTI PESANAN MODAL */}
       {showReceiptModal && activeOrderForReceipt && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/60 flex flex-col justify-end animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-gray-900 w-full rounded-t-3xl overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-8 duration-300">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-none overflow-hidden flex flex-col max-h-[92vh] border border-gray-200 dark:border-gray-800 shadow-2xl my-auto">
+            <div className="p-3 sm:p-3.5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
               <div>
-                <h3 className="font-bold text-gray-900 dark:text-white text-lg">Upload Bukti Pesanan / Struk</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Order #{activeOrderForReceipt.id}</p>
+                <h3 className="font-bold text-gray-900 dark:text-white text-sm">Upload Bukti Pesanan / Struk</h3>
+                <p className="text-[10px] text-gray-500">Order #{activeOrderForReceipt.id}</p>
               </div>
-              <button onClick={() => {setShowReceiptModal(false); setReceiptFiles([]);}} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
-                <X className="w-5 h-5" />
+              <button 
+                onClick={() => {setShowReceiptModal(false); setReceiptFiles([]);}} 
+                className="w-7 h-7 bg-gray-100 dark:bg-gray-800 rounded-none border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <div className="p-3.5 sm:p-4 overflow-y-auto space-y-3">
+              <p className="text-xs text-gray-600 dark:text-gray-400">
                 Unggah berkas/foto struk atau bukti pesanan siap diantar untuk pesanan #{activeOrderForReceipt.id}.
               </p>
 
               {activeOrderForReceipt.proof_of_purchase && activeOrderForReceipt.proof_of_purchase.length > 0 && receiptFiles.length === 0 && (
-                <div className="mb-4 bg-purple-50 dark:bg-purple-950/40 p-3 rounded-xl border border-purple-100 dark:border-purple-900/50">
-                  <p className="text-xs font-bold text-purple-800 dark:text-purple-300 mb-2">
+                <div className="bg-purple-50 dark:bg-purple-950/40 p-2.5 rounded-none border border-purple-200 dark:border-purple-900/50">
+                  <p className="text-xs font-bold text-purple-800 dark:text-purple-300 mb-1.5">
                     Berkas Struk Terunggah Saat Ini ({Array.isArray(activeOrderForReceipt.proof_of_purchase) ? activeOrderForReceipt.proof_of_purchase.length : 1} Berkas):
                   </p>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5">
                     {(Array.isArray(activeOrderForReceipt.proof_of_purchase) ? activeOrderForReceipt.proof_of_purchase : [activeOrderForReceipt.proof_of_purchase]).map((path, idx) => {
                       const fileType = getFileType(path);
                       const isImg = fileType === 'image';
                       return (
-                        <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-purple-200 dark:border-purple-800 bg-black/10 flex items-center justify-center">
+                        <div key={idx} className="aspect-square rounded-none overflow-hidden border border-purple-200 dark:border-purple-800 bg-black/10 flex items-center justify-center">
                           {isImg ? (
                             <img src={getStorageUrl(path)} alt={`Current ${idx + 1}`} className="w-full h-full object-cover" />
                           ) : (
                             <div className="flex flex-col items-center justify-center p-1 text-center text-purple-600 dark:text-purple-300">
-                              <FileText className="w-6 h-6" />
-                              <span className="text-[9px] font-mono mt-1 uppercase truncate max-w-full px-1">{fileType}</span>
+                              <FileText className="w-5 h-5" />
+                              <span className="text-[8px] font-mono mt-0.5 uppercase truncate max-w-full px-1">{fileType}</span>
                             </div>
                           )}
                         </div>
                       );
                     })}
                   </div>
-                  <p className="text-[11px] text-purple-600 dark:text-purple-400 mt-2 italic">
+                  <p className="text-[10px] text-purple-600 dark:text-purple-400 mt-1.5 italic">
                     *Memilih berkas baru di bawah akan ditambahkan ke daftar bukti pesanan.
                   </p>
                 </div>
               )}
               
-              <div className="space-y-4">
+              <div className="space-y-2">
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
                       Foto Struk / Bukti Pesanan <span className="text-red-500">*</span>
                     </label>
-                    <span className="text-[11px] text-purple-600 dark:text-purple-400 font-medium">
-                      Semua format foto & bebas ukuran
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">
+                      Bebas format & auto kompres
                     </span>
                   </div>
                   <input
@@ -2764,44 +2767,41 @@ export default function PesananToko() {
                       }
                       e.target.value = '';
                     }}
-                    className="w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 dark:file:bg-purple-900/30 dark:file:text-purple-400 dark:text-gray-400 border border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-1 disabled:opacity-60"
+                    className="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-none file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 dark:file:bg-purple-900/30 dark:file:text-purple-400 dark:text-gray-400 border border-dashed border-gray-300 dark:border-gray-700 rounded-none p-1 disabled:opacity-60 cursor-pointer"
                   />
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 flex items-center gap-1">
-                    <span>✨ Otomatis dikompresi agar hemat ukuran & cepat terunggah.</span>
-                  </p>
                 </div>
 
                 {receiptFiles.length > 0 && (
                   <div>
-                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">
+                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
                       Berkas Dipilih ({receiptFiles.length}):
                     </p>
-                    <div className="grid grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1">
+                    <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
                       {receiptFiles.map((file, idx) => {
                         const isImg = isImageFile(file);
                         const isPdf = isPdfFile(file);
                         const isHeif = isHeifFile(file);
 
                         return (
-                          <div key={idx} className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-2 flex flex-col justify-between group">
+                          <div key={idx} className="relative rounded-none overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-1.5 flex flex-col justify-between group">
                             {isImg ? (
-                              <div className="aspect-video w-full rounded-lg overflow-hidden bg-black/5 mb-1.5">
+                              <div className="aspect-video w-full rounded-none overflow-hidden bg-black/5 mb-1">
                                 <img src={URL.createObjectURL(file)} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
                               </div>
                             ) : (
-                              <div className="aspect-video w-full rounded-lg bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/40 flex flex-col items-center justify-center text-purple-600 dark:text-purple-400 mb-1.5">
-                                <FileText className="w-6 h-6" />
-                                <span className="text-[10px] font-mono font-bold mt-0.5 uppercase">
+                              <div className="aspect-video w-full rounded-none bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/40 flex flex-col items-center justify-center text-purple-600 dark:text-purple-400 mb-1">
+                                <FileText className="w-5 h-5" />
+                                <span className="text-[9px] font-mono font-bold mt-0.5 uppercase">
                                   {isPdf ? 'PDF' : isHeif ? 'HEIF' : file.name.split('.').pop() || 'FILE'}
                                 </span>
                               </div>
                             )}
 
-                            <div className="pr-6">
-                              <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate" title={file.name}>
+                            <div className="pr-5">
+                              <p className="text-[10px] font-semibold text-gray-800 dark:text-gray-200 truncate" title={file.name}>
                                 {file.name}
                               </p>
-                              <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                              <p className="text-[9px] text-gray-400 flex items-center gap-1 font-mono">
                                 <span>{formatFileSize(file.size)}</span>
                                 {file.originalSize && file.originalSize > file.size && (
                                   <span className="text-purple-600 dark:text-purple-400 font-bold">
@@ -2814,10 +2814,10 @@ export default function PesananToko() {
                             <button
                               type="button"
                               onClick={() => setReceiptFiles(prev => prev.filter((_, i) => i !== idx))}
-                              className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-transform active:scale-95 z-10"
+                              className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white p-0.5 rounded-none shadow-xs cursor-pointer"
                               title="Hapus berkas ini"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-3 h-3" />
                             </button>
                           </div>
                         );
@@ -2828,10 +2828,10 @@ export default function PesananToko() {
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-3 sticky bottom-0 bg-white dark:bg-gray-900">
+            <div className="p-3 border-t border-gray-200 dark:border-gray-700 flex gap-2 sticky bottom-0 bg-white dark:bg-gray-900">
               <button 
                 onClick={() => {setShowReceiptModal(false); setReceiptFiles([]);}}
-                className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold"
+                className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-none border border-gray-200 dark:border-gray-700 font-bold text-xs cursor-pointer"
               >
                 Batal
               </button>
@@ -2844,17 +2844,17 @@ export default function PesananToko() {
                   });
                   uploadReceiptMutation.mutate({ id: activeOrderForReceipt.id, formData, canteen_id: activeOrderForReceipt.canteen_id });
                 }}
-                className="flex-[2] py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:bg-gray-400 flex items-center justify-center gap-2 shadow-sm"
+                className="flex-[2] py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-none font-bold text-xs transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
               >
                 {uploadReceiptMutation.isPending ? (
-                  <span className="flex items-center gap-2">
-                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent inline-block"></span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent inline-block"></span>
                     <span>Memproses...</span>
                   </span>
                 ) : (
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-1.5">
+                    <UploadCloud className="w-3.5 h-3.5" />
                     <span>Unggah Bukti</span>
-                    <CheckCircle className="w-5 h-5" />
                   </span>
                 )}
               </button>
@@ -2866,28 +2866,31 @@ export default function PesananToko() {
 
       {/* MANUAL ORDER MODAL */}
       {showManualModal && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl my-auto">
-            <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Buat Pesanan Manual</h3>
-              <button onClick={() => setShowManualModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                <X className="w-6 h-6" />
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-none w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl my-auto border border-gray-200 dark:border-gray-800">
+            <div className="flex justify-between items-center p-3 sm:p-3.5 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Buat Pesanan Manual</h3>
+              <button 
+                onClick={() => setShowManualModal(false)} 
+                className="w-7 h-7 bg-gray-100 dark:bg-gray-800 rounded-none border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-4 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-              <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-xl border border-green-100 dark:border-green-900/50">
-                <p className="text-xs text-green-800 dark:text-green-300">
+            <div className="p-3.5 sm:p-4 space-y-2.5 max-h-[75vh] overflow-y-auto">
+              <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded-none border border-green-200 dark:border-green-900/50">
+                <p className="text-[11px] text-green-800 dark:text-green-300">
                   Buatkan tagihan/pesanan tambahan atas nama Santri. Pesanan ini akan langsung muncul di HP Santri untuk dibayar.
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Pilih Santri <span className="text-red-500">*</span></label>
+                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-0.5">Pilih Santri <span className="text-red-500">*</span></label>
                 <select
                   value={manualUserId}
                   onChange={e => setManualUserId(e.target.value)}
-                  className="w-full p-3 border rounded-xl text-sm dark:bg-gray-800 dark:border-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-none text-xs dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-green-500 focus:outline-hidden"
                 >
                   <option value="">-- Pilih Santri --</option>
                   {santriList.map(s => (
@@ -2899,25 +2902,25 @@ export default function PesananToko() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Catatan Pesanan / Barang <span className="text-red-500">*</span></label>
+                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-0.5">Catatan Pesanan / Barang <span className="text-red-500">*</span></label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={manualNotes}
                   onChange={e => setManualNotes(e.target.value)}
                   placeholder="Contoh: Pembelian Obat Maag + Biaya Pengantaran..."
-                  className="w-full p-3 border rounded-xl text-sm dark:bg-gray-800 dark:border-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-none text-xs dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-green-500 focus:outline-hidden"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Harga Produk / Barang Asli (Rp) <span className="text-red-500">*</span></label>
+                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-0.5">Harga Produk / Barang Asli (Rp) <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   inputMode="numeric"
                   value={manualPrice}
                   onChange={e => setManualPrice(e.target.value.replace(/[^0-9]/g, ''))}
                   placeholder="Contoh: 12000"
-                  className="w-full p-3 border rounded-xl text-sm dark:bg-gray-800 dark:border-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-none text-xs dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-green-500 focus:outline-hidden font-mono"
                 />
               </div>
 
@@ -2929,21 +2932,21 @@ export default function PesananToko() {
                 const grandTotal = prodPrice > 0 ? (prodPrice + delFee + admFee) : 0;
 
                 return (
-                  <div className="bg-gray-50 dark:bg-gray-800/60 p-3 rounded-xl border border-gray-200 dark:border-gray-700 space-y-1.5 text-xs text-gray-600 dark:text-gray-400">
+                  <div className="bg-gray-50 dark:bg-gray-800/60 p-2.5 rounded-none border border-gray-200 dark:border-gray-700 space-y-1 text-xs text-gray-600 dark:text-gray-400 font-mono">
                     <div className="flex justify-between">
-                      <span>Harga Produk / Barang:</span>
+                      <span className="font-sans text-[11px]">Harga Produk / Barang:</span>
                       <span className="font-semibold text-gray-900 dark:text-white">Rp {formatRupiah(prodPrice)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Ongkos Kirim (Otomatis):</span>
+                      <span className="font-sans text-[11px]">Ongkos Kirim (Otomatis):</span>
                       <span className="font-semibold text-gray-900 dark:text-white">+ Rp {formatRupiah(delFee)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Biaya Admin (Otomatis):</span>
+                      <span className="font-sans text-[11px]">Biaya Admin (Otomatis):</span>
                       <span className="font-semibold text-gray-900 dark:text-white">+ Rp {formatRupiah(admFee)}</span>
                     </div>
-                    <div className="flex justify-between pt-1.5 border-t border-gray-200 dark:border-gray-700 text-sm font-bold text-green-700 dark:text-green-400">
-                      <span>Total Tagihan Santri:</span>
+                    <div className="flex justify-between pt-1 border-t border-gray-200 dark:border-gray-700 text-xs font-bold text-green-700 dark:text-green-400">
+                      <span className="font-sans">Total Tagihan Santri:</span>
                       <span>Rp {formatRupiah(grandTotal)}</span>
                     </div>
                   </div>
@@ -2951,10 +2954,10 @@ export default function PesananToko() {
               })()}
             </div>
 
-            <div className="p-4 sm:p-6 pt-0 flex gap-3">
+            <div className="p-3 border-t border-gray-200 dark:border-gray-700 flex gap-2">
               <button 
                 onClick={() => setShowManualModal(false)}
-                className="flex-1 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 transition-colors"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 border border-gray-200 dark:border-gray-700 transition-colors cursor-pointer"
               >
                 Batal
               </button>
@@ -2967,7 +2970,7 @@ export default function PesananToko() {
                     total_price: manualPrice,
                   });
                 }}
-                className="flex-[2] py-2.5 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex justify-center items-center gap-2 shadow-sm"
+                className="flex-[2] py-1.5 rounded-none font-bold text-xs text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex justify-center items-center gap-1.5 shadow-xs cursor-pointer"
               >
                 {createManualOrderMutation.isPending ? 'Membuat...' : 'Buat Pesanan'}
               </button>
@@ -2979,72 +2982,72 @@ export default function PesananToko() {
 
       {/* CONFIRMATION ALERT MODAL WHEN PROCEEDING UNPAID ORDER */}
       {unpaidProceedOrder && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-700 p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-200 my-auto text-left">
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 rounded-none w-full max-w-md overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-800 p-3.5 sm:p-4 space-y-3 animate-in zoom-in-95 duration-200 my-auto text-left">
             {/* Header Icon & Title */}
-            <div className="flex items-start gap-3.5">
-              <div className="w-11 h-11 rounded-2xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 shadow-inner">
-                <AlertTriangle className="w-6 h-6" />
+            <div className="flex items-start gap-2.5">
+              <div className="w-8 h-8 rounded-none bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-300 dark:border-amber-800">
+                <AlertTriangle className="w-4 h-4" />
               </div>
               <div className="flex-1">
-                <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white leading-tight">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
                   Konfirmasi Lanjutkan Pesanan
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">
                   Pembayaran pesanan ini belum lunas
                 </p>
               </div>
               <button 
                 onClick={() => setUnpaidProceedOrder(null)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 -mr-1 rounded-lg transition-colors"
+                className="w-7 h-7 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-none border border-gray-200 dark:border-gray-700 flex items-center justify-center transition-colors cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Order Info Card */}
-            <div className="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 rounded-2xl p-3.5 space-y-2">
+            <div className="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 rounded-none p-2.5 space-y-1.5">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-gray-600 dark:text-gray-400">Order ID:</span>
-                <span className="font-bold text-gray-900 dark:text-white">
+                <span className="text-gray-600 dark:text-gray-400 text-[11px]">Order ID:</span>
+                <span className="font-bold text-gray-900 dark:text-white text-[11px]">
                   {unpaidProceedOrder._groupOrders?.length > 1
                     ? `#${unpaidProceedOrder._groupOrders.map(o => o.id).join(', #')} (${unpaidProceedOrder._groupOrders.length} Toko)`
                     : `#${unpaidProceedOrder.id}`}
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs">
-                <span className="text-gray-600 dark:text-gray-400">Nama Pemesan:</span>
-                <span className="font-semibold text-gray-900 dark:text-white">
+                <span className="text-gray-600 dark:text-gray-400 text-[11px]">Nama Pemesan:</span>
+                <span className="font-semibold text-gray-900 dark:text-white text-[11px]">
                   {unpaidProceedOrder.user?.name || 'Santri'}
                   {unpaidProceedOrder.user?.santri_name ? ` (${unpaidProceedOrder.user.santri_name})` : ''}
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs">
-                <span className="text-gray-600 dark:text-gray-400">Status Pembayaran:</span>
-                <span className={`px-2 py-0.5 rounded-full font-extrabold text-[10px] ${
+                <span className="text-gray-600 dark:text-gray-400 text-[11px]">Status Pembayaran:</span>
+                <span className={`px-1.5 py-0.5 rounded-none font-bold text-[10px] ${
                   unpaidProceedOrder.payment_status === 'waiting_confirmation'
-                    ? 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-200 ring-1 ring-amber-300'
-                    : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
+                    ? 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-200 border border-amber-400'
+                    : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 border border-red-300'
                 }`}>
                   {unpaidProceedOrder.payment_status === 'waiting_confirmation'
                     ? '⏳ Menunggu Validasi'
                     : '⚠️ Belum Bayar'}
                 </span>
               </div>
-              <div className="flex justify-between items-center pt-2 border-t border-amber-200/60 dark:border-amber-900/50 text-sm font-bold text-gray-900 dark:text-white">
-                <span>Total Tagihan:</span>
+              <div className="flex justify-between items-center pt-1.5 border-t border-amber-200/60 dark:border-amber-900/50 text-xs font-bold text-gray-900 dark:text-white font-mono">
+                <span className="font-sans">Total Tagihan:</span>
                 <span className="text-green-600 dark:text-green-400">
                   Rp {formatRupiah(unpaidProceedOrder._groupGrandTotal || unpaidProceedOrder.total_price)}
                 </span>
               </div>
             </div>
 
-            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+            <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed">
               Pesanan ini belum dikonfirmasi lunas oleh toko. Apakah Anda yakin ingin tetap melanjutkan pesanan ini ke tahap proses?
             </p>
 
             {/* Action Buttons */}
-            <div className="space-y-2 pt-1">
+            <div className="space-y-1.5 pt-1">
               <button
                 type="button"
                 disabled={batchUpdateStatusMutation.isPending || updateStatusMutation.isPending || updatePaymentMutation.isPending}
@@ -3068,9 +3071,9 @@ export default function PesananToko() {
                     console.error(e);
                   }
                 }}
-                className="w-full py-3 px-4 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md shadow-green-600/20 active:scale-98 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-1.5 px-3 bg-green-600 hover:bg-green-700 text-white rounded-none text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
-                <CheckCircle className="w-4 h-4" /> Tandai Lunas & Lanjutkan
+                <CheckCircle className="w-3.5 h-3.5" /> Tandai Lunas & Lanjutkan
               </button>
 
               <button
@@ -3091,7 +3094,7 @@ export default function PesananToko() {
                     updateStatusMutation.mutate({ id: pendingOrders[0].id, status: 'processing', canteen_id: pendingOrders[0].canteen_id });
                   }
                 }}
-                className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-98 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-1.5 px-3 bg-amber-500 hover:bg-amber-600 text-white rounded-none text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
                 Tetap Lanjutkan (Belum Lunas)
               </button>
@@ -3099,7 +3102,7 @@ export default function PesananToko() {
               <button
                 type="button"
                 onClick={() => setUnpaidProceedOrder(null)}
-                className="w-full py-2.5 px-4 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl text-xs sm:text-sm font-semibold transition-colors"
+                className="w-full py-1.5 px-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-none border border-gray-200 dark:border-gray-700 text-xs font-semibold transition-colors cursor-pointer"
               >
                 Batal
               </button>
@@ -3111,32 +3114,32 @@ export default function PesananToko() {
 
       {/* SET CUSTOM ORDER PRICE MODAL */}
       {showSetPriceModal && activeOrderForSetPrice && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl my-auto">
-            <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Tentukan Harga Pesanan</h3>
-              <button onClick={() => setShowSetPriceModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                <X className="w-6 h-6" />
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-none w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150 shadow-2xl my-auto border border-gray-200 dark:border-gray-800">
+            <div className="flex justify-between items-center p-3 sm:p-4 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Tentukan Harga Pesanan</h3>
+              <button onClick={() => setShowSetPriceModal(false)} className="w-7 h-7 rounded-none bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 flex items-center justify-center transition-colors border border-gray-200 dark:border-gray-700 cursor-pointer">
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <div className="p-4 sm:p-6 space-y-4">
-              <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl border border-purple-100 dark:border-purple-900/50">
+            <div className="p-3 sm:p-4 space-y-3">
+              <div className="bg-purple-50 dark:bg-purple-900/20 p-2.5 rounded-none border border-purple-200 dark:border-purple-800">
                 <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase block mb-1">Catatan dari Santri ({activeOrderForSetPrice.user?.name}):</span>
-                <p className="text-sm font-medium text-purple-900 dark:text-purple-200 whitespace-pre-wrap">
+                <p className="text-xs font-medium text-purple-900 dark:text-purple-200 whitespace-pre-wrap">
                   {activeOrderForSetPrice.custom_notes || 'Tidak ada catatan.'}
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Harga Produk / Barang Asli (Rp) <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Harga Produk / Barang Asli (Rp) <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   inputMode="numeric"
                   value={newPriceInput}
                   onChange={e => setNewPriceInput(e.target.value.replace(/[^0-9]/g, ''))}
                   placeholder="Contoh: 12300"
-                  className="w-full p-3 border rounded-xl text-sm dark:bg-gray-800 dark:border-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-none text-xs dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-green-500 focus:outline-none"
                 />
               </div>
 
@@ -3153,7 +3156,7 @@ export default function PesananToko() {
                 const grandTotal = prodPrice > 0 ? (prodPrice + delFee + admFee) : 0;
 
                 return (
-                  <div className="bg-gray-50 dark:bg-gray-800/60 p-3 rounded-xl border border-gray-200 dark:border-gray-700 space-y-1.5 text-xs text-gray-600 dark:text-gray-400">
+                  <div className="bg-gray-50 dark:bg-gray-800/60 p-2.5 rounded-none border border-gray-200 dark:border-gray-700 space-y-1 text-xs text-gray-600 dark:text-gray-400">
                     <div className="flex justify-between">
                       <span>Harga Produk / Barang:</span>
                       <span className="font-semibold text-gray-900 dark:text-white">Rp {formatRupiah(prodPrice)}</span>
@@ -3166,19 +3169,19 @@ export default function PesananToko() {
                       <span>Biaya Admin (Otomatis):</span>
                       <span className="font-semibold text-gray-900 dark:text-white">+ Rp {formatRupiah(admFee)}</span>
                     </div>
-                    <div className="flex justify-between pt-1.5 border-t border-gray-200 dark:border-gray-700 text-sm font-bold text-green-700 dark:text-green-400">
+                    <div className="flex justify-between pt-1 border-t border-gray-200 dark:border-gray-700 text-xs font-bold text-green-700 dark:text-green-400">
                       <span>Total Tagihan Santri:</span>
-                      <span>Rp {formatRupiah(grandTotal)}</span>
+                      <span className="font-mono">Rp {formatRupiah(grandTotal)}</span>
                     </div>
                   </div>
                 );
               })()}
             </div>
 
-            <div className="p-4 sm:p-6 pt-0 flex gap-3">
+            <div className="p-3 sm:p-4 pt-0 flex gap-2">
               <button 
                 onClick={() => setShowSetPriceModal(false)}
-                className="flex-1 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 transition-colors"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 transition-colors border border-gray-200 dark:border-gray-700"
               >
                 Batal
               </button>
@@ -3191,7 +3194,7 @@ export default function PesananToko() {
                     canteen_id: activeOrderForSetPrice.canteen_id
                   });
                 }}
-                className="flex-[2] py-2.5 rounded-xl font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors flex justify-center items-center gap-2 shadow-sm"
+                className="flex-[2] py-1.5 rounded-none font-bold text-xs text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex justify-center items-center gap-1.5 shadow-xs"
               >
                 {setCustomPriceMutation.isPending ? 'Simpan...' : 'Set & Setujui Harga'}
               </button>
@@ -3203,48 +3206,48 @@ export default function PesananToko() {
 
       {/* PROOF OF DELIVERY / PAYMENT FULL-SCREEN MODAL */}
       {selectedProofs.length > 0 && createPortal(
-        <div className="fixed inset-0 z-[110] bg-black/90 backdrop-blur-xs flex flex-col animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[110] bg-black/90 backdrop-blur-xs flex flex-col animate-in fade-in duration-150">
           {/* Header */}
-          <div className="flex justify-between items-center px-4 py-3 bg-black/70 border-b border-white/10 shrink-0">
-            <span className="text-white font-bold text-sm flex items-center gap-2">
+          <div className="flex justify-between items-center px-4 py-2.5 bg-black/80 border-b border-white/10 shrink-0">
+            <span className="text-white font-bold text-xs flex items-center gap-1.5">
               <FileText className="w-4 h-4 text-green-400" />
               {selectedProofs.length} Berkas Bukti
             </span>
             <button 
               onClick={() => setSelectedProofs([])}
-              className="w-9 h-9 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white active:scale-95 transition-all"
+              className="w-7 h-7 bg-white/10 hover:bg-white/20 rounded-none flex items-center justify-center text-white transition-all cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
           
           {/* Images & Documents */}
-          <div className="flex-1 overflow-y-auto flex flex-col items-center gap-4 p-4 pb-12">
+          <div className="flex-1 overflow-y-auto flex flex-col items-center gap-3 p-3 pb-8">
             {selectedProofs.map((proof, idx) => {
               const fileType = getFileType(proof);
               const fileName = getFileNameFromPath(proof);
 
               if (fileType === 'pdf') {
                 return (
-                  <div key={idx} className="w-full max-w-2xl bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col items-center gap-3 shadow-xl">
+                  <div key={idx} className="w-full max-w-2xl bg-gray-900 border border-gray-800 rounded-none p-3 flex flex-col items-center gap-2 shadow-xl">
                     <div className="w-full flex items-center justify-between text-xs text-gray-400 border-b border-gray-800 pb-2">
-                      <span className="font-semibold text-white flex items-center gap-1.5">
-                        <FileText className="w-4 h-4 text-red-400" /> Bukti {idx + 1}: {fileName}
+                      <span className="font-semibold text-white flex items-center gap-1.5 text-xs truncate">
+                        <FileText className="w-3.5 h-3.5 text-red-400 shrink-0" /> Bukti {idx + 1}: {fileName}
                       </span>
-                      <span className="px-2 py-0.5 bg-red-900/40 text-red-300 rounded font-mono text-[10px]">PDF</span>
+                      <span className="px-1.5 py-0.5 bg-red-900/40 text-red-300 rounded-none font-mono text-[9px]">PDF</span>
                     </div>
                     <iframe 
                       src={proof} 
                       title={`Bukti PDF ${idx + 1}`} 
-                      className="w-full h-[55vh] rounded-xl bg-white border border-gray-700" 
+                      className="w-full h-[55vh] rounded-none bg-white border border-gray-700" 
                     />
                     <a
                       href={proof}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 active:scale-98 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md"
+                      className="w-full py-1.5 px-3 bg-green-600 hover:bg-green-700 text-white rounded-none text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs"
                     >
-                      <ExternalLink className="w-4 h-4" /> Buka / Unduh Dokumen PDF
+                      <ExternalLink className="w-3.5 h-3.5" /> Buka / Unduh Dokumen PDF
                     </a>
                   </div>
                 );
@@ -3252,24 +3255,24 @@ export default function PesananToko() {
 
               if (fileType === 'image') {
                 return (
-                  <div key={idx} className="w-full max-w-xl bg-gray-900/60 border border-white/5 rounded-2xl p-2.5 flex flex-col items-center gap-2">
-                    <div className="w-full flex items-center justify-between px-2 text-xs text-gray-400">
-                      <span className="font-semibold text-white/90">Bukti {idx + 1}</span>
+                  <div key={idx} className="w-full max-w-xl bg-gray-900/60 border border-white/10 rounded-none p-2 flex flex-col items-center gap-1.5">
+                    <div className="w-full flex items-center justify-between px-1 text-xs text-gray-400">
+                      <span className="font-semibold text-white/90 text-xs">Bukti {idx + 1}</span>
                       <div className="flex items-center gap-1.5">
                         <button 
                           type="button"
                           onClick={() => setFullscreenImage(proof)}
-                          className="px-2.5 py-1 bg-green-600/20 hover:bg-green-600/30 text-green-400 hover:text-green-300 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95 border border-green-500/30"
+                          className="px-2 py-0.5 bg-green-600/20 hover:bg-green-600/30 text-green-400 hover:text-green-300 rounded-none text-[10px] font-bold flex items-center gap-1 transition-all border border-green-500/30 cursor-pointer"
                           title="Buka Pratinjau Layar Penuh"
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Buka Gambar Penuh</span>
+                          <Eye className="w-3 h-3" />
+                          <span>Layar Penuh</span>
                         </button>
                         <a 
                           href={proof} 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+                          className="p-1 text-gray-400 hover:text-white rounded-none hover:bg-white/10 transition-colors"
                           title="Buka di Tab Baru"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -3277,10 +3280,10 @@ export default function PesananToko() {
                       </div>
                     </div>
                     <img 
-                      src={proof}
+                      src={proof} 
                       alt={`Bukti ${idx + 1}`}
                       onClick={() => setFullscreenImage(proof)}
-                      className="w-full rounded-xl shadow-2xl object-contain bg-black/40 cursor-zoom-in hover:brightness-105 transition-all"
+                      className="w-full rounded-none shadow-xl object-contain bg-black/40 cursor-zoom-in hover:brightness-105 transition-all"
                       style={{ maxHeight: '75vh' }}
                       title="Klik gambar untuk memperbesar"
                       onError={(e) => {
@@ -3291,11 +3294,11 @@ export default function PesananToko() {
                     />
                     <div
                       style={{ display: 'none' }}
-                      className="w-full h-48 rounded-xl bg-gray-800 flex flex-col items-center justify-center text-gray-400 text-sm gap-2"
+                      className="w-full h-40 rounded-none bg-gray-800 flex flex-col items-center justify-center text-gray-400 text-xs gap-1.5"
                     >
-                      <ImageIcon className="w-10 h-10 opacity-40" />
+                      <ImageIcon className="w-8 h-8 opacity-40" />
                       <span>Gambar tidak dapat dimuat langsung</span>
-                      <a href={proof} target="_blank" rel="noreferrer" className="text-green-400 text-xs underline break-all px-4 text-center">Buka Berkas ({fileName})</a>
+                      <a href={proof} target="_blank" rel="noreferrer" className="text-green-400 text-[11px] underline break-all px-3 text-center">Buka Berkas ({fileName})</a>
                     </div>
                   </div>
                 );
@@ -3303,22 +3306,22 @@ export default function PesananToko() {
 
               // HEIF / Document / Other
               return (
-                <div key={idx} className="w-full max-w-xl bg-gray-900 border border-gray-800 rounded-2xl p-5 flex flex-col items-center gap-4 text-center shadow-xl">
-                  <div className="w-16 h-16 rounded-2xl bg-green-950/60 border border-green-800/50 flex items-center justify-center text-green-400">
-                    <FileText className="w-8 h-8" />
+                <div key={idx} className="w-full max-w-xl bg-gray-900 border border-gray-800 rounded-none p-4 flex flex-col items-center gap-3 text-center shadow-xl">
+                  <div className="w-12 h-12 rounded-none bg-green-950/60 border border-green-800/50 flex items-center justify-center text-green-400">
+                    <FileText className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-white font-bold text-sm break-all">{fileName}</p>
-                    <p className="text-gray-400 text-xs mt-1">Berkas Bukti #{idx + 1}</p>
+                    <p className="text-white font-bold text-xs break-all">{fileName}</p>
+                    <p className="text-gray-400 text-[10px] mt-0.5">Berkas Bukti #{idx + 1}</p>
                   </div>
                   <a
                     href={proof}
                     target="_blank"
                     download
                     rel="noopener noreferrer"
-                    className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 active:scale-98 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md"
+                    className="w-full py-1.5 px-3 bg-green-600 hover:bg-green-700 text-white rounded-none text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs"
                   >
-                    <Download className="w-4 h-4" /> Unduh / Buka Berkas
+                    <Download className="w-3.5 h-3.5" /> Unduh / Buka Berkas
                   </a>
                 </div>
               );
@@ -3331,59 +3334,59 @@ export default function PesananToko() {
       {/* ULTRA FULLSCREEN IMAGE LIGHTBOX MODAL */}
       {fullscreenImage && createPortal(
         <div 
-          className="fixed inset-0 z-[150] bg-black/95 backdrop-blur-md flex flex-col animate-in fade-in duration-200"
+          className="fixed inset-0 z-[150] bg-black/95 backdrop-blur-md flex flex-col animate-in fade-in duration-150"
           onClick={() => setFullscreenImage(null)}
         >
           {/* Top Bar */}
           <div 
-            className="flex items-center justify-between px-4 py-3 bg-black/80 border-b border-white/10 shrink-0 z-10"
+            className="flex items-center justify-between px-3 py-2 bg-black/80 border-b border-white/10 shrink-0 z-10"
             onClick={e => e.stopPropagation()}
           >
             <span className="text-white text-xs font-semibold flex items-center gap-1.5">
-              <ImageIcon className="w-4 h-4 text-green-400" />
+              <ImageIcon className="w-3.5 h-3.5 text-green-400" />
               Pratinjau Layar Penuh
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <a 
                 href={fullscreenImage} 
                 target="_blank" 
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1.5 transition-all"
+                rel="noopener noreferrer" 
+                className="px-2.5 py-1 rounded-none bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1 transition-all"
                 title="Buka di Tab Baru"
               >
-                <ExternalLink className="w-3.5 h-3.5" />
+                <ExternalLink className="w-3 h-3" />
                 <span>Tab Baru</span>
               </a>
               <a 
                 href={fullscreenImage} 
                 download
-                className="px-3 py-1.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
+                className="px-2.5 py-1 rounded-none bg-green-600 hover:bg-green-700 text-white text-xs font-bold flex items-center gap-1 transition-all shadow-xs"
                 title="Unduh Gambar"
               >
-                <Download className="w-3.5 h-3.5" />
+                <Download className="w-3 h-3" />
                 <span>Unduh</span>
               </a>
               <button 
                 onClick={() => setFullscreenImage(null)}
-                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all active:scale-90 ml-1"
+                className="w-7 h-7 rounded-none bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all ml-1 cursor-pointer"
                 title="Tutup (Esc)"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
           </div>
 
           {/* Centered Large Image */}
-          <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-auto">
+          <div className="flex-1 flex items-center justify-center p-2 overflow-auto">
             <img 
               src={fullscreenImage} 
               alt="Bukti Layar Penuh" 
-              className="max-w-full max-h-[85vh] sm:max-h-[90vh] object-contain rounded-xl shadow-2xl select-none"
+              className="max-w-full max-h-[85vh] sm:max-h-[90vh] object-contain rounded-none shadow-2xl select-none"
               onClick={e => e.stopPropagation()}
             />
           </div>
           
-          <div className="py-2.5 text-center text-gray-400 text-xs shrink-0 bg-black/40">
+          <div className="py-2 text-center text-gray-400 text-[11px] shrink-0 bg-black/50 border-t border-white/5">
             Ketuk tombol ✕ atau area luar untuk menutup layar penuh
           </div>
         </div>,
@@ -3392,103 +3395,129 @@ export default function PesananToko() {
 
       {/* Recap Modal */}
       {showRecapModal && createPortal(
-        <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col max-h-[85vh] my-auto">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
-              <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <ShoppingBag className="w-5 h-5 text-green-600" />
+        <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-none w-full max-w-md overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-800 flex flex-col max-h-[85vh] my-auto">
+            <div className="p-3 sm:p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+              <h3 className="font-bold text-xs sm:text-sm text-gray-900 dark:text-white flex items-center gap-1.5">
+                <ShoppingBag className="w-4 h-4 text-green-600" />
                 Rekap per Produk
               </h3>
-              <button onClick={() => setShowRecapModal(false)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                <X className="w-5 h-5" />
+              <button onClick={() => setShowRecapModal(false)} className="w-7 h-7 rounded-none bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 flex items-center justify-center transition-colors border border-gray-200 dark:border-gray-700 cursor-pointer">
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="p-4 overflow-y-auto">
+            <div className="p-3 sm:p-4 overflow-y-auto">
               {productRecap.items.length === 0 && productRecap.customCount === 0 ? (
-                <div className="text-center text-gray-500 py-10">
+                <div className="text-center text-gray-500 py-8 text-xs">
                   Belum ada data penjualan.
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {productRecap.items.length > 0 && (
                     <div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Produk Reguler</h4>
-                      <div className="space-y-2">
-                        {productRecap.items.map((item, idx) => (
-                          <div key={idx} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700">
-                            <div>
-                              <div className="font-semibold text-gray-800 dark:text-gray-200 text-xs sm:text-sm">
-                                {item.name}
-                              </div>
-                              <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1.5">
-                                <span>HPJ: Rp {formatRupiah(item.hpj)}</span>
-                                <span>•</span>
-                                <span className="text-amber-600 dark:text-amber-400 font-medium">HPP: Rp {formatRupiah(item.hpp)}</span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-xs font-bold text-green-600 dark:text-green-400">{item.quantity}x terjual</div>
-                              <div className="text-xs font-bold text-gray-800 dark:text-gray-200">Rp {formatRupiah(item.total)}</div>
-                              <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                                Laba: +Rp {formatRupiah(item.profit)}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">Produk Reguler</h4>
+                      <div className="border border-gray-200 dark:border-gray-800 overflow-hidden">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-gray-50 dark:bg-gray-800/80 text-[10px] uppercase font-bold text-gray-500 border-b border-gray-200 dark:border-gray-700">
+                              <th className="p-2">Produk</th>
+                              <th className="p-2 text-center">Terjual</th>
+                              <th className="p-2 text-right">Total</th>
+                              <th className="p-2 text-right">Laba</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                            {productRecap.items.map((item, idx) => (
+                              <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40">
+                                <td className="p-2">
+                                  <div className="font-semibold text-gray-800 dark:text-gray-200 text-xs">
+                                    {item.name}
+                                  </div>
+                                  <div className="text-[10px] text-gray-400">
+                                    HPP: Rp {formatRupiah(item.hpp)}
+                                  </div>
+                                </td>
+                                <td className="p-2 text-center font-bold text-green-600 dark:text-green-400">
+                                  {item.quantity}x
+                                </td>
+                                <td className="p-2 text-right font-mono font-semibold text-gray-800 dark:text-gray-200">
+                                  Rp {formatRupiah(item.total)}
+                                </td>
+                                <td className="p-2 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                  +Rp {formatRupiah(item.profit)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
 
                   {productRecap.customCount > 0 && (
                     <div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-2">Pesanan Titipan (Khusus)</h4>
-                      <div className="space-y-2 mb-2">
-                        {productRecap.customItems?.map((item, idx) => (
-                          <div key={idx} className="flex justify-between items-center bg-purple-50 dark:bg-purple-900/20 p-2.5 rounded-xl border border-purple-100 dark:border-purple-900/50">
-                            <div>
-                              <div className="font-semibold text-purple-900 dark:text-purple-200 text-xs sm:text-sm">
-                                {item.name}
-                              </div>
-                              <div className="text-[11px] text-purple-600 dark:text-purple-300 mt-0.5">
-                                HPP Standar: Rp {formatRupiah(item.hpp)}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-xs font-bold text-purple-600 dark:text-purple-400">{item.quantity}x pesanan</div>
-                              <div className="text-xs font-bold text-gray-800 dark:text-white">Rp {formatRupiah(item.total)}</div>
-                              <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                                Laba: +Rp {formatRupiah(item.profit)}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-1.5">Pesanan Titipan (Khusus)</h4>
+                      <div className="border border-purple-200 dark:border-purple-800/60 overflow-hidden mb-2">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-purple-50 dark:bg-purple-950/40 text-[10px] uppercase font-bold text-purple-700 dark:text-purple-300 border-b border-purple-200 dark:border-purple-800">
+                              <th className="p-2">Pesanan</th>
+                              <th className="p-2 text-center">Jml</th>
+                              <th className="p-2 text-right">Total</th>
+                              <th className="p-2 text-right">Laba</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-purple-100 dark:divide-purple-900/30">
+                            {productRecap.customItems?.map((item, idx) => (
+                              <tr key={idx} className="hover:bg-purple-50/40 dark:hover:bg-purple-950/20">
+                                <td className="p-2">
+                                  <div className="font-semibold text-purple-900 dark:text-purple-200 text-xs">
+                                    {item.name}
+                                  </div>
+                                  <div className="text-[10px] text-purple-600 dark:text-purple-400">
+                                    HPP: Rp {formatRupiah(item.hpp)}
+                                  </div>
+                                </td>
+                                <td className="p-2 text-center font-bold text-purple-600 dark:text-purple-400">
+                                  {item.quantity}x
+                                </td>
+                                <td className="p-2 text-right font-mono font-semibold text-gray-800 dark:text-white">
+                                  Rp {formatRupiah(item.total)}
+                                </td>
+                                <td className="p-2 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                  +Rp {formatRupiah(item.profit)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-                      <div className="flex justify-between items-center bg-purple-100/70 dark:bg-purple-950/40 p-2.5 rounded-xl border border-purple-200 dark:border-purple-800 text-xs">
+                      <div className="flex justify-between items-center bg-purple-50 dark:bg-purple-950/40 p-2 rounded-none border border-purple-200 dark:border-purple-800 text-xs">
                         <div>
-                          <span className="font-bold text-purple-900 dark:text-purple-300 block">Subtotal Pesanan Khusus ({productRecap.customCount}x)</span>
+                          <span className="font-bold text-purple-900 dark:text-purple-300 block">Subtotal Titipan ({productRecap.customCount}x)</span>
                           <span className="text-[10px] text-purple-700 dark:text-purple-400">Modal: Rp {formatRupiah(productRecap.customHpp)}</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-purple-700 dark:text-purple-300 block">Rp {formatRupiah(productRecap.customTotal)}</span>
-                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Laba: +Rp {formatRupiah(productRecap.customProfit)}</span>
+                          <span className="font-bold text-purple-700 dark:text-purple-300 block font-mono">Rp {formatRupiah(productRecap.customTotal)}</span>
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">Laba: +Rp {formatRupiah(productRecap.customProfit)}</span>
                         </div>
                       </div>
                     </div>
                   )}
                   
                   {/* FOOTER TOTAL */}
-                  <div className="pt-3 border-t border-gray-200 dark:border-gray-700 mt-4 space-y-1.5">
+                  <div className="pt-2 border-t border-gray-200 dark:border-gray-800 space-y-1">
                     <div className="flex justify-between items-center text-xs text-gray-600 dark:text-gray-400">
                       <span>Total Belanja Produk (HPJ)</span>
-                      <span className="font-bold text-gray-900 dark:text-white">Rp {formatRupiah(productRecap.totalProducts)}</span>
+                      <span className="font-bold text-gray-900 dark:text-white font-mono">Rp {formatRupiah(productRecap.totalProducts)}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs text-gray-600 dark:text-gray-400">
                       <span>Total Modal Pokok (HPP)</span>
-                      <span className="font-bold text-amber-600 dark:border-amber-400">Rp {formatRupiah(productRecap.totalHpp)}</span>
+                      <span className="font-bold text-amber-600 dark:text-amber-400 font-mono">Rp {formatRupiah(productRecap.totalHpp)}</span>
                     </div>
-                    <div className="flex justify-between items-center p-2.5 bg-green-50 dark:bg-green-950/40 rounded-xl border border-green-200 dark:border-green-800">
-                      <span className="font-bold text-green-900 dark:text-green-200 text-sm">Estimasi Laba Bersih Toko</span>
-                      <span className="font-black text-green-700 dark:text-green-300 text-base">
+                    <div className="flex justify-between items-center p-2 bg-green-50 dark:bg-green-950/40 rounded-none border border-green-200 dark:border-green-800">
+                      <span className="font-bold text-green-900 dark:text-green-200 text-xs">Estimasi Laba Bersih Toko</span>
+                      <span className="font-black text-green-700 dark:text-green-300 text-sm font-mono">
                         Rp {formatRupiah(productRecap.totalProfit)}
                       </span>
                     </div>
@@ -3496,10 +3525,10 @@ export default function PesananToko() {
                 </div>
               )}
             </div>
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="p-2.5 sm:p-3 border-t border-gray-100 dark:border-gray-800">
               <button 
                 onClick={() => setShowRecapModal(false)}
-                className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 rounded-xl font-bold transition-colors"
+                className="w-full py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 rounded-none font-bold text-xs transition-colors border border-gray-200 dark:border-gray-700 cursor-pointer"
               >
                 Tutup
               </button>
@@ -3511,19 +3540,19 @@ export default function PesananToko() {
 
       {/* MODAL UNGGAH BUKTI PEMBAYARAN OLEH KANTIN */}
       {orderToUploadPaymentProof && createPortal(
-        <div className="fixed inset-0 z-[105] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-5 sm:p-6 border border-gray-200 dark:border-gray-700 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
+        <div className="fixed inset-0 z-[105] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-none max-w-md w-full p-3.5 sm:p-4 border border-gray-200 dark:border-gray-800 shadow-2xl space-y-2.5 animate-in zoom-in-95 duration-150 my-auto">
             {/* Header Modal */}
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 flex items-center justify-center shadow-xs">
-                  <UploadCloud className="w-5 h-5" />
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-none bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 flex items-center justify-center border border-green-300 dark:border-green-800">
+                  <UploadCloud className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-gray-900 dark:text-white leading-tight">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
                     Unggah Bukti Bayar Santri
                   </h3>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">
                     {orderToUploadPaymentProof._groupOrders?.length > 1
                       ? `Paket Checkout (${orderToUploadPaymentProof._groupOrders.length} Toko) • #${orderToUploadPaymentProof._groupOrders.map(o => o.id).join(', #')}`
                       : `Pesanan #${orderToUploadPaymentProof.id} • ${orderToUploadPaymentProof.canteen?.name || 'Toko'}`}
@@ -3536,29 +3565,29 @@ export default function PesananToko() {
                   setOrderToUploadPaymentProof(null);
                   setCanteenPaymentProofFiles([]);
                 }}
-                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 flex items-center justify-center transition-colors"
+                className="w-7 h-7 rounded-none bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 flex items-center justify-center transition-colors border border-gray-200 dark:border-gray-700 cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
             {/* Info Santri & Tagihan */}
-            <div className="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-3.5 border border-gray-200 dark:border-gray-700/60 space-y-2">
+            <div className="bg-gray-50 dark:bg-gray-800/60 rounded-none p-2.5 border border-gray-200 dark:border-gray-700/60 space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500 dark:text-gray-400">Santri / Pemesan:</span>
-                <span className="font-bold text-gray-900 dark:text-white truncate max-w-[200px]">
+                <span className="text-gray-500 dark:text-gray-400 text-[11px]">Santri / Pemesan:</span>
+                <span className="font-bold text-gray-900 dark:text-white truncate max-w-[200px] text-right text-[11px]">
                   {orderToUploadPaymentProof.user?.santri_name || orderToUploadPaymentProof.user?.name}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500 dark:text-gray-400">Kamar / Lokasi:</span>
-                <span className="font-semibold text-gray-700 dark:text-gray-300">
+                <span className="text-gray-500 dark:text-gray-400 text-[11px]">Kamar / Lokasi:</span>
+                <span className="font-semibold text-gray-700 dark:text-gray-300 text-[11px]">
                   {orderToUploadPaymentProof.user?.santri_room || orderToUploadPaymentProof.delivery_location || '-'}
                 </span>
               </div>
-              <div className="pt-2 border-t border-gray-200 dark:border-gray-700/60 flex items-center justify-between">
+              <div className="pt-1.5 border-t border-gray-200 dark:border-gray-700/60 flex items-center justify-between">
                 <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Total Tagihan:</span>
-                <span className="text-base font-black text-green-600 dark:text-green-400">
+                <span className="text-sm font-black text-green-600 dark:text-green-400 font-mono">
                   Rp {formatRupiah(orderToUploadPaymentProof._groupGrandTotal || orderToUploadPaymentProof.total_price)}
                 </span>
               </div>
@@ -3566,17 +3595,17 @@ export default function PesananToko() {
 
             {/* Bukti Yang Sudah Ada (Jika Ada) */}
             {orderToUploadPaymentProof.proof_of_payment && orderToUploadPaymentProof.proof_of_payment.length > 0 && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-300">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px] font-bold text-gray-700 dark:text-gray-300">
                   <span>Bukti Tersimpan ({orderToUploadPaymentProof.proof_of_payment.length}):</span>
-                  <span className="text-[10px] text-gray-400 font-normal">Klik untuk hapus jika salah</span>
+                  <span className="text-[9px] text-gray-400 font-normal">Klik tombol hapus untuk membatalkan</span>
                 </div>
-                <div className="flex gap-2 overflow-x-auto pb-1">
+                <div className="flex gap-1.5 overflow-x-auto pb-1">
                   {(Array.isArray(orderToUploadPaymentProof.proof_of_payment) 
                     ? orderToUploadPaymentProof.proof_of_payment 
                     : [orderToUploadPaymentProof.proof_of_payment]
                   ).map((p, pIdx) => (
-                    <div key={pIdx} className="relative group shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-black/10">
+                    <div key={pIdx} className="relative group shrink-0 w-14 h-14 rounded-none overflow-hidden border border-gray-200 dark:border-gray-700 bg-black/10">
                       <img src={getStorageUrl(p)} alt="Bukti" className="w-full h-full object-cover" />
                       <button
                         type="button"
@@ -3590,10 +3619,10 @@ export default function PesananToko() {
                           }
                         }}
                         disabled={deleteCanteenProofMutation.isPending}
-                        className="absolute inset-0 bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute inset-0 bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                         title="Hapus berkas ini"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ))}
@@ -3602,7 +3631,7 @@ export default function PesananToko() {
             )}
 
             {/* Tombol Pilih File & Kamera */}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <input
                 type="file"
                 ref={canteenPaymentFileInputRef}
@@ -3620,14 +3649,14 @@ export default function PesananToko() {
                 onChange={(e) => handleCanteenProofFilesSelected(e.target.files)}
               />
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
                   disabled={isCompressingPaymentProof || uploadCanteenPaymentProofMutation.isPending}
                   onClick={() => canteenPaymentCameraInputRef.current?.click()}
-                  className="py-3 px-3 bg-gray-50 hover:bg-green-50/80 dark:bg-gray-800/80 dark:hover:bg-green-950/40 border border-gray-200 dark:border-gray-700 hover:border-green-400 rounded-2xl text-gray-700 dark:text-gray-200 flex flex-col items-center justify-center gap-1.5 transition-all text-xs font-bold active:scale-98 cursor-pointer"
+                  className="py-2 px-2 bg-gray-50 hover:bg-green-50/80 dark:bg-gray-800/80 dark:hover:bg-green-950/40 border border-gray-200 dark:border-gray-700 hover:border-green-400 rounded-none text-gray-700 dark:text-gray-200 flex flex-col items-center justify-center gap-1 transition-all text-xs font-bold cursor-pointer"
                 >
-                  <Camera className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <Camera className="w-4 h-4 text-green-600 dark:text-green-400" />
                   <span>Ambil Foto</span>
                 </button>
 
@@ -3635,46 +3664,46 @@ export default function PesananToko() {
                   type="button"
                   disabled={isCompressingPaymentProof || uploadCanteenPaymentProofMutation.isPending}
                   onClick={() => canteenPaymentFileInputRef.current?.click()}
-                  className="py-3 px-3 bg-gray-50 hover:bg-green-50/80 dark:bg-gray-800/80 dark:hover:bg-green-950/40 border border-gray-200 dark:border-gray-700 hover:border-green-400 rounded-2xl text-gray-700 dark:text-gray-200 flex flex-col items-center justify-center gap-1.5 transition-all text-xs font-bold active:scale-98 cursor-pointer"
+                  className="py-2 px-2 bg-gray-50 hover:bg-green-50/80 dark:bg-gray-800/80 dark:hover:bg-green-950/40 border border-gray-200 dark:border-gray-700 hover:border-green-400 rounded-none text-gray-700 dark:text-gray-200 flex flex-col items-center justify-center gap-1 transition-all text-xs font-bold cursor-pointer"
                 >
-                  <FileUp className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <FileUp className="w-4 h-4 text-green-600 dark:text-green-400" />
                   <span>Pilih dari Galeri</span>
                 </button>
               </div>
 
-              <p className="text-[10px] text-gray-400 text-center">
+              <p className="text-[9px] text-gray-400 text-center">
                 Mendukung JPG, PNG, WEBP, PDF (Maks 15MB/berkas, auto kompresi cerdas)
               </p>
             </div>
 
             {/* List Berkas Yang Dipilih */}
             {canteenPaymentProofFiles.length > 0 && (
-              <div className="space-y-1.5">
-                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 block">
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300 block">
                   Berkas Terpilih ({canteenPaymentProofFiles.length}):
                 </span>
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
                   {canteenPaymentProofFiles.map((file, fIdx) => {
                     const isImg = isImageFile(file);
                     return (
-                      <div key={fIdx} className="relative rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2 flex flex-col justify-between">
+                      <div key={fIdx} className="relative rounded-none border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-1.5 flex flex-col justify-between">
                         {isImg ? (
-                          <div className="aspect-video w-full rounded-lg overflow-hidden bg-black/5 mb-1">
+                          <div className="aspect-video w-full rounded-none overflow-hidden bg-black/5 mb-1">
                             <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
                           </div>
                         ) : (
-                          <div className="aspect-video w-full rounded-lg bg-green-50 dark:bg-green-950/40 flex flex-col items-center justify-center text-green-600 dark:text-green-400 mb-1">
-                            <FileText className="w-5 h-5" />
-                            <span className="text-[9px] font-bold uppercase mt-0.5">PDF</span>
+                          <div className="aspect-video w-full rounded-none bg-green-50 dark:bg-green-950/40 flex flex-col items-center justify-center text-green-600 dark:text-green-400 mb-1">
+                            <FileText className="w-4 h-4" />
+                            <span className="text-[8px] font-bold uppercase mt-0.5">PDF</span>
                           </div>
                         )}
-                        <p className="text-[11px] font-semibold text-gray-800 dark:text-gray-200 truncate" title={file.name}>
+                        <p className="text-[10px] font-semibold text-gray-800 dark:text-gray-200 truncate" title={file.name}>
                           {file.name}
                         </p>
-                        <div className="flex items-center justify-between text-[10px] text-gray-400 mt-0.5">
-                          <span>{formatFileSize(file.size)}</span>
+                        <div className="flex items-center justify-between text-[9px] text-gray-400 mt-0.5">
+                          <span className="font-mono">{formatFileSize(file.size)}</span>
                           {file.originalSize && file.originalSize > file.size && (
-                            <span className="text-green-600 font-bold">
+                            <span className="text-green-600 font-bold font-mono">
                               (-{Math.round((1 - file.size / file.originalSize) * 100)}%)
                             </span>
                           )}
@@ -3682,7 +3711,7 @@ export default function PesananToko() {
                         <button
                           type="button"
                           onClick={() => setCanteenPaymentProofFiles((prev) => prev.filter((_, i) => i !== fIdx))}
-                          className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-xs active:scale-90"
+                          className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white p-0.5 rounded-none shadow-xs cursor-pointer"
                           title="Hapus berkas"
                         >
                           <X className="w-3 h-3" />
@@ -3695,40 +3724,40 @@ export default function PesananToko() {
             )}
 
             {/* Pilihan Status Pembayaran */}
-            <div className="space-y-1.5 text-left">
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 block">
+            <div className="space-y-1 text-left">
+              <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 block">
                 Ubah Status Pembayaran Menjadi:
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
                   onClick={() => setCanteenPaymentStatus('paid')}
-                  className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`p-1.5 rounded-none border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     canteenPaymentStatus === 'paid'
-                      ? 'bg-green-50 dark:bg-green-950/60 border-green-500 text-green-700 dark:text-green-300 ring-2 ring-green-500/30'
+                      ? 'bg-green-50 dark:bg-green-950/60 border-green-500 text-green-700 dark:text-green-300 ring-1 ring-green-500'
                       : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
                   }`}
                 >
-                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <CheckCircle className="w-3.5 h-3.5 text-green-600" />
                   <span>Langsung Lunas</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setCanteenPaymentStatus('waiting_confirmation')}
-                  className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`p-1.5 rounded-none border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     canteenPaymentStatus === 'waiting_confirmation'
-                      ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-800 dark:text-amber-300 ring-2 ring-amber-500/30'
+                      ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-800 dark:text-amber-300 ring-1 ring-amber-500'
                       : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
                   }`}
                 >
-                  <Clock className="w-4 h-4 text-amber-600" />
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
                   <span>Menunggu Validasi</span>
                 </button>
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => {
@@ -3736,7 +3765,7 @@ export default function PesananToko() {
                   setCanteenPaymentProofFiles([]);
                 }}
                 disabled={uploadCanteenPaymentProofMutation.isPending || isCompressingPaymentProof}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700 cursor-pointer"
               >
                 Batal
               </button>
@@ -3755,7 +3784,7 @@ export default function PesananToko() {
                     canteen_id: orderToUploadPaymentProof.canteen_id
                   });
                 }}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
               >
                 {uploadCanteenPaymentProofMutation.isPending ? (
                   <>

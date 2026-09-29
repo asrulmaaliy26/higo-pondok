@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from '@tanstack/react-router';
 import ThemeToggle from '../../ui/ThemeToggle';
+import SyncDbButton from '../../common/SyncDbButton';
 import { useActiveOrdersCount } from '../../../hooks/useActiveOrdersCount';
 import { useCartStore } from '../../../store/cartStore';
 import { useAuthStore } from '../../../store/authStore';
@@ -85,7 +86,10 @@ export default function DesktopSidebar({ sidebarMenus }) {
       </div>
 
       {/* Sidebar Footer with Theme Toggle */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
+      <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 space-y-2.5">
+        {role === ROLES.ADMIN && (
+          <SyncDbButton variant="sidebar" />
+        )}
         <ThemeToggle variant="switch" showLabel={true} className="w-full justify-between p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xs" />
       </div>
     </aside>

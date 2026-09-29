@@ -319,19 +319,19 @@ export default function ThermalReceiptModal({
         }
       `}</style>
 
-      <div className="receipt-modal-backdrop fixed inset-0 z-[120] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
-        <div className={`receipt-modal-card bg-white dark:bg-gray-900 w-full ${isA4 ? 'max-w-5xl' : 'max-w-md'} rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] border border-gray-200 dark:border-gray-700 transition-all duration-200`}>
+      <div className="receipt-modal-backdrop fixed inset-0 z-[120] bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+        <div className={`receipt-modal-card bg-white dark:bg-gray-900 w-full ${isA4 ? 'max-w-5xl' : 'max-w-md'} rounded-none overflow-hidden shadow-2xl flex flex-col max-h-[94vh] border border-gray-200 dark:border-gray-800 transition-all duration-200`}>
           {/* MODAL HEADER */}
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50/80 dark:bg-gray-800/80 no-print flex-wrap gap-2">
+          <div className="p-3 sm:p-3.5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/80 dark:bg-gray-800/80 no-print flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 flex items-center justify-center shrink-0">
-                <Printer className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-none bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 flex items-center justify-center shrink-0 border border-green-300 dark:border-green-800">
+                <Printer className="w-3.5 h-3.5" />
               </div>
               <div>
-                <h3 className="font-bold text-gray-900 dark:text-white text-sm">
+                <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
                   {title || (mode === 'batch' ? `Rekap Pesanan (${filteredBatchOrders.length} Pesanan)` : `Struk Pesanan #ORD-${order?.id}`)}
                 </h3>
-                <p className="text-[11px] text-gray-500">
+                <p className="text-[10px] text-gray-500">
                   {isA4
                     ? (mode === 'batch' && a4Layout === 'grid'
                         ? 'Format Kertas A4 (PDF) • Slip Struk Kasir Siap Gunting'
@@ -341,26 +341,26 @@ export default function ThermalReceiptModal({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {/* Paper Size Selector (58mm, 80mm, A4) */}
-              <div className="flex bg-gray-200 dark:bg-gray-700 p-0.5 rounded-xl text-[11px] font-bold">
+              <div className="flex bg-gray-200 dark:bg-gray-700 p-0.5 rounded-none text-[10px] font-bold">
                 <button
                   type="button"
                   onClick={() => setPaperWidth('A4')}
-                  className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                  className={`px-2 py-1 rounded-none transition-all flex items-center gap-1 cursor-pointer ${
                     paperWidth === 'A4'
                       ? 'bg-green-600 text-white shadow-xs'
                       : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
                   }`}
                   title="Kertas A4 / Dokumen & Invoice Siap Simpan PDF"
                 >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Kertas A4 (PDF)</span>
+                  <FileText className="w-3 h-3" />
+                  <span>A4</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaperWidth('58mm')}
-                  className={`px-2.5 py-1.5 rounded-lg transition-all ${
+                  className={`px-2 py-1 rounded-none transition-all cursor-pointer ${
                     paperWidth === '58mm'
                       ? 'bg-white dark:bg-gray-900 text-green-700 dark:text-green-400 shadow-xs'
                       : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
@@ -372,7 +372,7 @@ export default function ThermalReceiptModal({
                 <button
                   type="button"
                   onClick={() => setPaperWidth('80mm')}
-                  className={`px-2.5 py-1.5 rounded-lg transition-all ${
+                  className={`px-2 py-1 rounded-none transition-all cursor-pointer ${
                     paperWidth === '80mm'
                       ? 'bg-white dark:bg-gray-900 text-green-700 dark:text-green-400 shadow-xs'
                       : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
@@ -385,58 +385,58 @@ export default function ThermalReceiptModal({
 
               <button 
                 onClick={onClose} 
-                className="w-8 h-8 rounded-full bg-gray-200/70 dark:bg-gray-700 hover:bg-gray-300 text-gray-600 dark:text-gray-300 flex items-center justify-center transition-colors"
+                className="w-7 h-7 rounded-none bg-gray-200/70 dark:bg-gray-700 hover:bg-gray-300 text-gray-600 dark:text-gray-300 flex items-center justify-center transition-colors border border-gray-300 dark:border-gray-600 cursor-pointer"
                 title="Tutup Modal"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
           {/* TOGGLE SUB-FORMAT KHUSUS A4 BATCH (SLIP STRUK GRID VS TABEL MANIFES) */}
           {isA4 && mode === 'batch' && (
-            <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800/90 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between no-print gap-2 flex-wrap">
+            <div className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800/90 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between no-print gap-2 flex-wrap">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Tata Letak PDF:</span>
-                <div className="flex bg-gray-200 dark:bg-gray-700 p-0.5 rounded-lg text-xs font-bold">
+                <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300">Tata Letak PDF:</span>
+                <div className="flex bg-gray-200 dark:bg-gray-700 p-0.5 rounded-none text-xs font-bold">
                   <button
                     type="button"
                     onClick={() => setA4Layout('grid')}
-                    className={`px-3 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                    className={`px-2.5 py-0.5 rounded-none transition-all flex items-center gap-1.5 cursor-pointer ${
                       a4Layout === 'grid'
                         ? 'bg-green-600 text-white shadow-xs'
                         : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
                     }`}
                   >
-                    <span>✂️ Slip Struk Penuh (Font Besar & Siap Gunting)</span>
+                    <span>✂️ Slip Struk Penuh</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setA4Layout('table')}
-                    className={`px-3 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                    className={`px-2.5 py-0.5 rounded-none transition-all flex items-center gap-1.5 cursor-pointer ${
                       a4Layout === 'table'
                         ? 'bg-green-600 text-white shadow-xs'
                         : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
                     }`}
                   >
-                    <span>📋 Tabel Manifes Antaran</span>
+                    <span>📋 Tabel Manifes</span>
                   </button>
                 </div>
               </div>
-              <span className="text-[11px] text-green-700 dark:text-green-400 font-semibold hidden sm:inline">
-                {a4Layout === 'grid' ? '✓ Format 1 struk per ruang penuh, huruf besar & tebal' : '✓ Ringkasan tabel daftar pengantaran'}
+              <span className="text-[10px] text-green-700 dark:text-green-400 font-semibold hidden sm:inline">
+                {a4Layout === 'grid' ? '✓ Format 1 struk per ruang penuh' : '✓ Ringkasan tabel daftar pengantaran'}
               </span>
             </div>
           )}
 
           {/* NOTICE / PANDUAN PENGATURAN CETAK THERMAL */}
           {!isA4 && (
-            <div className="mx-4 mt-3 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-200 no-print flex items-start gap-2">
-              <div className="text-base shrink-0 leading-none">💡</div>
+            <div className="mx-3 mt-2 p-2 rounded-none bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[10px] text-amber-900 dark:text-amber-200 no-print flex items-start gap-1.5">
+              <div className="text-sm shrink-0 leading-none">💡</div>
               <div className="space-y-0.5">
                 <p className="font-bold">Panduan Cetak Pas di Printer Thermal ({paperWidth}):</p>
-                <p className="text-[10.5px] leading-relaxed text-amber-800 dark:text-amber-300">
-                  Jika pratinjau tampak selebar kertas A4: Pada jendela print browser, pastikan <strong>Tujuan (Destination)</strong> dipilih printer thermal Anda (bukan Save as PDF). Di bagian <em>Setelan lainnya (More settings)</em>, ubah <strong>Ukuran Kertas</strong> ke <strong>{paperWidth} / Roll Paper</strong> dan <strong>Margin</strong> ke <strong>Tidak ada (None)</strong>.
+                <p className="text-[10px] leading-relaxed text-amber-800 dark:text-amber-300">
+                  Jika pratinjau tampak selebar kertas A4: Pada jendela print browser, pastikan <strong>Tujuan (Destination)</strong> dipilih printer thermal Anda. Di bagian <em>Setelan lainnya</em>, ubah <strong>Ukuran Kertas</strong> ke <strong>{paperWidth} / Roll Paper</strong> dan <strong>Margin</strong> ke <strong>Tidak ada (None)</strong>.
                 </p>
               </div>
             </div>
@@ -1174,19 +1174,19 @@ export default function ThermalReceiptModal({
           </div>
 
           {/* MODAL FOOTER ACTION BUTTONS */}
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-3 bg-white dark:bg-gray-900 no-print flex-wrap">
+          <div className="p-3 border-t border-gray-200 dark:border-gray-800 flex gap-2 bg-white dark:bg-gray-900 no-print flex-wrap">
             <button
               onClick={onClose}
-              className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-2xl font-bold text-xs transition-colors"
+              className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-none font-bold text-xs transition-colors border border-gray-200 dark:border-gray-700 cursor-pointer"
             >
               Tutup
             </button>
             <button
               onClick={handlePrint}
               disabled={filteredBatchOrders.length === 0 && mode === 'batch'}
-              className="flex-[2] py-3 bg-green-600 hover:bg-green-700 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-green-600/20 transition-all disabled:opacity-50"
+              className="flex-[2] py-2 bg-green-600 hover:bg-green-700 active:scale-98 text-white rounded-none font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all disabled:opacity-50 cursor-pointer"
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="w-3.5 h-3.5" />
               {isA4
                 ? (mode === 'batch' && a4Layout === 'grid'
                     ? '🖨️ Cetak / Simpan PDF (Grid 4 Struk A4)'

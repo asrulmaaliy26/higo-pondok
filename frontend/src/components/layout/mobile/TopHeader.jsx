@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from '@tanstack/react-router';
 import ThemeToggle from '../../ui/ThemeToggle';
+import SyncDbButton from '../../common/SyncDbButton';
 
 export default function TopHeader({ user, isNoTopHeaderPage }) {
   if (isNoTopHeaderPage) return null;
@@ -16,6 +17,9 @@ export default function TopHeader({ user, isNoTopHeaderPage }) {
       </div>
       
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* Tombol Sinkronisasi / Backup Database VPS */}
+        <SyncDbButton variant="header" />
+
         {/* Theme Mode Toggle */}
         <ThemeToggle size="md" />
 

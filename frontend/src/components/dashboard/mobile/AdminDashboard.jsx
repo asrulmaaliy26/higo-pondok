@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../../lib/axios';
 import { Link } from '@tanstack/react-router';
 import ThemeToggle from '../../ui/ThemeToggle';
+import SyncDbButton from '../../common/SyncDbButton';
 
 export default function AdminDashboard({ user }) {
   const { data: adminStats } = useQuery({
@@ -43,7 +44,7 @@ export default function AdminDashboard({ user }) {
         <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">
           Akses Cepat Menu Admin
         </h3>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
           <Link
             to="/dashboard/admin/pesanan"
             className="flex flex-col items-center text-center justify-center p-4 rounded-xl bg-green-50 hover:bg-green-100 dark:bg-green-950/50 dark:hover:bg-green-900/60 transition-all border border-green-200/60 dark:border-green-800/50 shadow-xs hover:-translate-y-0.5"
@@ -79,6 +80,8 @@ export default function AdminDashboard({ user }) {
             <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">Log Aktivitas</span>
             <span className="text-[10px] text-gray-500 dark:text-gray-400 hidden sm:block mt-0.5">Riwayat Audit Sistem</span>
           </Link>
+
+          <SyncDbButton variant="card" />
         </div>
       </div>
 

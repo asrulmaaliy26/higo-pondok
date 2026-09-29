@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 require base_path('app/Domains/Auth/Routes/api.php');
 require base_path('app/Domains/Canteen/Routes/api.php');
+require base_path('app/Domains/DatabaseSync/Routes/api.php');
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;

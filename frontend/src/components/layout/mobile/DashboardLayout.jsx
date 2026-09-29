@@ -9,6 +9,7 @@ import TopHeader from './TopHeader';
 import MobileBottomNav from './MobileBottomNav';
 import DesktopSidebar from './DesktopSidebar';
 import ActiveCartFloatingBanner from '../../cart/ActiveCartFloatingBanner';
+import SyncDatabaseModal from '../../modals/SyncDatabaseModal';
 
 export default function DashboardLayout() {
   const user = useAuthStore((state) => state.user);
@@ -80,6 +81,9 @@ export default function DashboardLayout() {
 
         {/* Floating Active Cart Banner (Muncul saat user keluar dari detail toko & masih ada item di keranjang) */}
         <ActiveCartFloatingBanner />
+
+        {/* Modal Sinkronisasi Database VPS (Admin) */}
+        {userRole === 'admin' && <SyncDatabaseModal />}
       </div>
     </div>
   );

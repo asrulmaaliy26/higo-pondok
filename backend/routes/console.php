@@ -11,3 +11,11 @@ Artisan::command('inspire', function () {
 // Bersihkan token Sanctum yang sudah kedaluwarsa secara otomatis setiap hari
 Schedule::command('sanctum:prune-expired --hours=48')->daily();
 
+// Command Sinkronisasi Database VPS
+Artisan::command('db:pull-vps {--url= : URL endpoint VPS} {--secret= : Secret key}', function (\App\Domains\DatabaseSync\Services\DatabaseSyncService $service) {
+    $cmd = new \App\Domains\DatabaseSync\Commands\DbPullVpsCommand();
+    $cmd->setOutput($this->output);
+    $cmd->setInput($this->input);
+    return $cmd->handle($service);
+})->purpose('Tarik dan sinkronkan database lokal secara otomatis dari VPS');
+

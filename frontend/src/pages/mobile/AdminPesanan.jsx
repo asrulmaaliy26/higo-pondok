@@ -697,70 +697,114 @@ export default function AdminPesanan() {
   };
 
   return (
-    <div className="space-y-2.5 pb-20 animate-fade-in-up font-sans max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1.5 bg-white dark:bg-gray-900 p-2.5 sm:p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
-        <div>
-          <div className="flex items-center gap-1.5">
-            <h1 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-              Rekapitulasi & Manajemen Pesanan
-            </h1>
-          </div>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400">
-            Pantau seluruh arus pesanan di semua kantin, periksa rekapitulasi omzet per tanggal, dan kelola/hapus pesanan bermasalah.
-          </p>
-        </div>
-      </div>
-
-      {/* UNIFIED GLOBAL FILTER SECTION */}
-      <div className="bg-white dark:bg-gray-900 p-2.5 sm:p-3 rounded-xl border border-green-300/80 dark:border-green-800 shadow-xs space-y-2">
-        <div className="flex items-center justify-between flex-wrap gap-1 border-b border-gray-200 dark:border-gray-700 pb-1.5">
-          <h3 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-green-600" />
-            Filter Periode
-          </h3>
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800">
-            📅 Periode Aktif: <strong>{getFilterLabel()}</strong>
-          </span>
-        </div>
-
-        {/* Mode Filter Selector */}
-        <div className="flex gap-1 overflow-x-auto pb-0.5 no-scrollbar">
-          {[
-            { id: 'day', label: 'Harian (Per Tanggal)' },
-            { id: 'week', label: 'Mingguan' },
-            { id: 'month', label: 'Bulanan' },
-            { id: 'year', label: 'Tahunan' },
-            { id: 'all', label: 'Semua Waktu' }
-          ].map((m) => (
+    <div className="space-y-1.5 pb-20 animate-fade-in-up font-sans max-w-7xl mx-auto">
+      {/* ULTRA COMPACT TOP PANEL (2 BARIS TERPADU, SUPER PADAT & MAKSIMALKAN RUANG) */}
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-none shadow-xs divide-y divide-gray-200 dark:divide-gray-800">
+        
+        {/* Baris 1: Tab Navigasi Utama + Mode Filter + Action Buttons */}
+        <div className="px-2 py-1 flex items-center justify-between gap-1.5 flex-wrap bg-gray-50/70 dark:bg-gray-950/50">
+          {/* Sisi Kiri: Tab Utama */}
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
             <button
-              key={m.id}
-              onClick={() => {
-                setFilterMode(m.id);
-                if (m.id === 'week') {
-                  setFilterWeekIndex(getCurrentWeekIndex(filterYear, filterMonth));
-                }
-              }}
-              className={`px-2 py-0.5 rounded-md text-[11px] font-bold whitespace-nowrap transition-all shadow-xs ${
-                filterMode === m.id
-                  ? 'bg-green-600 text-white shadow-xs ring-1 ring-green-600/30'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
+              onClick={() => setActiveTab('orders')}
+              className={`py-1 px-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors cursor-pointer ${
+                activeTab === 'orders'
+                  ? 'border-green-600 text-green-700 dark:text-green-400 bg-white dark:bg-gray-900 shadow-2xs'
+                  : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
               }`}
             >
-              {m.label}
+              <ShoppingBag className="w-3.5 h-3.5 text-green-600" />
+              <span>Pesanan ({orders.length})</span>
             </button>
-          ))}
+
+            <button
+              onClick={() => setActiveTab('recap')}
+              className={`py-1 px-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors cursor-pointer ${
+                activeTab === 'recap'
+                  ? 'border-green-600 text-green-700 dark:text-green-400 bg-white dark:bg-gray-900 shadow-2xs'
+                  : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5 text-blue-600" />
+              <span>Rekap & Statistik</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('trash')}
+              className={`py-1 px-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors cursor-pointer ${
+                activeTab === 'trash'
+                  ? 'border-amber-600 text-amber-700 dark:text-amber-400 bg-white dark:bg-gray-900 shadow-2xs'
+                  : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+              }`}
+            >
+              <Trash2 className="w-3.5 h-3.5 text-amber-600" />
+              <span>Sampah ({trashedOrders.length})</span>
+            </button>
+          </div>
+
+          {/* Sisi Kanan: Segmented Mode Selector & Quick Actions */}
+          <div className="flex items-center gap-1 shrink-0 ml-auto">
+            {/* Mode Switcher Buttons */}
+            <div className="inline-flex border border-gray-200 dark:border-gray-700 divide-x divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+              {[
+                { id: 'day', label: 'Hari' },
+                { id: 'week', label: 'Minggu' },
+                { id: 'month', label: 'Bulan' },
+                { id: 'year', label: 'Tahun' },
+                { id: 'all', label: 'Semua' }
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    setFilterMode(m.id);
+                    if (m.id === 'week') {
+                      setFilterWeekIndex(getCurrentWeekIndex(filterYear, filterMonth));
+                    }
+                  }}
+                  className={`px-2 py-0.5 text-[10px] font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                    filterMode === m.id
+                      ? 'bg-green-600 text-white'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Print Batch Button (Thermal) */}
+            {activeTab === 'orders' && orders.length > 0 && (
+              <button
+                onClick={handlePrintBatchReceipt}
+                className="py-1 px-2 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-none text-[11px] font-bold transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
+                title="Cetak Rekap Seluruh Pesanan ke Printer Thermal"
+              >
+                <Printer className="w-3 h-3 text-green-400" />
+                <span className="hidden sm:inline">Cetak ({orders.length})</span>
+              </button>
+            )}
+
+            {/* Refresh Data Button */}
+            <button
+              onClick={() => {
+                if (activeTab === 'orders') refetchOrders();
+                else if (activeTab === 'recap') refetchRecap();
+                else if (activeTab === 'trash') refetchTrash();
+              }}
+              title="Perbarui Data"
+              className="p-1 text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isFetchingOrders || isFetchingRecap || isFetchingTrash ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
 
-        {/* Dynamic Inputs & Filters Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-1.5 pt-0.5">
-          {/* 1. Date Input (Per Tanggal / Datepicker) - KIRI */}
-          {filterMode === 'day' && (
-            <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
-                Pilih Tanggal:
-              </label>
-              <div className="relative group">
+        {/* Baris 2: Toolbar Filter Horizontal Super Ramping (Single Dense Row) */}
+        <div className="p-1.5 bg-white dark:bg-gray-900">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-1 text-xs">
+            {/* 1. Date Selector (Per Tanggal) */}
+            {filterMode === 'day' && (
+              <div className="relative group shrink-0 w-full sm:w-auto min-w-[170px]">
                 <input
                   type="date"
                   value={filterDate}
@@ -769,29 +813,24 @@ export default function AdminPesanan() {
                     try {
                       e.target.showPicker();
                     } catch {
-                      // Fallback for older browsers
+                      // Fallback
                     }
                   }}
                   className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
-                  title="Klik untuk memilih hari / tanggal / bulan / tahun"
+                  title="Klik untuk memilih hari / tanggal"
                 />
-                <div className="w-full flex items-center justify-between px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold group-hover:border-green-500 group-hover:bg-green-50/20 dark:group-hover:bg-green-950/20 transition-all shadow-xs">
-                  <span className="truncate">
-                    {formatFullDate(filterDate)}
+                <div className="flex items-center justify-between h-7 px-2 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-semibold group-hover:border-green-500 transition-colors">
+                  <span className="truncate text-[11px]">
+                    📅 {formatFullDate(filterDate)}
                   </span>
-                  <Calendar className="w-3.5 h-3.5 text-green-600 dark:text-green-400 shrink-0 ml-1.5 group-hover:scale-110 transition-transform" />
+                  <Calendar className="w-3.5 h-3.5 text-green-600 dark:text-green-400 shrink-0 ml-1" />
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Week Mode Inputs */}
-          {filterMode === 'week' && (
-            <>
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
-                  Pilih Bulan:
-                </label>
+            {/* Week Mode Inputs */}
+            {filterMode === 'week' && (
+              <div className="flex items-center gap-1 shrink-0">
                 <select
                   value={filterMonth}
                   onChange={(e) => {
@@ -799,9 +838,9 @@ export default function AdminPesanan() {
                     setFilterMonth(newMonth);
                     setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
                   }}
-                  className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-medium focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  className="h-7 px-1.5 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:outline-none"
                 >
-                  {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
+                  {['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'].map(
                     (m, i) => (
                       <option key={i} value={i}>
                         {m}
@@ -809,16 +848,11 @@ export default function AdminPesanan() {
                     )
                   )}
                 </select>
-              </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
-                  Pilih Rentang Minggu:
-                </label>
                 <select
                   value={filterWeekIndex < getWeeksInMonth(filterYear, filterMonth).length ? filterWeekIndex : 0}
                   onChange={(e) => setFilterWeekIndex(parseInt(e.target.value))}
-                  className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-medium focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  className="h-7 px-1.5 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:outline-none max-w-[130px] truncate"
                 >
                   {getWeeksInMonth(filterYear, filterMonth).map((w, i) => (
                     <option key={i} value={i}>
@@ -827,184 +861,105 @@ export default function AdminPesanan() {
                   ))}
                 </select>
               </div>
-            </>
-          )}
+            )}
 
-          {/* Month Mode Input */}
-          {filterMode === 'month' && (
-            <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
-                Pilih Bulan:
-              </label>
-              <select
-                value={filterMonth}
-                onChange={(e) => {
-                  const newMonth = parseInt(e.target.value);
-                  setFilterMonth(newMonth);
-                  setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
-                }}
-                className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-medium focus:ring-2 focus:ring-green-500 focus:outline-none"
-              >
-                {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
-                  (m, i) => (
-                    <option key={i} value={i}>
-                      {m}
+            {/* Month Mode Input */}
+            {filterMode === 'month' && (
+              <div className="shrink-0">
+                <select
+                  value={filterMonth}
+                  onChange={(e) => {
+                    const newMonth = parseInt(e.target.value);
+                    setFilterMonth(newMonth);
+                    setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
+                  }}
+                  className="h-7 px-2 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:outline-none"
+                >
+                  {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
+                    (m, i) => (
+                      <option key={i} value={i}>
+                        Bulan: {m}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+            )}
+
+            {/* Year Mode */}
+            {(filterMode === 'week' || filterMode === 'month' || filterMode === 'year') && (
+              <div className="shrink-0">
+                <select
+                  value={filterYear}
+                  onChange={(e) => {
+                    const newYear = parseInt(e.target.value);
+                    setFilterYear(newYear);
+                    setFilterWeekIndex(getCurrentWeekIndex(newYear, filterMonth));
+                  }}
+                  className="h-7 px-1.5 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:outline-none"
+                >
+                  {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                    <option key={y} value={y}>
+                      {y}
                     </option>
-                  )
-                )}
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Status Filter */}
+            <div className="shrink-0 w-[130px] sm:w-[145px]">
+              <select
+                value={selectedStatusFilter}
+                onChange={(e) => setSelectedStatusFilter(e.target.value)}
+                className="w-full h-7 px-1.5 border rounded-none text-[11px] font-semibold bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:outline-none"
+              >
+                <option value="all">📋 Semua Status</option>
+                <option value="waiting_confirmation">⏳ Verifikasi Bayar</option>
+                <option value="paid">💳 Lunas</option>
+                <option value="unpaid">⚠️ Belum Bayar</option>
+                <option value="pending">⏳ Pending</option>
+                <option value="processing">🚚 Diproses</option>
+                <option value="completed">✅ Selesai</option>
+                <option value="cancelled">❌ Dibatalkan</option>
               </select>
             </div>
-          )}
 
-          {/* Year Mode or Month/Week Year Selector */}
-          {(filterMode === 'week' || filterMode === 'month' || filterMode === 'year') && (
-            <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
-                Pilih Tahun:
-              </label>
+            {/* Courier Filter */}
+            <div className="shrink-0 w-[120px] sm:w-[135px]">
               <select
-                value={filterYear}
-                onChange={(e) => {
-                  const newYear = parseInt(e.target.value);
-                  setFilterYear(newYear);
-                  setFilterWeekIndex(getCurrentWeekIndex(newYear, filterMonth));
-                }}
-                className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-medium focus:ring-2 focus:ring-green-500 focus:outline-none"
+                value={selectedCourierFilter}
+                onChange={(e) => setSelectedCourierFilter(e.target.value)}
+                className="w-full h-7 px-1.5 border rounded-none text-[11px] font-semibold bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:outline-none"
               >
-                {[2024, 2025, 2026, 2027, 2028].map((y) => (
-                  <option key={y} value={y}>
-                    {y}
+                <option value="all">🚚 Semua Kurir</option>
+                <option value="unassigned">🚫 Antar Sendiri</option>
+                {couriersList.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    🛵 {c.name}
                   </option>
                 ))}
               </select>
             </div>
-          )}
 
-          {/* Status Filter */}
-          <div>
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
-              Filter Status:
-            </label>
-            <select
-              value={selectedStatusFilter}
-              onChange={(e) => setSelectedStatusFilter(e.target.value)}
-              className="w-full px-2.5 py-1.5 border rounded-lg text-xs font-semibold bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-green-500 focus:outline-none"
-            >
-              <option value="all">📋 Semua Status</option>
-              <option value="waiting_confirmation">⏳ Menunggu Validasi Bayar</option>
-              <option value="paid">💳 Sudah Bayar (Lunas)</option>
-              <option value="unpaid">⚠️ Belum Bayar</option>
-              <option value="pending">⏳ Belum Dikonfirmasi (Pending)</option>
-              <option value="processing">🚚 Sedang Diproses</option>
-              <option value="completed">✅ Selesai</option>
-              <option value="cancelled">❌ Dibatalkan</option>
-            </select>
-          </div>
-
-          {/* Courier Filter */}
-          <div>
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
-              Filter Kurir:
-            </label>
-            <select
-              value={selectedCourierFilter}
-              onChange={(e) => setSelectedCourierFilter(e.target.value)}
-              className="w-full px-2.5 py-1.5 border rounded-lg text-xs font-semibold bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-green-500 focus:outline-none"
-            >
-              <option value="all">🚚 Semua Kurir</option>
-              <option value="unassigned">🚫 Tanpa Kurir / Antar Sendiri</option>
-              {couriersList.map((c) => (
-                <option key={c.id} value={c.id}>
-                  🛵 {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Search Box */}
-          <div className="sm:col-span-2 lg:col-span-1 xl:col-span-2">
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
-              Pencarian Cepat:
-            </label>
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            {/* Search Box (Expands to fill remaining space) */}
+            <div className="flex-1 min-w-[150px] relative">
+              <Search className="w-3 h-3 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Ketik nama Santri / Wali / Toko / Order ID..."
+                placeholder="Cari Santri / Wali / Toko / Order ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white focus:ring-2 focus:ring-green-500 focus:outline-none font-medium"
+                className="w-full h-7 pl-6 pr-2 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white focus:ring-1 focus:ring-green-500 focus:outline-none font-medium placeholder:text-gray-400"
               />
             </div>
           </div>
         </div>
       </div>
 
-      {/* MAIN TAB SWITCHER (DITARUH DI BAWAH FILTER) */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-3 py-1 flex items-center justify-between gap-3 rounded-xl shadow-xs overflow-x-auto no-scrollbar">
-        <div className="flex gap-3">
-          <button
-            onClick={() => setActiveTab('orders')}
-            className={`py-1.5 px-2.5 text-xs sm:text-sm font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors ${
-              activeTab === 'orders'
-                ? 'border-green-600 text-green-600 dark:text-green-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-          >
-            <ShoppingBag className="w-4 h-4" />
-            Daftar Semua Pesanan ({orders.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('recap')}
-            className={`py-1.5 px-2.5 text-xs sm:text-sm font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors ${
-              activeTab === 'recap'
-                ? 'border-green-600 text-green-600 dark:text-green-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            Tab Rekap & Statistik
-          </button>
-          <button
-            onClick={() => setActiveTab('trash')}
-            className={`py-2 px-3 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === 'trash'
-                ? 'border-amber-600 text-amber-600 dark:text-amber-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-          >
-            <Trash2 className="w-4 h-4" />
-            Tong Sampah ({trashedOrders.length})
-          </button>
-        </div>
-
-        {activeTab === 'orders' && orders.length > 0 && (
-          <button
-            onClick={handlePrintBatchReceipt}
-            className="py-1.5 px-3 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs active:scale-95 shrink-0"
-            title="Cetak Rekap Seluruh Pesanan ke Printer Thermal"
-          >
-            <Printer className="w-3.5 h-3.5 text-green-400" />
-            <span>🖨️ Cetak Rekap ({orders.length})</span>
-          </button>
-        )}
-      </div>
-
       {/* TAB 1: DAFTAR SEMUA PESANAN */}
       {activeTab === 'orders' && (
-        <div className="space-y-4">
-          {/* Orders Count & Refresh Bar */}
-          <div className="flex items-center justify-between px-1 text-xs text-gray-500">
-            <span>
-              Menampilkan <strong>{orders.length}</strong> pesanan ({getFilterLabel()})
-            </span>
-            <button
-              onClick={() => refetchOrders()}
-              className="flex items-center gap-1 text-green-600 dark:text-green-400 hover:underline font-semibold"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isFetchingOrders ? 'animate-spin' : ''}`} /> Refresh Data
-            </button>
-          </div>
+        <div className="space-y-1.5">
 
           {/* Orders List */}
           {isLoadingOrders ? (
@@ -1012,15 +967,15 @@ export default function AdminPesanan() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
             </div>
           ) : orders.length === 0 ? (
-            <div className="bg-white dark:bg-gray-900 rounded-2xl p-12 text-center border border-gray-200 dark:border-gray-700 shadow-sm">
-              <ShoppingBag className="w-16 h-16 mx-auto mb-3 text-gray-300 dark:text-gray-700" />
-              <h3 className="font-bold text-gray-700 dark:text-gray-300 text-base">Tidak ada pesanan ditemukan</h3>
-              <p className="text-xs text-gray-400 mt-1">
+            <div className="bg-white dark:bg-gray-900 rounded-none p-8 text-center border border-gray-200 dark:border-gray-700 shadow-xs">
+              <ShoppingBag className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-700" />
+              <h3 className="font-bold text-gray-700 dark:text-gray-300 text-sm">Tidak ada pesanan ditemukan</h3>
+              <p className="text-xs text-gray-400 mt-0.5">
                 Tidak ada pesanan yang sesuai dengan filter tanggal <strong>{getFilterLabel()}</strong>.
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2">
               {orders.map((order) => {
                 const isPaid = order.payment_status === 'paid';
                 const isWaiting = order.payment_status === 'waiting_confirmation';
@@ -1055,13 +1010,13 @@ export default function AdminPesanan() {
                 return (
                   <div
                     key={order.id}
-                    className="bg-white dark:bg-gray-900 rounded-2xl border border-green-300/90 dark:border-green-800 shadow-sm hover:border-green-500 dark:hover:border-green-600 hover:shadow-md transition-all p-3 sm:p-3.5 flex flex-col justify-between gap-2"
+                    className="bg-white dark:bg-gray-900 rounded-none border border-gray-200 dark:border-gray-800 shadow-xs hover:border-green-500 dark:hover:border-green-600 transition-all p-2 sm:p-2.5 flex flex-col justify-between gap-1"
                   >
                     {/* 1. Header: Toko, ID, Jam & Status Badges */}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-1.5 border-b border-gray-200 dark:border-gray-700/80 pb-1.5">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-1 border-b border-gray-200 dark:border-gray-700/80 pb-1">
                         <div className="flex items-center gap-1 flex-wrap min-w-0">
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate max-w-[130px]">
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-none bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate max-w-[130px]">
                             🏪 {order.canteen?.name || `Kantin #${order.canteen_id}`}
                           </span>
                           <span className="text-[11px] font-bold text-gray-800 dark:text-gray-200">
@@ -1078,7 +1033,7 @@ export default function AdminPesanan() {
                             type="button"
                             onClick={() => handleOpenChangeStatusModal(order)}
                             title="Klik untuk ubah status pembayaran / pesanan"
-                            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                            className={`px-1.5 py-0.5 rounded-none text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                               isPaid
                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
                                 : isWaiting
@@ -1093,7 +1048,7 @@ export default function AdminPesanan() {
                             type="button"
                             onClick={() => handleOpenChangeStatusModal(order)}
                             title="Klik untuk ubah status pesanan"
-                            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                            className={`px-1.5 py-0.5 rounded-none text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                               order.status === 'completed'
                                 ? 'bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800'
                                 : order.status === 'processing'
@@ -1129,13 +1084,13 @@ export default function AdminPesanan() {
                           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                             <span className="truncate">Wali: {waliName}</span>
                             {(santriLevel || santriClass) && (
-                              <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 text-[10px] font-bold">
+                              <span className="inline-flex items-center px-1.5 py-0.2 rounded-none bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 text-[10px] font-bold">
                                 🎓 {santriLevel ? `${santriLevel} ` : ''}{santriClass ? `Kelas ${santriClass}` : ''}
                               </span>
                             )}
                           </div>
                           {order.courier?.name ? (
-                            <span className="text-green-700 dark:text-green-400 font-bold flex items-center gap-1 shrink-0 bg-green-50 dark:bg-green-950/50 px-1.5 py-0.5 rounded-md border border-green-200 dark:border-green-800 text-[10px]">
+                            <span className="text-green-700 dark:text-green-400 font-bold flex items-center gap-1 shrink-0 bg-green-50 dark:bg-green-950/50 px-1.5 py-0.5 rounded-none border border-green-200 dark:border-green-800 text-[10px]">
                               <Truck className="w-3 h-3 text-green-600 dark:text-green-400" /> {order.courier.name}
                             </span>
                           ) : (
@@ -1147,7 +1102,7 @@ export default function AdminPesanan() {
                       </div>
 
                       {/* 3. Items List Box (Minimalist & Clean) */}
-                      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2 space-y-0.5 text-xs border border-gray-200 dark:border-gray-700">
+                      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-none p-1.5 space-y-0.5 text-xs border border-gray-200 dark:border-gray-700">
                         {order.custom_notes && (
                           <div className="text-[11px] font-medium text-purple-800 dark:text-purple-300 pb-0.5 border-b border-purple-100 dark:border-purple-900/40">
                             ✨ {order.custom_notes}
@@ -1176,7 +1131,7 @@ export default function AdminPesanan() {
                       </div>
 
                       {/* 4. Proof Buttons (Only if available - compact chips) & Quick Upload */}
-                      <div className="flex gap-1.5 flex-wrap items-center pt-0.5">
+                      <div className="flex gap-1 flex-wrap items-center pt-0.5">
                         {order.proof_of_payment && order.proof_of_payment.length > 0 ? (
                           <div className="inline-flex items-center gap-1">
                             <button
@@ -1186,14 +1141,14 @@ export default function AdminPesanan() {
                                   : [getStorageUrl(order.proof_of_payment)];
                                 setSelectedProofs(proofs);
                               }}
-                              className="px-2 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-indigo-200 dark:border-indigo-800"
+                              className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-100 rounded-none text-[10px] font-semibold flex items-center gap-1 transition-colors border border-indigo-200 dark:border-indigo-800 cursor-pointer"
                             >
                               <ImageIcon className="w-3 h-3" /> Bayar ({Array.isArray(order.proof_of_payment) ? order.proof_of_payment.length : 1})
                             </button>
                             <button
                               onClick={() => handleOpenUploadPaymentModal(order)}
                               title="Tambah / ganti bukti transfer santri"
-                              className="px-1.5 py-0.5 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300 hover:bg-green-100 rounded-md text-[10px] font-bold flex items-center gap-0.5 transition-colors border border-green-200 dark:border-green-800"
+                              className="px-1.5 py-0.5 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300 hover:bg-green-100 rounded-none text-[10px] font-bold flex items-center gap-0.5 transition-colors border border-green-200 dark:border-green-800 cursor-pointer"
                             >
                               <Plus className="w-2.5 h-2.5" /> Bukti
                             </button>
@@ -1201,7 +1156,7 @@ export default function AdminPesanan() {
                         ) : (
                           <button
                             onClick={() => handleOpenUploadPaymentModal(order)}
-                            className="px-2 py-0.5 bg-green-50 hover:bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-green-200 dark:border-green-800"
+                            className="px-1.5 py-0.5 bg-green-50 hover:bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300 rounded-none text-[10px] font-semibold flex items-center gap-1 transition-colors border border-green-200 dark:border-green-800 cursor-pointer"
                             title="Unggah bukti pembayaran santri"
                           >
                             <UploadCloud className="w-3 h-3 text-green-600 dark:text-green-400" />
@@ -1217,7 +1172,7 @@ export default function AdminPesanan() {
                                 : [getStorageUrl(order.proof_of_purchase)];
                               setSelectedProofs(proofs);
                             }}
-                            className="px-2 py-0.5 bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 hover:bg-purple-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-800"
+                            className="px-1.5 py-0.5 bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 hover:bg-purple-100 rounded-none text-[10px] font-semibold flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-800 cursor-pointer"
                           >
                             <ImageIcon className="w-3 h-3" /> Struk
                           </button>
@@ -1231,7 +1186,7 @@ export default function AdminPesanan() {
                                 : [getStorageUrl(order.proof_of_delivery)];
                               setSelectedProofs(proofs);
                             }}
-                            className="px-2 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-blue-200 dark:border-blue-800"
+                            className="px-1.5 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100 rounded-none text-[10px] font-semibold flex items-center gap-1 transition-colors border border-blue-200 dark:border-blue-800 cursor-pointer"
                           >
                             <ImageIcon className="w-3 h-3" /> Antar
                           </button>
@@ -1240,7 +1195,7 @@ export default function AdminPesanan() {
                     </div>
 
                     {/* 5. Footer: Total Price & Minimalist Actions */}
-                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700/80 flex items-center justify-between gap-2">
+                    <div className="pt-1.5 border-t border-gray-200 dark:border-gray-700/80 flex items-center justify-between gap-1.5">
                       <div className="min-w-0">
                         <span className="text-sm font-black text-green-700 dark:text-green-400 block leading-tight">
                           Rp {parseFloat(order.total_price || 0).toLocaleString('id-ID')}
@@ -1258,7 +1213,7 @@ export default function AdminPesanan() {
                               setOrderToCancel(order);
                               setCancelReason('');
                             }}
-                            className="p-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800"
+                            className="p-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-none text-xs font-bold transition-colors border border-red-200 dark:border-red-800 cursor-pointer"
                             title={order.status === 'completed' ? 'Batalkan pesanan yang sudah selesai' : 'Batalkan Pesanan'}
                           >
                             <X className="w-3.5 h-3.5" />
@@ -1267,7 +1222,7 @@ export default function AdminPesanan() {
 
                         <button
                           onClick={() => handleOpenUploadPaymentModal(order)}
-                          className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold transition-colors"
+                          className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-none text-xs font-bold transition-colors cursor-pointer"
                           title="Unggah / Tambah Bukti Transfer Santri"
                         >
                           <UploadCloud className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
@@ -1275,7 +1230,7 @@ export default function AdminPesanan() {
 
                         <button
                           onClick={() => handleOpenChangeStatusModal(order)}
-                          className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1 shadow-2xs"
+                          className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-none text-[11px] font-bold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
                           title="Ubah Status Pesanan"
                         >
                           <RotateCcw className="w-3 h-3" />
@@ -1284,7 +1239,7 @@ export default function AdminPesanan() {
 
                         <button
                           onClick={() => handlePrintSingleReceipt(order)}
-                          className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold transition-colors"
+                          className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-none text-xs font-bold transition-colors cursor-pointer"
                           title="Cetak Struk Thermal / A4"
                         >
                           <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
@@ -1292,7 +1247,7 @@ export default function AdminPesanan() {
 
                         <button
                           onClick={() => setOrderToDelete(order)}
-                          className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-400 hover:text-red-600 rounded-lg text-xs font-bold transition-colors border border-gray-200 dark:border-gray-700"
+                          className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-400 hover:text-red-600 rounded-none text-xs font-bold transition-colors border border-gray-200 dark:border-gray-700 cursor-pointer"
                           title="Hapus / Pindahkan ke Kotak Sampah"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1309,18 +1264,18 @@ export default function AdminPesanan() {
 
       {/* TAB 2: REKAPITULASI & STATISTIK */}
       {activeTab === 'recap' && (
-        <div className="space-y-6">
+        <div className="space-y-3">
           {/* Header Ringkasan Periode Aktif */}
-          <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <FileText className="w-5 h-5 text-green-600" />
+          <div className="bg-white dark:bg-gray-900 p-2.5 sm:p-3 rounded-none shadow-xs border border-gray-200 dark:border-gray-800 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-green-600" />
               Rekapitulasi Penjualan & Keuangan ({getFilterLabel()})
             </h2>
             <button
               onClick={() => refetchRecap()}
               className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 hover:underline font-semibold ml-auto"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isFetchingRecap ? 'animate-spin' : ''}`} /> Refresh Rekap
+              <RefreshCw className={`w-3 h-3 ${isFetchingRecap ? 'animate-spin' : ''}`} /> Refresh Rekap
             </button>
           </div>
 
@@ -1331,46 +1286,46 @@ export default function AdminPesanan() {
           ) : (
             <>
               {/* Metric Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3.5">
-                <div className="bg-white dark:bg-gray-900 p-3.5 sm:p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xs">
-                  <span className="text-[11px] sm:text-xs text-gray-500 font-medium block mb-1">Total Belanja (HPJ)</span>
-                  <span className="text-base sm:text-xl font-black text-gray-900 dark:text-white">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                <div className="bg-white dark:bg-gray-900 p-2.5 sm:p-3 rounded-none border border-gray-200 dark:border-gray-800 shadow-xs">
+                  <span className="text-[10px] text-gray-500 font-medium block mb-0.5">Total Belanja (HPJ)</span>
+                  <span className="text-sm sm:text-base font-black text-gray-900 dark:text-white">
                     Rp {(recapData?.summary?.total_products || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
-                <div className="bg-amber-50/60 dark:bg-amber-950/20 p-3.5 sm:p-4 rounded-2xl border border-amber-200/80 dark:border-amber-800/40 shadow-xs">
-                  <span className="text-[11px] sm:text-xs text-amber-700 dark:text-amber-400 font-medium block mb-1">Total Modal (HPP)</span>
-                  <span className="text-base sm:text-xl font-black text-amber-700 dark:text-amber-300">
+                <div className="bg-amber-50/60 dark:bg-amber-950/20 p-2.5 sm:p-3 rounded-none border border-amber-200/80 dark:border-amber-800/40 shadow-xs">
+                  <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium block mb-0.5">Total Modal (HPP)</span>
+                  <span className="text-sm sm:text-base font-black text-amber-700 dark:text-amber-300">
                     Rp {(recapData?.summary?.total_hpp || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
-                <div className="bg-emerald-50 dark:bg-emerald-950/40 p-3.5 sm:p-4 rounded-2xl border border-emerald-200 dark:border-emerald-800/50 shadow-xs">
-                  <span className="text-[11px] sm:text-xs text-emerald-700 dark:text-emerald-300 font-bold block mb-1">Total Laba Toko</span>
-                  <span className="text-base sm:text-xl font-black text-emerald-700 dark:text-emerald-300">
+                <div className="bg-emerald-50 dark:bg-emerald-950/40 p-2.5 sm:p-3 rounded-none border border-emerald-200 dark:border-emerald-800/50 shadow-xs">
+                  <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold block mb-0.5">Total Laba Toko</span>
+                  <span className="text-sm sm:text-base font-black text-emerald-700 dark:text-emerald-300">
                     Rp {(recapData?.summary?.total_profit || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
-                <div className="bg-white dark:bg-gray-900 p-3.5 sm:p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xs flex flex-col justify-between">
+                <div className="bg-white dark:bg-gray-900 p-2.5 sm:p-3 rounded-none border border-gray-200 dark:border-gray-800 shadow-xs flex flex-col justify-between">
                   <div>
-                    <span className="text-[11px] sm:text-xs text-gray-500 font-medium block mb-1">Total Ongkir Kurir</span>
-                    <span className="text-base sm:text-xl font-black text-blue-600 dark:text-blue-400">
+                    <span className="text-[10px] text-gray-500 font-medium block mb-0.5">Total Ongkir Kurir</span>
+                    <span className="text-sm sm:text-base font-black text-blue-600 dark:text-blue-400">
                       Rp {(recapData?.summary?.total_delivery_fee || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
                   {(recapData?.summary?.total_courier_cut_to_admin || 0) > 0 && (
-                    <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-800 text-[10px] text-gray-400">
+                    <div className="mt-1 pt-1 border-t border-gray-100 dark:border-gray-800 text-[10px] text-gray-400">
                       Dialihkan ke admin: <span className="font-semibold text-amber-600 dark:text-amber-400">-Rp {(recapData?.summary?.total_courier_cut_to_admin || 0).toLocaleString('id-ID')}</span>
                     </div>
                   )}
                 </div>
-                <div className="bg-white dark:bg-gray-900 p-3.5 sm:p-4 rounded-2xl border border-purple-200/60 dark:border-purple-800/40 shadow-xs flex flex-col justify-between">
+                <div className="bg-white dark:bg-gray-900 p-2.5 sm:p-3 rounded-none border border-purple-200/60 dark:border-purple-800/40 shadow-xs flex flex-col justify-between">
                   <div>
-                    <span className="text-[11px] sm:text-xs text-purple-700 dark:text-purple-400 font-medium block mb-1">Total Biaya Admin</span>
-                    <span className="text-base sm:text-xl font-black text-purple-600 dark:text-purple-400">
+                    <span className="text-[10px] text-purple-700 dark:text-purple-400 font-medium block mb-0.5">Total Biaya Admin</span>
+                    <span className="text-sm sm:text-base font-black text-purple-600 dark:text-purple-400">
                       Rp {(recapData?.summary?.total_admin_fee || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
-                  <div className="mt-2 pt-1.5 border-t border-purple-100 dark:border-purple-900/40 space-y-0.5 text-[10px] sm:text-[11px]">
+                  <div className="mt-1 pt-1 border-t border-purple-100 dark:border-purple-900/40 space-y-0.5 text-[10px]">
                     <div className="flex justify-between text-gray-500 dark:text-gray-400">
                       <span>• Admin Pokok:</span>
                       <span className="font-semibold text-gray-700 dark:text-gray-300">
@@ -1385,87 +1340,139 @@ export default function AdminPesanan() {
                     </div>
                   </div>
                 </div>
-                <div className="bg-green-50 dark:bg-green-950/40 p-3.5 sm:p-4 rounded-2xl border border-green-200 dark:border-green-800/50 shadow-xs">
-                  <span className="text-[11px] sm:text-xs text-green-700 dark:text-green-300 font-medium block mb-1">
+                <div className="bg-green-50 dark:bg-green-950/40 p-2.5 sm:p-3 rounded-none border border-green-200 dark:border-green-800/50 shadow-xs">
+                  <span className="text-[10px] text-green-700 dark:text-green-300 font-medium block mb-0.5">
                     Grand Total ({recapData?.summary?.total_orders || 0} Order)
                   </span>
-                  <span className="text-base sm:text-xl font-black text-green-700 dark:text-green-300">
+                  <span className="text-sm sm:text-base font-black text-green-700 dark:text-green-300">
                     Rp {(recapData?.summary?.grand_total || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
               </div>
 
-              {/* Rekapitulasi Per Toko / Kantin */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-3.5 sm:p-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50/50 dark:bg-blue-950/20">
+              {/* Rekapitulasi Per Toko / Kantin (Tabel Lurus & Rapi) */}
+              <div className="bg-white dark:bg-gray-900 rounded-none shadow-xs border border-gray-200 dark:border-gray-800 overflow-hidden">
+                <div className="p-2 sm:p-2.5 border-b border-gray-200 dark:border-gray-800 bg-blue-50/40 dark:bg-blue-950/20 flex items-center justify-between">
                   <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
                     <Store className="w-4 h-4 text-blue-600" />
                     Rekapitulasi Per Toko / Kantin
                   </h3>
+                  <span className="text-[10px] text-gray-500 font-medium">
+                    {recapData?.canteen_recap?.length || 0} Toko Terlibat
+                  </span>
                 </div>
-                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                
+                <div className="overflow-x-auto no-scrollbar">
                   {!recapData?.canteen_recap || recapData.canteen_recap.length === 0 ? (
                     <div className="p-6 text-center text-gray-500 text-sm">
                       Belum ada transaksi pada periode <strong>{getFilterLabel()}</strong>.
                     </div>
                   ) : (
-                    recapData.canteen_recap.map((c) => (
-                      <div
-                        key={c.canteen_id}
-                        className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors"
-                      >
-                        <div>
-                          <h4 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
-                            🏪 {c.canteen_name}
-                            <span className="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold px-2 py-0.5 rounded capitalize">
-                              Zona {c.category}
-                            </span>
-                          </h4>
-                          <p className="text-[11px] text-gray-500 mt-0.5">{c.order_count} Total Pesanan</p>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-wrap text-xs font-semibold">
-                          <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg text-gray-700 dark:text-gray-300">
-                            Produk: Rp {c.total_products.toLocaleString('id-ID')}
-                          </span>
-                          <span className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-1 rounded-lg">
-                            HPP: Rp {(c.total_hpp || 0).toLocaleString('id-ID')}
-                          </span>
-                          <span className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-1 rounded-lg font-bold">
-                            Laba: +Rp {(c.total_profit || 0).toLocaleString('id-ID')}
-                          </span>
-                          <span className="text-gray-300 dark:text-gray-600">|</span>
-                          <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-lg">
-                            Ongkir: Rp {c.total_delivery_fee.toLocaleString('id-ID')}
-                          </span>
-                          <span className="bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded-lg">
-                            Admin: Rp {c.total_admin_fee.toLocaleString('id-ID')}
-                            {(c.total_courier_cut_to_admin || 0) > 0 && (
-                              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-normal ml-1">
-                                (Pokok: {(c.total_base_admin_fee || 0).toLocaleString('id-ID')}, Pindahan: +{(c.total_courier_cut_to_admin || 0).toLocaleString('id-ID')})
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/60 text-[11px] font-bold text-gray-500 dark:text-gray-400">
+                          <th className="py-2 px-2.5 text-left whitespace-nowrap">Toko / Kantin</th>
+                          <th className="py-2 px-2 text-right whitespace-nowrap">Belanja (HPJ)</th>
+                          <th className="py-2 px-2 text-right whitespace-nowrap">Modal (HPP)</th>
+                          <th className="py-2 px-2 text-right whitespace-nowrap">Laba Toko</th>
+                          <th className="py-2 px-2 text-right whitespace-nowrap">Ongkir</th>
+                          <th className="py-2 px-2 text-right whitespace-nowrap">Biaya Admin</th>
+                          <th className="py-2 px-2.5 text-right whitespace-nowrap">Total Omzet</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                        {recapData.canteen_recap.map((c) => (
+                          <tr
+                            key={c.canteen_id}
+                            className="hover:bg-gray-50/60 dark:hover:bg-gray-800/40 transition-colors"
+                          >
+                            <td className="py-1.5 px-2.5 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-gray-900 dark:text-white text-xs">
+                                  🏪 {c.canteen_name}
+                                </span>
+                                <span className="text-[10px] bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold px-1.5 py-0.2 rounded-none border border-blue-200 dark:border-blue-800 capitalize">
+                                  Zona {c.category}
+                                </span>
+                                <span className="text-[11px] text-gray-400 font-medium">
+                                  • {c.order_count} pesanan
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-1.5 px-2 text-right whitespace-nowrap font-mono text-[11px] text-gray-800 dark:text-gray-200 font-medium">
+                              Rp {c.total_products.toLocaleString('id-ID')}
+                            </td>
+                            <td className="py-1.5 px-2 text-right whitespace-nowrap font-mono text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                              Rp {(c.total_hpp || 0).toLocaleString('id-ID')}
+                            </td>
+                            <td className="py-1.5 px-2 text-right whitespace-nowrap font-mono text-[11px]">
+                              <span className={`px-1.5 py-0.2 rounded-none border font-bold ${
+                                (c.total_profit || 0) >= 0 
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60'
+                                  : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/60'
+                              }`}>
+                                {(c.total_profit || 0) >= 0 ? '+' : ''}Rp {(c.total_profit || 0).toLocaleString('id-ID')}
                               </span>
-                            )}
-                          </span>
-                          <span className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 px-2 py-1 rounded-lg font-bold ml-auto sm:ml-0">
-                            Total: Rp {c.grand_total.toLocaleString('id-ID')}
-                          </span>
-                        </div>
-                      </div>
-                    ))
+                            </td>
+                            <td className="py-1.5 px-2 text-right whitespace-nowrap font-mono text-[11px] text-blue-600 dark:text-blue-400 font-medium">
+                              Rp {c.total_delivery_fee.toLocaleString('id-ID')}
+                            </td>
+                            <td className="py-1.5 px-2 text-right whitespace-nowrap font-mono text-[11px]">
+                              <span className="text-purple-600 dark:text-purple-400 font-medium">
+                                Rp {c.total_admin_fee.toLocaleString('id-ID')}
+                              </span>
+                              {(c.total_courier_cut_to_admin || 0) > 0 && (
+                                <span className="text-[9px] text-amber-500 font-normal block">
+                                  (+{(c.total_courier_cut_to_admin || 0).toLocaleString('id-ID')})
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-1.5 px-2.5 text-right whitespace-nowrap font-mono text-[11px]">
+                              <span className="bg-green-100 dark:bg-green-950/70 px-1.5 py-0.5 rounded-none border border-green-300 dark:border-green-800 text-green-800 dark:text-green-300 font-bold">
+                                Rp {c.grand_total.toLocaleString('id-ID')}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="border-t-2 border-gray-300 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-950/70 font-bold text-xs">
+                        <tr>
+                          <td className="py-2 px-2.5 text-gray-900 dark:text-white">
+                            Total ({recapData.canteen_recap.length} Toko)
+                          </td>
+                          <td className="py-2 px-2 text-right font-mono text-[11px] text-gray-900 dark:text-white">
+                            Rp {recapData.canteen_recap.reduce((sum, c) => sum + (c.total_products || 0), 0).toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2 px-2 text-right font-mono text-[11px] text-amber-600 dark:text-amber-400">
+                            Rp {recapData.canteen_recap.reduce((sum, c) => sum + (c.total_hpp || 0), 0).toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2 px-2 text-right font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
+                            +Rp {recapData.canteen_recap.reduce((sum, c) => sum + (c.total_profit || 0), 0).toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2 px-2 text-right font-mono text-[11px] text-blue-600 dark:text-blue-400">
+                            Rp {recapData.canteen_recap.reduce((sum, c) => sum + (c.total_delivery_fee || 0), 0).toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2 px-2 text-right font-mono text-[11px] text-purple-600 dark:text-purple-400">
+                            Rp {recapData.canteen_recap.reduce((sum, c) => sum + (c.total_admin_fee || 0), 0).toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2 px-2.5 text-right font-mono text-[11px] text-green-700 dark:text-green-300 font-black">
+                            Rp {recapData.canteen_recap.reduce((sum, c) => sum + (c.grand_total || 0), 0).toLocaleString('id-ID')}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   )}
                 </div>
               </div>
 
               {/* Rekapitulasi Per Kurir */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-3.5 sm:p-4 border-b border-gray-200 dark:border-gray-700 bg-emerald-50/50 dark:bg-emerald-950/20 flex items-center justify-between">
+              <div className="bg-white dark:bg-gray-900 rounded-none shadow-xs border border-gray-200 dark:border-gray-800 overflow-hidden">
+                <div className="p-2 sm:p-2.5 border-b border-gray-200 dark:border-gray-800 bg-emerald-50/50 dark:bg-emerald-950/20 flex items-center justify-between">
                   <div>
                     <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
                       <Truck className="w-4 h-4 text-green-600" />
                       Rekapitulasi Per Kurir
                     </h3>
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                      Jumlah order yang diantar dan akumulasi penerimaan ongkir kurir
-                    </p>
                   </div>
                   {selectedCourierFilter !== 'all' && (
                     <button
@@ -1477,7 +1484,7 @@ export default function AdminPesanan() {
                     </button>
                   )}
                 </div>
-                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                <div className="divide-y divide-gray-200 dark:divide-gray-800">
                   {!recapData?.courier_recap || recapData.courier_recap.length === 0 ? (
                     <div className="p-6 text-center text-gray-500 text-sm">
                       Belum ada data kurir pada periode <strong>{getFilterLabel()}</strong>.
@@ -1486,37 +1493,39 @@ export default function AdminPesanan() {
                     recapData.courier_recap.map((cr) => (
                       <div
                         key={cr.courier_id}
-                        className={`p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors ${
+                        className={`p-2 sm:p-2.5 flex flex-col md:flex-row md:items-center justify-between gap-1.5 hover:bg-gray-50/50 dark:hover:bg-gray-800/40 transition-colors ${
                           String(selectedCourierFilter) === String(cr.courier_id) ||
                           (selectedCourierFilter === 'unassigned' && cr.is_unassigned)
                             ? 'bg-green-50/60 dark:bg-green-950/30 border-l-4 border-green-500'
                             : ''
                         }`}
                       >
-                        <div>
-                          <h4 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-1.5">
                             {cr.is_unassigned ? '🚫' : '🛵'} {cr.courier_name}
-                            {cr.is_unassigned && (
-                              <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-semibold px-2 py-0.5 rounded">
-                                Antar Sendiri
-                              </span>
-                            )}
                           </h4>
-                          <p className="text-[11px] text-gray-500 mt-0.5">{cr.order_count} Pesanan Diantar</p>
+                          {cr.is_unassigned && (
+                            <span className="text-[10px] bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 font-bold px-1.5 py-0.2 rounded-none border border-amber-200 dark:border-amber-800">
+                              Antar Sendiri
+                            </span>
+                          )}
+                          <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                            • {cr.order_count} Pesanan Diantar
+                          </span>
                         </div>
-                        <div className="flex items-center gap-1.5 flex-wrap text-xs font-semibold">
-                          <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-lg">
+                        <div className="flex items-center gap-1 flex-wrap text-xs font-semibold">
+                          <span className="bg-blue-50 dark:bg-blue-950/30 px-1.5 py-0.5 rounded-none border border-blue-200 dark:border-blue-800/50 text-blue-700 dark:text-blue-300 text-[11px]">
                             Ongkir: Rp {(cr.total_delivery_fee || 0).toLocaleString('id-ID')}
                           </span>
                           {(cr.total_courier_cut_to_admin || 0) > 0 && (
-                            <span className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-1 rounded-lg">
+                            <span className="bg-amber-50 dark:bg-amber-950/30 px-1.5 py-0.5 rounded-none border border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-300 text-[11px]">
                               Potongan Admin: -Rp {(cr.total_courier_cut_to_admin || 0).toLocaleString('id-ID')}
                             </span>
                           )}
-                          <span className="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 px-2 py-1 rounded-lg font-bold">
+                          <span className="bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded-none border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 font-bold text-[11px]">
                             Bersih Kurir: Rp {(cr.net_delivery_fee || 0).toLocaleString('id-ID')}
                           </span>
-                          <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg text-gray-700 dark:text-gray-300 ml-auto sm:ml-0">
+                          <span className="bg-gray-50 dark:bg-gray-800 px-1.5 py-0.5 rounded-none border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-[11px] ml-auto md:ml-0">
                             Total Belanja: Rp {(cr.grand_total || 0).toLocaleString('id-ID')}
                           </span>
                         </div>
@@ -1527,14 +1536,11 @@ export default function AdminPesanan() {
               </div>
 
               {/* Rekapitulasi Per Santri / Wali */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-3.5 sm:p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
+              <div className="bg-white dark:bg-gray-900 rounded-none shadow-xs border border-gray-200 dark:border-gray-800 overflow-hidden">
+                <div className="p-2 sm:p-2.5 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
                   <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">Rekapitulasi Per Wali / Santri</h3>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                    Format: Total Belanja Produk | Total Ongkir | Total Admin
-                  </p>
                 </div>
-                <div className="divide-y divide-gray-200 dark:divide-gray-700 max-h-96 overflow-y-auto">
+                <div className="divide-y divide-gray-200 dark:divide-gray-800 max-h-96 overflow-y-auto">
                   {!recapData?.user_recap || recapData.user_recap.length === 0 ? (
                     <div className="p-6 text-center text-gray-500 text-sm">
                       Belum ada transaksi pada periode <strong>{getFilterLabel()}</strong>.
@@ -1543,24 +1549,24 @@ export default function AdminPesanan() {
                     recapData.user_recap.map((u) => (
                       <div
                         key={u.user_id}
-                        className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors"
+                        className="p-2 sm:p-2.5 flex flex-col md:flex-row md:items-center justify-between gap-1.5 hover:bg-gray-50/50 dark:hover:bg-gray-800/40 transition-colors"
                       >
-                        <div>
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">{u.santri_name}</h4>
-                          <p className="text-[11px] text-gray-500">
+                          <span className="text-[11px] text-gray-500 dark:text-gray-400">
                             Wali: {u.wali_name} {u.santri_room ? `• ${u.santri_room}` : ''} ({u.order_count} pesanan)
-                          </p>
+                          </span>
                         </div>
-                        <div className="flex items-center gap-1.5 flex-wrap text-xs font-semibold">
-                          <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg text-gray-700 dark:text-gray-300">
+                        <div className="flex items-center gap-1 flex-wrap text-xs font-semibold">
+                          <span className="bg-gray-50 dark:bg-gray-800 px-1.5 py-0.5 rounded-none border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-[11px]">
                             Produk: Rp {u.total_products.toLocaleString('id-ID')}
                           </span>
-                          <span className="text-gray-300 dark:text-gray-600">|</span>
-                          <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-lg">
+                          <span className="text-gray-300 dark:text-gray-700 hidden sm:inline">|</span>
+                          <span className="bg-blue-50 dark:bg-blue-950/30 px-1.5 py-0.5 rounded-none border border-blue-200 dark:border-blue-800/50 text-blue-700 dark:text-blue-300 text-[11px]">
                             Ongkir: Rp {u.total_delivery_fee.toLocaleString('id-ID')}
                           </span>
-                          <span className="text-gray-300 dark:text-gray-600">|</span>
-                          <span className="bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded-lg">
+                          <span className="text-gray-300 dark:text-gray-700 hidden sm:inline">|</span>
+                          <span className="bg-purple-50 dark:bg-purple-950/30 px-1.5 py-0.5 rounded-none border border-purple-200 dark:border-purple-800/50 text-purple-700 dark:text-purple-300 text-[11px]">
                             Admin: Rp {u.total_admin_fee.toLocaleString('id-ID')}
                             {(u.total_courier_cut_to_admin || 0) > 0 && (
                               <span className="text-[10px] text-amber-600 dark:text-amber-400 font-normal ml-1">
@@ -1568,7 +1574,7 @@ export default function AdminPesanan() {
                               </span>
                             )}
                           </span>
-                          <span className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 px-2 py-1 rounded-lg font-bold ml-auto sm:ml-0">
+                          <span className="bg-green-100 dark:bg-green-950/60 px-2 py-0.5 rounded-none border border-green-300 dark:border-green-800 text-green-800 dark:text-green-300 font-bold text-[11px] ml-auto md:ml-0">
                             Total: Rp {u.grand_total.toLocaleString('id-ID')}
                           </span>
                         </div>
@@ -1579,47 +1585,47 @@ export default function AdminPesanan() {
               </div>
 
               {/* Rekapitulasi Produk Terjual */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-3.5 sm:p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
+              <div className="bg-white dark:bg-gray-900 rounded-none shadow-xs border border-gray-200 dark:border-gray-800 overflow-hidden">
+                <div className="p-2 sm:p-2.5 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
                   <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">Rekapitulasi Kuantitas & Laba Produk Terjual</h3>
                 </div>
-                <div className="divide-y divide-gray-200 dark:divide-gray-700 max-h-96 overflow-y-auto">
+                <div className="divide-y divide-gray-200 dark:divide-gray-800 max-h-96 overflow-y-auto">
                   {!recapData?.product_breakdown || recapData.product_breakdown.length === 0 ? (
                     <div className="p-6 text-center text-gray-500 text-sm">
                       Belum ada produk terjual pada periode <strong>{getFilterLabel()}</strong>.
                     </div>
                   ) : (
                     recapData.product_breakdown.map((p) => (
-                      <div key={p.product_id} className="p-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm">
+                      <div key={p.product_id} className="p-2 px-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-sm">
                         <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-800 dark:text-gray-200">{p.name}</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">{p.name}</span>
                             {p.is_custom && (
-                              <span className="text-[10px] bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded font-bold">
+                              <span className="text-[10px] bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 px-1.5 py-0.2 rounded-none border border-purple-200 dark:border-purple-800 font-bold">
                                 Titip Beli
                               </span>
                             )}
                             {p.canteen_name && (
-                              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold bg-gray-100 dark:bg-gray-800 px-1.5 py-0.2 rounded-none border border-gray-200 dark:border-gray-700">
                                 {p.canteen_name}
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-2">
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1.5">
                             <span>HPJ: <strong className="text-gray-700 dark:text-gray-300">Rp {(p.hpj || 0).toLocaleString('id-ID')}</strong></span>
                             <span>•</span>
-                            <span>HPP (Modal): <strong className="text-amber-700 dark:text-amber-400">Rp {(p.hpp || 1000).toLocaleString('id-ID')}</strong></span>
+                            <span>HPP: <strong className="text-amber-700 dark:text-amber-400">Rp {(p.hpp || 1000).toLocaleString('id-ID')}</strong></span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded text-xs">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span className="font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800/60 px-1.5 py-0.5 rounded-none text-[11px]">
                             {p.total_quantity}x terjual
                           </span>
-                          <span className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-2 py-0.5 rounded text-xs font-semibold">
+                          <span className="bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 px-1.5 py-0.5 rounded-none text-[11px] font-semibold">
                             Subtotal: Rp {p.total_subtotal.toLocaleString('id-ID')}
                           </span>
-                          <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 px-2 py-0.5 rounded text-xs font-bold">
-                            Laba Toko: +Rp {(p.total_profit || 0).toLocaleString('id-ID')}
+                          <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 px-1.5 py-0.5 rounded-none text-[11px] font-bold">
+                            Laba: +Rp {(p.total_profit || 0).toLocaleString('id-ID')}
                           </span>
                         </div>
                       </div>
@@ -1634,24 +1640,24 @@ export default function AdminPesanan() {
 
       {/* TAB 3: KOTAK SAMPAH / RECYCLE BIN */}
       {activeTab === 'trash' && (
-        <div className="space-y-4 animate-fade-in-up">
+        <div className="space-y-2 animate-fade-in-up">
           {/* Header Bar */}
-          <div className="bg-amber-50 dark:bg-amber-950/40 p-4 rounded-2xl border border-amber-200 dark:border-amber-800/60 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div className="bg-amber-50 dark:bg-amber-950/40 p-3 sm:p-3.5 rounded-none border border-amber-200 dark:border-amber-800/60 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
-              <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200 flex items-center gap-2">
+              <h3 className="text-xs sm:text-sm font-bold text-amber-900 dark:text-amber-200 flex items-center gap-2">
                 <Trash2 className="w-4 h-4 text-amber-600" />
                 Kotak Sampah / Recycle Bin ({trashedOrders.length} Pesanan)
               </h3>
-              <p className="text-xs text-amber-700 dark:text-amber-300/90 mt-0.5">
+              <p className="text-[11px] text-amber-700 dark:text-amber-300/90 mt-0.5">
                 Pesanan yang dihapus sementara tersimpan di sini. Anda dapat memulihkannya kapan saja atau menghapusnya secara permanen.
               </p>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={() => refetchTrash()}
-                className="px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-2xs"
+                className="px-2.5 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 font-bold text-xs rounded-none flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isFetchingTrash ? 'animate-spin' : ''}`} /> Refresh
               </button>
@@ -1661,7 +1667,7 @@ export default function AdminPesanan() {
                   type="button"
                   onClick={() => setShowEmptyTrashModal(true)}
                   disabled={emptyTrashMutation.isPending}
-                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-2xs"
+                  className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-none flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Kosongkan Sampah
                 </button>
@@ -1675,17 +1681,17 @@ export default function AdminPesanan() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
             </div>
           ) : trashedOrders.length === 0 ? (
-            <div className="bg-white dark:bg-gray-900 rounded-2xl p-12 text-center border border-gray-200 dark:border-gray-700 shadow-sm space-y-2">
-              <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 flex items-center justify-center mx-auto">
-                <Trash2 className="w-6 h-6" />
+            <div className="bg-white dark:bg-gray-900 rounded-none p-8 text-center border border-gray-200 dark:border-gray-700 shadow-xs space-y-2">
+              <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 flex items-center justify-center mx-auto">
+                <Trash2 className="w-5 h-5" />
               </div>
-              <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200">Kotak Sampah Kosong</h4>
+              <h4 className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200">Kotak Sampah Kosong</h4>
               <p className="text-xs text-gray-500 max-w-sm mx-auto">
                 Tidak ada pesanan yang tersimpan di dalam kotak sampah saat ini.
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {trashedOrders.map((order) => {
                 const deletedDate = order.deleted_at 
                   ? new Date(order.deleted_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) 
@@ -1694,15 +1700,15 @@ export default function AdminPesanan() {
                 return (
                   <div
                     key={order.id}
-                    className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-amber-100 dark:border-amber-950/60 shadow-xs space-y-3 relative overflow-hidden"
+                    className="bg-white dark:bg-gray-900 rounded-none p-3 border border-amber-200 dark:border-amber-950/60 shadow-xs space-y-2.5 relative overflow-hidden"
                   >
                     <div className="flex justify-between items-start gap-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-sm text-gray-900 dark:text-white">
+                          <span className="font-extrabold text-xs sm:text-sm text-gray-900 dark:text-white">
                             Pesanan #{order.id}
                           </span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-none bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
                             Di Kotak Sampah
                           </span>
                         </div>
@@ -1712,7 +1718,7 @@ export default function AdminPesanan() {
                       </div>
 
                       <div className="text-right">
-                        <div className="font-extrabold text-sm text-gray-900 dark:text-white">
+                        <div className="font-extrabold text-xs sm:text-sm text-gray-900 dark:text-white">
                           Rp {parseFloat(order.total_price || 0).toLocaleString('id-ID')}
                         </div>
                         <div className="text-[10px] text-gray-500">
@@ -1722,7 +1728,7 @@ export default function AdminPesanan() {
                     </div>
 
                     {/* Customer & Item details */}
-                    <div className="bg-gray-50 dark:bg-gray-800/60 p-2.5 rounded-xl text-xs space-y-1">
+                    <div className="bg-gray-50 dark:bg-gray-800/60 p-2 rounded-none text-xs space-y-1 border border-gray-100 dark:border-gray-800">
                       <div className="flex justify-between">
                         <span className="text-gray-500">Pemesan / Santri:</span>
                         <strong className="text-gray-800 dark:text-gray-200">
@@ -1742,12 +1748,12 @@ export default function AdminPesanan() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2 pt-1 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-1.5 pt-1 border-t border-gray-200 dark:border-gray-800">
                       <button
                         type="button"
                         onClick={() => restoreOrderMutation.mutate(order.id)}
                         disabled={restoreOrderMutation.isPending}
-                        className="flex-1 py-2 px-3 bg-green-50 hover:bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                        className="flex-1 py-1.5 px-2.5 bg-green-50 hover:bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 font-bold text-xs rounded-none flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
                       >
                         <RotateCcw className="w-3.5 h-3.5" /> Pulihkan (Restore)
                       </button>
@@ -1755,10 +1761,10 @@ export default function AdminPesanan() {
                       <button
                         type="button"
                         onClick={() => setOrderToForceDelete(order)}
-                        className="py-2 px-3 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                        className="py-1.5 px-2.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 font-bold text-xs rounded-none flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                         title="Hapus Permanen"
                       >
-                        <Trash2 className="w-3.5 h-3.5" /> Hapus Permanen
+                        <Trash2 className="w-3.5 h-3.5" /> Permanen
                       </button>
                     </div>
                   </div>
@@ -1771,14 +1777,14 @@ export default function AdminPesanan() {
 
       {/* MODAL KONFIRMASI PINDAHKAN KE SAMPAH (SOFT DELETE) */}
       {orderToDelete && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
-            <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
-              <Trash2 className="w-6 h-6" />
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-none max-w-md w-full p-3.5 sm:p-4 border border-gray-200 dark:border-gray-800 shadow-2xl space-y-3 animate-in zoom-in-95 duration-150 my-auto">
+            <div className="w-9 h-9 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded-none flex items-center justify-center mx-auto border border-amber-300 dark:border-amber-800">
+              <Trash2 className="w-4 h-4" />
             </div>
 
-            <div className="text-center space-y-1.5">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Pindahkan ke Kotak Sampah?</h3>
+            <div className="text-center space-y-1">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Pindahkan ke Kotak Sampah?</h3>
               <p className="text-xs text-gray-500 leading-relaxed">
                 Pesanan <strong>#{orderToDelete.id}</strong> atas nama{' '}
                 <strong className="text-gray-800 dark:text-gray-200">
@@ -1786,22 +1792,22 @@ export default function AdminPesanan() {
                 </strong>{' '}
                 dari toko{' '}
                 <strong className="text-gray-800 dark:text-gray-200">{orderToDelete.canteen?.name}</strong> senilai{' '}
-                <strong className="text-green-600">
+                <strong className="text-green-600 font-mono">
                   Rp {parseFloat(orderToDelete.total_price || 0).toLocaleString('id-ID')}
                 </strong>{' '}
                 akan dipindahkan ke <strong>Kotak Sampah (Recycle Bin)</strong>.
               </p>
-              <p className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded-xl border border-amber-200 dark:border-amber-800">
-                💡 Pesanan tidak akan muncul di daftar aktif atau perhitungan rekap, namun dapat Anda <strong>pulihkan (restore)</strong> kapan saja.
+              <p className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-1.5 rounded-none border border-amber-200 dark:border-amber-800 text-left">
+                💡 Pesanan tidak akan muncul di daftar aktif atau rekap, namun dapat Anda <strong>pulihkan (restore)</strong> kapan saja.
               </p>
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setOrderToDelete(null)}
                 disabled={deleteOrderMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
               >
                 Batal
               </button>
@@ -1809,7 +1815,7 @@ export default function AdminPesanan() {
                 type="button"
                 onClick={handleDeleteConfirm}
                 disabled={deleteOrderMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1 shadow-xs cursor-pointer"
               >
                 {deleteOrderMutation.isPending ? (
                   <>
@@ -1830,25 +1836,25 @@ export default function AdminPesanan() {
 
       {/* MODAL KONFIRMASI HAPUS PERMANEN (FORCE DELETE) */}
       {orderToForceDelete && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
-            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-6 h-6" />
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-none max-w-md w-full p-3.5 sm:p-4 border border-gray-200 dark:border-gray-800 shadow-2xl space-y-3 animate-in zoom-in-95 duration-150 my-auto">
+            <div className="w-9 h-9 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-none flex items-center justify-center mx-auto border border-red-300 dark:border-red-800">
+              <AlertTriangle className="w-4 h-4" />
             </div>
 
-            <div className="text-center space-y-1.5">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Hapus Permanen Pesanan #{orderToForceDelete.id}?</h3>
+            <div className="text-center space-y-1">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Hapus Permanen Pesanan #{orderToForceDelete.id}?</h3>
               <p className="text-xs text-gray-500 leading-relaxed">
                 Tindakan ini akan <strong>menghapus permanen</strong> data pesanan dan seluruh berkas bukti transfer/foto dari server. Tindakan ini <strong>tidak dapat dibatalkan</strong>.
               </p>
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setOrderToForceDelete(null)}
                 disabled={forceDeleteMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
               >
                 Batal
               </button>
@@ -1856,7 +1862,7 @@ export default function AdminPesanan() {
                 type="button"
                 onClick={() => forceDeleteMutation.mutate(orderToForceDelete.id)}
                 disabled={forceDeleteMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1 shadow-xs cursor-pointer"
               >
                 {forceDeleteMutation.isPending ? (
                   <>
@@ -1877,25 +1883,25 @@ export default function AdminPesanan() {
 
       {/* MODAL KONFIRMASI KOSONGKAN SELURUH KOTAK SAMPAH */}
       {showEmptyTrashModal && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
-            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-6 h-6" />
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-none max-w-md w-full p-3.5 sm:p-4 border border-gray-200 dark:border-gray-800 shadow-2xl space-y-3 animate-in zoom-in-95 duration-150 my-auto">
+            <div className="w-9 h-9 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-none flex items-center justify-center mx-auto border border-red-300 dark:border-red-800">
+              <AlertTriangle className="w-4 h-4" />
             </div>
 
-            <div className="text-center space-y-1.5">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Kosongkan Kotak Sampah?</h3>
+            <div className="text-center space-y-1">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Kosongkan Kotak Sampah?</h3>
               <p className="text-xs text-gray-500 leading-relaxed">
                 Seluruh <strong>{trashedOrders.length} pesanan</strong> di dalam kotak sampah akan dihapus secara permanen beserta berkas buktinya. Tindakan ini <strong>tidak dapat dibatalkan</strong>.
               </p>
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setShowEmptyTrashModal(false)}
                 disabled={emptyTrashMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
               >
                 Batal
               </button>
@@ -1903,7 +1909,7 @@ export default function AdminPesanan() {
                 type="button"
                 onClick={() => emptyTrashMutation.mutate()}
                 disabled={emptyTrashMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1 shadow-xs cursor-pointer"
               >
                 {emptyTrashMutation.isPending ? (
                   <>
@@ -1925,28 +1931,28 @@ export default function AdminPesanan() {
       {/* MODAL VIEWER GAMBAR / BUKTI */}
       {selectedProofs.length > 0 && createPortal(
         <div className="fixed inset-0 z-[110] bg-black/90 backdrop-blur-xs flex flex-col animate-in fade-in duration-200">
-          <div className="flex justify-between items-center px-4 py-3 bg-black/70 border-b border-white/10 shrink-0">
+          <div className="flex justify-between items-center px-3 py-2 bg-black/80 border-b border-white/10 shrink-0">
             <span className="text-white font-bold text-xs flex items-center gap-1.5">
               <ImageIcon className="w-3.5 h-3.5 text-green-400" />
               {selectedProofs.length} Foto / Berkas Bukti
             </span>
             <button
               onClick={() => setSelectedProofs([])}
-              className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
+              className="w-7 h-7 bg-white/10 rounded-none flex items-center justify-center text-white hover:bg-white/20 transition-all border border-white/20 cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center gap-4 pb-12">
+          <div className="flex-1 overflow-y-auto p-3 flex flex-col items-center gap-3 pb-8">
             {selectedProofs.map((proof, idx) => {
               const fileType = getFileType(proof);
               const fileName = getFileNameFromPath(proof);
 
               return (
-                <div key={idx} className="w-full max-w-lg bg-gray-900 border border-gray-800 rounded-2xl p-2.5 flex flex-col items-center gap-2">
-                  <div className="w-full flex items-center justify-between px-2 text-xs text-gray-400">
-                    <span className="font-medium">Bukti {idx + 1} dari {selectedProofs.length}</span>
+                <div key={idx} className="w-full max-w-lg bg-gray-900 border border-gray-800 rounded-none p-2 flex flex-col items-center gap-1.5">
+                  <div className="w-full flex items-center justify-between px-1 text-xs text-gray-400">
+                    <span className="font-medium text-[11px]">Bukti {idx + 1} dari {selectedProofs.length}</span>
                     <a 
                       href={proof} 
                       target="_blank" 
@@ -1959,7 +1965,7 @@ export default function AdminPesanan() {
                   <img
                     src={proof}
                     alt={`Bukti ${idx + 1}`}
-                    className="w-full rounded-xl object-contain max-h-[75vh] bg-black/40"
+                    className="w-full rounded-none object-contain max-h-[75vh] bg-black/40 border border-gray-800"
                     onError={(e) => {
                       e.target.onerror = null;
                       e.target.style.display = 'none';
@@ -1968,10 +1974,10 @@ export default function AdminPesanan() {
                   />
                   <div
                     style={{ display: 'none' }}
-                    className="w-full h-48 rounded-xl bg-gray-800 flex flex-col items-center justify-center text-gray-400 text-sm gap-2"
+                    className="w-full h-40 rounded-none bg-gray-800 border border-gray-700 flex flex-col items-center justify-center text-gray-400 text-sm gap-2"
                   >
-                    <FileText className="w-10 h-10 opacity-40 text-green-400" />
-                    <span>Pratinjau langsung tidak tersedia untuk format ini</span>
+                    <FileText className="w-8 h-8 opacity-40 text-green-400" />
+                    <span className="text-xs">Pratinjau langsung tidak tersedia untuk format ini</span>
                     <a href={proof} target="_blank" rel="noreferrer" className="text-green-400 text-xs underline break-all px-4 text-center">Buka Berkas ({fileName})</a>
                   </div>
                 </div>
@@ -1981,16 +1987,17 @@ export default function AdminPesanan() {
         </div>,
         document.body
       )}
+
       {/* MODAL KONFIRMASI BATALKAN PESANAN */}
       {orderToCancel && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
-            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-6 h-6" />
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-none max-w-md w-full p-3.5 sm:p-4 border border-gray-200 dark:border-gray-800 shadow-2xl space-y-3 animate-in zoom-in-95 duration-150 my-auto">
+            <div className="w-9 h-9 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-none flex items-center justify-center mx-auto border border-red-300 dark:border-red-800">
+              <AlertTriangle className="w-4 h-4" />
             </div>
 
-            <div className="text-center space-y-1.5">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+            <div className="text-center space-y-1">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
                 Batalkan Pesanan #{orderToCancel.id}?
               </h3>
               <p className="text-xs text-gray-500 leading-relaxed">
@@ -2007,8 +2014,8 @@ export default function AdminPesanan() {
             </div>
 
             {/* Input Alasan Pembatalan */}
-            <div className="space-y-1.5 text-left">
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+            <div className="space-y-1 text-left">
+              <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">
                 Alasan Pembatalan (Opsional):
               </label>
               <input
@@ -2016,11 +2023,11 @@ export default function AdminPesanan() {
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 placeholder="Contoh: Kesalahan input kurir, salah tujuan, dll."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-red-500 focus:outline-hidden"
+                className="w-full px-2.5 py-1.5 rounded-none border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:ring-1 focus:ring-red-500 focus:outline-hidden"
               />
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => {
@@ -2028,7 +2035,7 @@ export default function AdminPesanan() {
                   setCancelReason('');
                 }}
                 disabled={cancelOrderMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
               >
                 Kembali
               </button>
@@ -2036,7 +2043,7 @@ export default function AdminPesanan() {
                 type="button"
                 onClick={() => cancelOrderMutation.mutate({ id: orderToCancel.id, reason: cancelReason })}
                 disabled={cancelOrderMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1 shadow-xs cursor-pointer"
               >
                 {cancelOrderMutation.isPending ? (
                   <>
@@ -2057,26 +2064,26 @@ export default function AdminPesanan() {
 
       {/* MODAL UBAH STATUS PESANAN & PEMBAYARAN */}
       {orderToChangeStatus && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
-            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl flex items-center justify-center mx-auto">
-              <RotateCcw className="w-6 h-6" />
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-none max-w-md w-full p-3.5 sm:p-4 border border-gray-200 dark:border-gray-800 shadow-2xl space-y-2.5 animate-in zoom-in-95 duration-150 my-auto">
+            <div className="w-9 h-9 bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 rounded-none flex items-center justify-center mx-auto border border-green-300 dark:border-green-800">
+              <RotateCcw className="w-4 h-4" />
             </div>
 
-            <div className="text-center space-y-1">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+            <div className="text-center space-y-0.5">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
                 Ubah Status Pesanan #{orderToChangeStatus.id}
               </h3>
-              <p className="text-xs text-gray-500 font-medium">
+              <p className="text-[11px] text-gray-500 font-medium">
                 {orderToChangeStatus.canteen?.name} • {orderToChangeStatus.user?.santri_name || orderToChangeStatus.user?.name}
               </p>
             </div>
 
             {/* Kotak Ringkasan Status Saat Ini */}
-            <div className="bg-gray-50 dark:bg-gray-800/80 p-3 rounded-2xl border border-gray-200 dark:border-gray-700/60 flex items-center justify-between text-xs">
+            <div className="bg-gray-50 dark:bg-gray-800/80 p-2 rounded-none border border-gray-200 dark:border-gray-700/60 flex items-center justify-between text-xs">
               <div>
-                <span className="text-gray-400 block text-[10px] uppercase font-bold tracking-wider mb-0.5">Status Saat Ini:</span>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-bold text-[11px] ${
+                <span className="text-gray-400 block text-[9px] uppercase font-bold tracking-wider mb-0.5">Status Saat Ini:</span>
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-none font-bold text-[10px] ${
                   orderToChangeStatus.status === 'completed'
                     ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
                     : orderToChangeStatus.status === 'processing'
@@ -2096,8 +2103,8 @@ export default function AdminPesanan() {
               </div>
 
               <div className="text-right">
-                <span className="text-gray-400 block text-[10px] uppercase font-bold tracking-wider mb-0.5">Pembayaran:</span>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-bold text-[11px] ${
+                <span className="text-gray-400 block text-[9px] uppercase font-bold tracking-wider mb-0.5">Pembayaran:</span>
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-none font-bold text-[10px] ${
                   orderToChangeStatus.payment_status === 'paid'
                     ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
                     : orderToChangeStatus.payment_status === 'waiting_confirmation'
@@ -2114,15 +2121,15 @@ export default function AdminPesanan() {
             </div>
 
             {/* 1. Dropdown Status Pesanan */}
-            <div className="space-y-1.5 text-left">
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+            <div className="space-y-1 text-left">
+              <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
                 <span>Pilih Status Pesanan:</span>
-                <span className="text-[11px] font-normal text-gray-400">Default: status saat ini</span>
+                <span className="text-[10px] font-normal text-gray-400">Default: status saat ini</span>
               </label>
               <select
                 value={selectedNewStatus}
                 onChange={(e) => setSelectedNewStatus(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                className="w-full px-2.5 py-1.5 rounded-none border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-xs font-semibold focus:ring-1 focus:ring-green-500 focus:outline-hidden"
               >
                 <option value="pending">⏳ Belum Dikonfirmasi (Pending / Menunggu)</option>
                 <option value="processing">🚚 Sedang Diproses / Diantar (Processing)</option>
@@ -2132,15 +2139,15 @@ export default function AdminPesanan() {
             </div>
 
             {/* 2. Dropdown Status Pembayaran */}
-            <div className="space-y-1.5 text-left">
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+            <div className="space-y-1 text-left">
+              <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
                 <span>Pilih Status Pembayaran:</span>
-                <span className="text-[11px] font-normal text-gray-400">Default: status bayar saat ini</span>
+                <span className="text-[10px] font-normal text-gray-400">Default: status bayar saat ini</span>
               </label>
               <select
                 value={selectedNewPaymentStatus}
                 onChange={(e) => setSelectedNewPaymentStatus(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                className="w-full px-2.5 py-1.5 rounded-none border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-xs font-semibold focus:ring-1 focus:ring-green-500 focus:outline-hidden"
               >
                 <option value="unpaid">⚠️ Belum Bayar (Unpaid)</option>
                 <option value="waiting_confirmation">⏳ Menunggu Validasi (Waiting Confirmation)</option>
@@ -2149,7 +2156,7 @@ export default function AdminPesanan() {
             </div>
 
             {/* Shortcut Unggah Bukti Bayar */}
-            <div className="pt-1">
+            <div className="pt-0.5">
               <button
                 type="button"
                 onClick={() => {
@@ -2157,19 +2164,19 @@ export default function AdminPesanan() {
                   setOrderToChangeStatus(null);
                   handleOpenUploadPaymentModal(targetOrder);
                 }}
-                className="w-full py-2.5 px-3 bg-green-50 hover:bg-green-100 dark:bg-green-950/40 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-98"
+                className="w-full py-1.5 px-2 bg-green-50 hover:bg-green-100 dark:bg-green-950/40 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 rounded-none text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <UploadCloud className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <UploadCloud className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
                 <span>Unggah / Tambah Bukti Transfer</span>
               </button>
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setOrderToChangeStatus(null)}
                 disabled={updateStatusMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
               >
                 Batal
               </button>
@@ -2181,7 +2188,7 @@ export default function AdminPesanan() {
                   payment_status: selectedNewPaymentStatus
                 })}
                 disabled={updateStatusMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1 shadow-xs cursor-pointer"
               >
                 {updateStatusMutation.isPending ? (
                   <>
@@ -2202,19 +2209,19 @@ export default function AdminPesanan() {
 
       {/* MODAL UNGGAH BUKTI PEMBAYARAN OLEH ADMIN */}
       {orderToUploadProof && createPortal(
-        <div className="fixed inset-0 z-[105] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-5 sm:p-6 border border-gray-200 dark:border-gray-700 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-auto">
+        <div className="fixed inset-0 z-[105] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-none max-w-md w-full p-3.5 sm:p-4 border border-gray-200 dark:border-gray-800 shadow-2xl space-y-2.5 animate-in zoom-in-95 duration-150 my-auto">
             {/* Header Modal */}
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 flex items-center justify-center shadow-xs">
-                  <UploadCloud className="w-5 h-5" />
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-none bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 flex items-center justify-center border border-green-300 dark:border-green-800">
+                  <UploadCloud className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-gray-900 dark:text-white leading-tight">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
                     Unggah Bukti Bayar
                   </h3>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">
                     Pesanan #{orderToUploadProof.id} • {orderToUploadProof.canteen?.name || 'Toko'}
                   </p>
                 </div>
@@ -2225,29 +2232,29 @@ export default function AdminPesanan() {
                   setOrderToUploadProof(null);
                   setProofFiles([]);
                 }}
-                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 flex items-center justify-center transition-colors"
+                className="w-7 h-7 rounded-none bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 flex items-center justify-center transition-colors border border-gray-200 dark:border-gray-700 cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
             {/* Info Santri & Tagihan */}
-            <div className="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-3.5 border border-gray-200 dark:border-gray-700/60 space-y-2">
+            <div className="bg-gray-50 dark:bg-gray-800/60 rounded-none p-2.5 border border-gray-200 dark:border-gray-700/60 space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500 dark:text-gray-400">Santri / Pemesan:</span>
-                <span className="font-bold text-gray-900 dark:text-white truncate max-w-[200px]">
+                <span className="text-gray-500 dark:text-gray-400 text-[11px]">Santri / Pemesan:</span>
+                <span className="font-bold text-gray-900 dark:text-white truncate max-w-[200px] text-right text-[11px]">
                   {orderToUploadProof.user?.santri_name || orderToUploadProof.user?.name}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500 dark:text-gray-400">Kamar / Lokasi:</span>
-                <span className="font-semibold text-gray-700 dark:text-gray-300">
+                <span className="text-gray-500 dark:text-gray-400 text-[11px]">Kamar / Lokasi:</span>
+                <span className="font-semibold text-gray-700 dark:text-gray-300 text-[11px]">
                   {orderToUploadProof.user?.santri_room || orderToUploadProof.delivery_location || '-'}
                 </span>
               </div>
-              <div className="pt-2 border-t border-gray-200 dark:border-gray-700/60 flex items-center justify-between">
+              <div className="pt-1.5 border-t border-gray-200 dark:border-gray-700/60 flex items-center justify-between">
                 <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Total Tagihan:</span>
-                <span className="text-base font-black text-green-600 dark:text-green-400">
+                <span className="text-sm font-black text-green-600 dark:text-green-400 font-mono">
                   Rp {parseFloat(orderToUploadProof.total_price || 0).toLocaleString('id-ID')}
                 </span>
               </div>
@@ -2255,17 +2262,17 @@ export default function AdminPesanan() {
 
             {/* Bukti Yang Sudah Ada (Jika Ada) */}
             {orderToUploadProof.proof_of_payment && orderToUploadProof.proof_of_payment.length > 0 && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-300">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px] font-bold text-gray-700 dark:text-gray-300">
                   <span>Bukti Tersimpan ({orderToUploadProof.proof_of_payment.length}):</span>
-                  <span className="text-[10px] text-gray-400 font-normal">Klik untuk hapus jika salah</span>
+                  <span className="text-[9px] text-gray-400 font-normal">Klik tombol hapus untuk membatalkan</span>
                 </div>
-                <div className="flex gap-2 overflow-x-auto pb-1">
+                <div className="flex gap-1.5 overflow-x-auto pb-1">
                   {(Array.isArray(orderToUploadProof.proof_of_payment) 
                     ? orderToUploadProof.proof_of_payment 
                     : [orderToUploadProof.proof_of_payment]
                   ).map((p, pIdx) => (
-                    <div key={pIdx} className="relative group shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-black/10">
+                    <div key={pIdx} className="relative group shrink-0 w-14 h-14 rounded-none overflow-hidden border border-gray-200 dark:border-gray-700 bg-black/10">
                       <img src={getStorageUrl(p)} alt="Bukti" className="w-full h-full object-cover" />
                       <button
                         type="button"
@@ -2279,10 +2286,10 @@ export default function AdminPesanan() {
                           }
                         }}
                         disabled={deleteProofMutation.isPending}
-                        className="absolute inset-0 bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute inset-0 bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                         title="Hapus berkas ini"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ))}
@@ -2291,7 +2298,7 @@ export default function AdminPesanan() {
             )}
 
             {/* Tombol Pilih File & Kamera */}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <input
                 type="file"
                 ref={proofFileInputRef}
@@ -2309,14 +2316,14 @@ export default function AdminPesanan() {
                 onChange={(e) => handleProofFilesSelected(e.target.files)}
               />
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
                   disabled={isCompressingProof || uploadPaymentProofMutation.isPending}
                   onClick={() => proofCameraInputRef.current?.click()}
-                  className="py-3 px-3 bg-gray-50 hover:bg-green-50/80 dark:bg-gray-800/80 dark:hover:bg-green-950/40 border border-gray-200 dark:border-gray-700 hover:border-green-400 rounded-2xl text-gray-700 dark:text-gray-200 flex flex-col items-center justify-center gap-1.5 transition-all text-xs font-bold active:scale-98 cursor-pointer"
+                  className="py-2 px-2 bg-gray-50 hover:bg-green-50/80 dark:bg-gray-800/80 dark:hover:bg-green-950/40 border border-gray-200 dark:border-gray-700 hover:border-green-400 rounded-none text-gray-700 dark:text-gray-200 flex flex-col items-center justify-center gap-1 transition-all text-xs font-bold cursor-pointer"
                 >
-                  <Camera className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <Camera className="w-4 h-4 text-green-600 dark:text-green-400" />
                   <span>Ambil Foto</span>
                 </button>
 
@@ -2324,46 +2331,46 @@ export default function AdminPesanan() {
                   type="button"
                   disabled={isCompressingProof || uploadPaymentProofMutation.isPending}
                   onClick={() => proofFileInputRef.current?.click()}
-                  className="py-3 px-3 bg-gray-50 hover:bg-green-50/80 dark:bg-gray-800/80 dark:hover:bg-green-950/40 border border-gray-200 dark:border-gray-700 hover:border-green-400 rounded-2xl text-gray-700 dark:text-gray-200 flex flex-col items-center justify-center gap-1.5 transition-all text-xs font-bold active:scale-98 cursor-pointer"
+                  className="py-2 px-2 bg-gray-50 hover:bg-green-50/80 dark:bg-gray-800/80 dark:hover:bg-green-950/40 border border-gray-200 dark:border-gray-700 hover:border-green-400 rounded-none text-gray-700 dark:text-gray-200 flex flex-col items-center justify-center gap-1 transition-all text-xs font-bold cursor-pointer"
                 >
-                  <FileUp className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <FileUp className="w-4 h-4 text-green-600 dark:text-green-400" />
                   <span>Pilih dari Galeri</span>
                 </button>
               </div>
 
-              <p className="text-[10px] text-gray-400 text-center">
+              <p className="text-[9px] text-gray-400 text-center">
                 Mendukung JPG, PNG, WEBP, PDF (Maks 15MB/berkas, auto kompresi cerdas)
               </p>
             </div>
 
             {/* List Berkas Yang Dipilih */}
             {proofFiles.length > 0 && (
-              <div className="space-y-1.5">
-                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 block">
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300 block">
                   Berkas Terpilih ({proofFiles.length}):
                 </span>
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
                   {proofFiles.map((file, fIdx) => {
                     const isImg = isImageFile(file);
                     return (
-                      <div key={fIdx} className="relative rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2 flex flex-col justify-between">
+                      <div key={fIdx} className="relative rounded-none border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-1.5 flex flex-col justify-between">
                         {isImg ? (
-                          <div className="aspect-video w-full rounded-lg overflow-hidden bg-black/5 mb-1">
+                          <div className="aspect-video w-full rounded-none overflow-hidden bg-black/5 mb-1">
                             <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
                           </div>
                         ) : (
-                          <div className="aspect-video w-full rounded-lg bg-green-50 dark:bg-green-950/40 flex flex-col items-center justify-center text-green-600 dark:text-green-400 mb-1">
-                            <FileText className="w-5 h-5" />
-                            <span className="text-[9px] font-bold uppercase mt-0.5">PDF</span>
+                          <div className="aspect-video w-full rounded-none bg-green-50 dark:bg-green-950/40 flex flex-col items-center justify-center text-green-600 dark:text-green-400 mb-1">
+                            <FileText className="w-4 h-4" />
+                            <span className="text-[8px] font-bold uppercase mt-0.5">PDF</span>
                           </div>
                         )}
-                        <p className="text-[11px] font-semibold text-gray-800 dark:text-gray-200 truncate" title={file.name}>
+                        <p className="text-[10px] font-semibold text-gray-800 dark:text-gray-200 truncate" title={file.name}>
                           {file.name}
                         </p>
-                        <div className="flex items-center justify-between text-[10px] text-gray-400 mt-0.5">
-                          <span>{formatFileSize(file.size)}</span>
+                        <div className="flex items-center justify-between text-[9px] text-gray-400 mt-0.5">
+                          <span className="font-mono">{formatFileSize(file.size)}</span>
                           {file.originalSize && file.originalSize > file.size && (
-                            <span className="text-green-600 font-bold">
+                            <span className="text-green-600 font-bold font-mono">
                               (-{Math.round((1 - file.size / file.originalSize) * 100)}%)
                             </span>
                           )}
@@ -2371,7 +2378,7 @@ export default function AdminPesanan() {
                         <button
                           type="button"
                           onClick={() => setProofFiles((prev) => prev.filter((_, i) => i !== fIdx))}
-                          className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-xs active:scale-90"
+                          className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white p-0.5 rounded-none shadow-xs cursor-pointer"
                           title="Hapus berkas"
                         >
                           <X className="w-3 h-3" />
@@ -2384,40 +2391,40 @@ export default function AdminPesanan() {
             )}
 
             {/* Pilihan Status Pembayaran */}
-            <div className="space-y-1.5 text-left">
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 block">
+            <div className="space-y-1 text-left">
+              <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 block">
                 Ubah Status Pembayaran Menjadi:
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
                   onClick={() => setUploadPaymentStatus('paid')}
-                  className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`p-1.5 rounded-none border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     uploadPaymentStatus === 'paid'
-                      ? 'bg-green-50 dark:bg-green-950/60 border-green-500 text-green-700 dark:text-green-300 ring-2 ring-green-500/30'
+                      ? 'bg-green-50 dark:bg-green-950/60 border-green-500 text-green-700 dark:text-green-300 ring-1 ring-green-500'
                       : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
                   }`}
                 >
-                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <CheckCircle className="w-3.5 h-3.5 text-green-600" />
                   <span>Langsung Lunas</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setUploadPaymentStatus('waiting_confirmation')}
-                  className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`p-1.5 rounded-none border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     uploadPaymentStatus === 'waiting_confirmation'
-                      ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-800 dark:text-amber-300 ring-2 ring-amber-500/30'
+                      ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-800 dark:text-amber-300 ring-1 ring-amber-500'
                       : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
                   }`}
                 >
-                  <Clock className="w-4 h-4 text-amber-600" />
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
                   <span>Menunggu Validasi</span>
                 </button>
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => {
@@ -2425,7 +2432,7 @@ export default function AdminPesanan() {
                   setProofFiles([]);
                 }}
                 disabled={uploadPaymentProofMutation.isPending || isCompressingProof}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700 cursor-pointer"
               >
                 Batal
               </button>
@@ -2443,7 +2450,7 @@ export default function AdminPesanan() {
                     formData
                   });
                 }}
-                className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
               >
                 {uploadPaymentProofMutation.isPending ? (
                   <>

@@ -107,3 +107,18 @@ Proyek ini tidak menggunakan Blade atau Inertia, melainkan murni **React + Vite*
 12. **Sinkronisasi Database dan Seeder (Database & Seeder Sync)**:
     - Setiap kali ada perubahan struktur database (tabel baru, kolom baru, perubahan tipe data) melalui file Migration, WAJIB juga untuk memperbarui file Seeder yang relevan (`database/seeders/...`).
     - Hal ini untuk memastikan bahwa *mock data* atau data awal sistem selalu sinkron dengan struktur tabel terbaru dan bisa langsung digunakan untuk *testing* (contoh: `php artisan migrate:fresh --seed`) tanpa menimbulkan *error* akibat kolom yang belum terisi.
+
+13. **Aturan Desain UI Kompak & Flat Bebas Lengkungan (High-Density & Flat Sharp UI Guidelines)**:
+    - **Sudut Flat & Tegas (`rounded-none`)**:
+      - Seluruh elemen antarmuka (Card, Modal Popup/Dialog, Tombol/Button, Input Form, Dropdown/Select, Badge Status, Tab Navigasi, Container Bukti/Gambar) WAJIB menggunakan sudut tegas / siku flat (`rounded-none`).
+      - DILARANG KERAS menggunakan border melengkung berlebih seperti `rounded-3xl`, `rounded-2xl`, `rounded-xl`, atau `rounded-full` (kecuali indikator spinner bulat/animasi loading).
+    - **Kepadatan Informasi Maksimal (High Density & Space-Saving)**:
+      - Selalu prioritaskan efisiensi ruang layar vertikal dan horizontal.
+      - Gunakan padding yang ramping (misal: modal `p-3 sm:p-4`, card `p-2 sm:p-2.5`, tombol `py-1.5` hingga `py-2`, gap antar elemen `gap-1` hingga `gap-2`).
+      - DILARANG membiarkan ruang kosong berlebih (*whitespace bloat*) agar informasi penting langsung terlihat tanpa perlu banyak scrolling baik di perangkat mobile maupun desktop.
+    - **Standar Modal Popup / Dialog Kompak**:
+      - Seluruh modal wajib tampil flat (`rounded-none`), berbingkai tegas (`border border-gray-200 dark:border-gray-800`), berlatar belakang solid (`bg-white dark:bg-gray-900`), dengan header ramping, tombol tutup kotak tegas (`rounded-none`), dan tombol aksi persegi flat (`rounded-none`).
+    - **Data Rekapitulasi & Tabel**:
+      - Seluruh rekapitulasi data numerik/finansial (rekap per toko, kurir, santri, dsb.) WAJIB disajikan dalam struktur **Tabel (`<table>`) atau Grid terstruktur** yang lurus dan rata.
+      - Kolom angka finansial/kuantitas wajib rata kanan (`text-right`) dengan font monospaced (`font-mono`) agar digit ribuan sejajar sempurna. DILARANG menggunakan chip fleksibel yang meliuk-liuk atau tidak sejajar untuk data perbandingan kuantitatif.
+

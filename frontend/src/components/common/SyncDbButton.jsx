@@ -100,14 +100,14 @@ export default function SyncDbButton({ variant = 'header', className = '' }) {
       type="button"
       onClick={isLocal ? openModal : undefined}
       onClickCapture={!isLocal ? () => window.location.href = exportUrl : undefined}
-      className={`flex flex-col items-center text-center justify-center p-4 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 transition-all border border-amber-200/60 dark:border-amber-800/50 shadow-xs hover:-translate-y-0.5 cursor-pointer ${className}`}
+      className={`flex flex-col items-center text-center justify-center p-2 rounded-none bg-amber-50/60 hover:bg-amber-100/70 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 transition-all border border-amber-200/70 dark:border-amber-800/60 shadow-2xs cursor-pointer ${className}`}
     >
-      <CloudDownload className="w-7 h-7 text-amber-600 dark:text-amber-400 mb-1.5" />
-      <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
-        {isLocal ? 'Tarik DB VPS' : 'Backup Database'}
+      <CloudDownload className="w-5 h-5 text-amber-600 dark:text-amber-400 mb-1" />
+      <span className="text-xs font-bold text-gray-900 dark:text-white leading-tight">
+        {isLocal ? 'Tarik DB VPS' : 'Backup DB'}
       </span>
-      <span className="text-[10px] text-gray-500 dark:text-gray-400 hidden sm:block mt-0.5">
-        {isLocal ? 'Sinkron Data Live VPS' : 'Unduh Dump Database'}
+      <span className="text-[10px] text-gray-500 dark:text-gray-400 hidden sm:block leading-none mt-0.5">
+        {isLocal ? 'Sinkron Data Live' : 'Unduh Dump DB'}
       </span>
     </button>
   );

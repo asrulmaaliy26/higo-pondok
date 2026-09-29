@@ -10,9 +10,8 @@ import KurirDashboard from '../../components/dashboard/mobile/KurirDashboard';
 export default function Dashboard() {
   const user = useAuthStore((state) => state.user);
   const role = getUserRole(user) || ROLES.ADMIN;
-
   return (
-    <div className="space-y-6 animate-fade-in-up">
+    <div className="space-y-2 animate-fade-in-up pb-12 max-w-7xl mx-auto px-1 sm:px-2">
       {role === ROLES.ADMIN && <AdminDashboard user={user} />}
       {role === ROLES.USER && <UserDashboard user={user} />}
       {role === ROLES.KANTIN && <KantinDashboard user={user} />}

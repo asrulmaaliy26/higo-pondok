@@ -374,9 +374,15 @@ export default function PesananToko() {
     return '';
   };
 
-  const currentParams = getFilterParams();
+  const currentParams = React.useMemo(() => getFilterParams(), [
+    filterMode,
+    filterDate,
+    filterMonth,
+    filterYear,
+    filterWeekIndex
+  ]);
 
-  const { data: ordersRes, isLoading } = useQuery({
+  const { data: ordersRes, isLoading, isFetching } = useQuery({
     queryKey: ['canteen_orders', selectedCanteenFilter, currentParams.start_date, currentParams.end_date, currentParams.period],
     queryFn: async () => {
       const canteenParam = selectedCanteenFilter !== 'all' ? `canteen_id=${selectedCanteenFilter}&` : '';
@@ -385,7 +391,10 @@ export default function PesananToko() {
       const res = await api.get(`/canteen/orders?${canteenParam}${dateParams}${periodParam}`);
       return res.data;
     },
-    refetchInterval: 5000,
+    refetchInterval: filterMode === 'day' ? 10000 : false,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    placeholderData: (previousData) => previousData,
   });
 
   const { data: couriersRes } = useQuery({
@@ -398,8 +407,49 @@ export default function PesananToko() {
   });
 
   const [activeTab, setActiveTab] = useState('orders');
+  const [visibleCompletedLimit, setVisibleCompletedLimit] = useState(30);
 
-  const { data: recapData, isLoading: isLoadingRecap } = useQuery({
+  const santriLookupMap = React.useMemo(() => {
+    if (!santriData?.data) return new Map();
+    const map = new Map();
+    santriData.data.forEach(r => {
+      if (!r || !r[1]) return;
+      const cleanName = r[1].toLowerCase().replace(/\s+(laki-laki|perempuan)$/i, '').trim();
+      if (!map.has(cleanName)) {
+        map.set(cleanName, r);
+      }
+    });
+    return map;
+  }, []);
+
+  const getSantriMeta = React.useCallback((orderUser, fallbackLocation) => {
+    const santriName = orderUser?.santri_name || orderUser?.name || 'Pembeli';
+    const waliName = orderUser?.name || 'Wali';
+    let santriClass = orderUser?.santri_class || '';
+    let santriLevel = orderUser?.santri_level || '';
+    let santriRoom = orderUser?.santri_room || fallbackLocation || '';
+
+    if (santriName) {
+      const sName = santriName.toLowerCase().trim();
+      const match = santriLookupMap.get(sName);
+      if (match) {
+        if (!santriLevel && match[4]) santriLevel = match[4];
+        const tingkat = match[5] || '';
+        const rombel = match[6] || '';
+        const program = match[7] && match[7] !== '-' ? match[7] : '';
+        const fullClass = [tingkat, rombel, program].filter(Boolean).join(' ');
+        if (!santriClass || santriClass === tingkat) {
+          santriClass = fullClass || santriClass;
+        }
+        if ((!santriRoom || santriRoom === '-') && match[10]) {
+          santriRoom = match[10];
+        }
+      }
+    }
+    return { santriName, waliName, santriClass, santriLevel, santriRoom };
+  }, [santriLookupMap]);
+
+  const { data: recapData, isLoading: isLoadingRecap, isFetching: isFetchingRecap } = useQuery({
     queryKey: ['canteen_recap', selectedCanteenFilter, currentParams.period, currentParams.start_date, currentParams.end_date],
     queryFn: async () => {
       const canteenParam = selectedCanteenFilter !== 'all' ? `canteen_id=${selectedCanteenFilter}&` : '';
@@ -408,10 +458,14 @@ export default function PesananToko() {
       const res = await api.get(`/canteen/orders/recap?${canteenParam}${dateParams}${periodParam}`);
       return res.data;
     },
-    enabled: activeTab === 'recap',
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    placeholderData: (previousData) => previousData,
   });
 
-  const rawOrders = ordersRes || [];
+  const rawOrders = React.useMemo(() => {
+    return Array.isArray(ordersRes) ? ordersRes : (Array.isArray(ordersRes?.data) ? ordersRes.data : []);
+  }, [ordersRes]);
   const orders = React.useMemo(() => {
     const list = rawOrders.filter(order => {
       // 1. Status Filter
@@ -967,38 +1021,13 @@ export default function PesananToko() {
     const isCancelled = order.status === 'cancelled';
     const isPaid = order.payment_status === 'paid';
     const isWaiting = order.payment_status === 'waiting_confirmation';
-    const santriName = order.user?.santri_name || order.user?.name || 'Pembeli';
-    const waliName = order.user?.name || 'Wali';
-    let santriClass = order.user?.santri_class || '';
-    let santriLevel = order.user?.santri_level || '';
-    let santriRoom = order.user?.santri_room || order.delivery_location || '';
 
-    if (santriName && santriData?.data) {
-      const sName = santriName.toLowerCase().trim();
-      const match = santriData.data.find(r => {
-        if (!r || !r[1]) return false;
-        const rawName = r[1].toLowerCase().replace(/\s+(laki-laki|perempuan)$/i, '').trim();
-        return rawName === sName || sName.includes(rawName) || rawName.includes(sName);
-      });
-      if (match) {
-        if (!santriLevel && match[4]) santriLevel = match[4];
-        const tingkat = match[5] || '';
-        const rombel = match[6] || '';
-        const program = match[7] && match[7] !== '-' ? match[7] : '';
-        const fullClass = [tingkat, rombel, program].filter(Boolean).join(' ');
-        if (!santriClass || santriClass === tingkat) {
-          santriClass = fullClass || santriClass;
-        }
-        if ((!santriRoom || santriRoom === '-') && match[10]) {
-          santriRoom = match[10];
-        }
-      }
-    }
+    const { santriName, waliName, santriClass, santriLevel, santriRoom } = getSantriMeta(order.user, order.delivery_location);
 
     return (
       <div 
         key={order.id} 
-        className={`rounded-2xl border shadow-sm hover:shadow-md transition-all p-3.5 sm:p-4.5 flex flex-col justify-between gap-3 ${
+        className={`rounded-none border transition-all p-2 sm:p-2.5 flex flex-col justify-between gap-1.5 ${
           isCompleted 
             ? 'bg-gray-50/70 dark:bg-gray-900/40 border-green-200 dark:border-green-900/50' 
             : isProcessing
@@ -1009,12 +1038,12 @@ export default function PesananToko() {
         }`}
       >
         {/* 1. Header: Toko, ID, Jam & Status Badges */}
-        <div className="flex items-center justify-between gap-2 border-b border-gray-200 dark:border-gray-700/80 pb-2 flex-wrap">
+        <div className="flex items-center justify-between gap-1 border-b border-gray-200 dark:border-gray-700/80 pb-1 flex-wrap">
           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-            <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate">
+            <span className="text-[10px] sm:text-[11px] font-bold px-1.5 py-0.5 rounded-none bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800 truncate">
               🏪 {order.canteen?.name || 'Toko'}
             </span>
-            <span className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200">
+            <span className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 font-mono">
               #{order.id}
             </span>
             <span className="text-[10px] sm:text-xs text-gray-400">
@@ -1023,14 +1052,14 @@ export default function PesananToko() {
           </div>
 
           {/* Status Badges */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             {isPending && (!order.canteen?.couriers || order.canteen.couriers.length === 0) && (
-              <span className="text-[9px] sm:text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+              <span className="text-[9px] sm:text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1 py-0.5 rounded-none border border-amber-200 dark:border-amber-800 flex items-center gap-0.5">
                 ⚠️ Belum ada kurir
               </span>
             )}
 
-            <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ${
+            <span className={`px-1.5 py-0.5 rounded-none text-[9.5px] sm:text-[10px] font-bold ${
               isPaid
                 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
                 : isWaiting
@@ -1040,7 +1069,7 @@ export default function PesananToko() {
               {isPaid ? 'Lunas' : isWaiting ? 'Verifikasi' : 'COD / Belum'}
             </span>
 
-            <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ${
+            <span className={`px-1.5 py-0.5 rounded-none text-[9.5px] sm:text-[10px] font-bold ${
               isCompleted
                 ? 'bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800'
                 : isProcessing
@@ -1054,193 +1083,192 @@ export default function PesananToko() {
           </div>
         </div>
 
-        {/* Responsive Body for Web: Left Customer & Payment, Right Items */}
-        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-start flex-1">
-          {/* Left Column (sm: 5 cols): Santri, Wali, Kontak, Bukti, Pembayaran */}
-          <div className="sm:col-span-5 space-y-2.5">
-            <div className="text-xs space-y-1 bg-gray-50/70 dark:bg-gray-800/40 p-2.5 rounded-xl border border-gray-200/70 dark:border-gray-700/70">
-              <div className="flex items-center justify-between gap-1">
-                <span className="font-bold text-gray-900 dark:text-white flex items-center gap-1.5 min-w-0">
-                  <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                  <span className="truncate sm:whitespace-normal">{santriName}</span>
-                </span>
-                <span className="text-[11px] text-gray-600 dark:text-gray-300 font-semibold shrink-0">
-                  📍 {santriRoom || '-'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 pt-0.5 flex-wrap gap-1">
+        {/* 2. Responsive Body: Left (Customer & Payment Strip), Right (Items) */}
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5 items-start flex-1">
+          {/* Left Column (sm: 5 cols): Santri, Wali, Kontak, Bukti, Pembayaran dalam 1 strip padat */}
+          <div className="sm:col-span-5 space-y-1">
+            <div className="bg-gray-50/80 dark:bg-gray-800/40 p-1.5 rounded-none border border-gray-200/80 dark:border-gray-700/80 text-[11px] space-y-1">
+              {/* Row 1: Santri & Wali Info */}
+              <div className="flex items-center justify-between gap-1 flex-wrap">
                 <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                  <span className="truncate">Wali: {waliName}</span>
+                  <span className="font-bold text-gray-900 dark:text-white flex items-center gap-1">
+                    <User className="w-3 h-3 text-gray-400 shrink-0" />
+                    <span className="truncate">{santriName}</span>
+                  </span>
+                  <span className="text-gray-500 dark:text-gray-400 text-[10px] truncate">
+                    (Wali: {waliName})
+                  </span>
                   {(santriLevel || santriClass) && (
-                    <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 text-[10px] font-bold">
+                    <span className="inline-flex items-center px-1 py-0.2 rounded-none bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 text-[9px] font-bold">
                       🎓 {santriLevel ? `${santriLevel} ` : ''}{santriClass ? `Kelas ${santriClass}` : ''}
                     </span>
                   )}
                 </div>
-                {order.user?.phone && (
-                  <button
-                    type="button"
-                    onClick={() => handleContact(order.user?.phone, order.user?.name)}
-                    className="text-green-600 dark:text-green-400 font-bold hover:underline flex items-center gap-0.5 shrink-0 text-[10px] sm:text-xs"
-                  >
-                    <MessageCircle className="w-3.5 h-3.5" /> WA Pembeli
-                  </button>
-                )}
+                <div className="flex items-center gap-1.5 shrink-0 text-[10px]">
+                  <span className="text-gray-600 dark:text-gray-300 font-semibold">
+                    📍 {santriRoom || '-'}
+                  </span>
+                  {order.user?.phone && (
+                    <button
+                      type="button"
+                      onClick={() => handleContact(order.user?.phone, order.user?.name)}
+                      className="text-green-600 dark:text-green-400 font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <MessageCircle className="w-2.5 h-2.5" /> WA
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Proof Buttons (If uploaded) & Quick Upload */}
-            <div className="flex gap-1.5 flex-wrap items-center pt-0.5">
-              {order.proof_of_payment && order.proof_of_payment.length !== 0 ? (
-                <div className="inline-flex items-center gap-1">
-                  <button 
-                    onClick={() => {
-                      let proofs = [];
-                      if (Array.isArray(order.proof_of_payment)) {
-                        proofs = order.proof_of_payment.map(path => getStorageUrl(path));
-                      } else {
-                        proofs = [getStorageUrl(order.proof_of_payment)];
-                      }
-                      setSelectedProofs(proofs);
-                    }}
-                    className="px-2 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-indigo-200 dark:border-indigo-800"
-                  >
-                    <ImageIcon className="w-3 h-3" /> Bukti Transfer ({Array.isArray(order.proof_of_payment) ? order.proof_of_payment.length : 1})
-                  </button>
-                  {!isCancelled && (
+              {/* Row 2: Bukti & Aksi Pembayaran Segaris */}
+              <div className="flex items-center justify-between gap-1 pt-1 border-t border-gray-200/60 dark:border-gray-700/60 flex-wrap">
+                {/* Proof Badges */}
+                <div className="flex items-center gap-1 flex-wrap">
+                  {order.proof_of_payment && order.proof_of_payment.length !== 0 ? (
+                    <div className="inline-flex items-center gap-0.5">
+                      <button 
+                        onClick={() => {
+                          let proofs = [];
+                          if (Array.isArray(order.proof_of_payment)) {
+                            proofs = order.proof_of_payment.map(path => getStorageUrl(path));
+                          } else {
+                            proofs = [getStorageUrl(order.proof_of_payment)];
+                          }
+                          setSelectedProofs(proofs);
+                        }}
+                        className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-100 rounded-none text-[9.5px] font-semibold flex items-center gap-1 transition-colors border border-indigo-200 dark:border-indigo-800 cursor-pointer"
+                      >
+                        <ImageIcon className="w-2.5 h-2.5" /> Bukti ({Array.isArray(order.proof_of_payment) ? order.proof_of_payment.length : 1})
+                      </button>
+                      {!isCancelled && (
+                        <button 
+                          type="button"
+                          onClick={() => handleOpenUploadPaymentModal(order)}
+                          title="Tambah / perbarui bukti transfer santri"
+                          className="px-1 py-0.5 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300 hover:bg-green-100 rounded-none text-[9.5px] font-bold flex items-center transition-colors border border-green-200 dark:border-green-800 cursor-pointer"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    !isCancelled && (
+                      <button 
+                        type="button"
+                        onClick={() => handleOpenUploadPaymentModal(order)}
+                        className="px-1.5 py-0.5 bg-green-50 hover:bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300 rounded-none text-[9.5px] font-semibold flex items-center gap-1 transition-colors border border-green-200 dark:border-green-800 cursor-pointer"
+                        title="Unggah bukti pembayaran santri"
+                      >
+                        <UploadCloud className="w-2.5 h-2.5 text-green-600 dark:text-green-400" />
+                        <span>+ Bukti</span>
+                      </button>
+                    )
+                  )}
+
+                  {order.proof_of_purchase && order.proof_of_purchase.length !== 0 && (
+                    <button 
+                      onClick={() => {
+                        let proofs = [];
+                        if (Array.isArray(order.proof_of_purchase)) {
+                          proofs = order.proof_of_purchase.map(path => getStorageUrl(path));
+                        } else {
+                          proofs = [getStorageUrl(order.proof_of_purchase)];
+                        }
+                        setSelectedProofs(proofs);
+                      }}
+                      className="px-1.5 py-0.5 bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 hover:bg-purple-100 rounded-none text-[9.5px] font-semibold flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-800 cursor-pointer"
+                    >
+                      <ImageIcon className="w-2.5 h-2.5" /> Struk ({Array.isArray(order.proof_of_purchase) ? order.proof_of_purchase.length : 1})
+                    </button>
+                  )}
+                  {order.proof_of_delivery && order.proof_of_delivery.length !== 0 && (
+                    <button 
+                      onClick={() => {
+                        let proofs = [];
+                        if (Array.isArray(order.proof_of_delivery)) {
+                          proofs = order.proof_of_delivery.map(path => getStorageUrl(path));
+                        } else {
+                          proofs = [getStorageUrl(order.proof_of_delivery)];
+                        }
+                        setSelectedProofs(proofs);
+                      }}
+                      className="px-1.5 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100 rounded-none text-[9.5px] font-semibold flex items-center gap-1 transition-colors border border-blue-200 dark:border-blue-800 cursor-pointer"
+                    >
+                      <ImageIcon className="w-2.5 h-2.5" /> Antar ({Array.isArray(order.proof_of_delivery) ? order.proof_of_delivery.length : 1})
+                    </button>
+                  )}
+                </div>
+
+                {/* Aksi Pembayaran */}
+                {!isCancelled ? (
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
                       onClick={() => handleOpenUploadPaymentModal(order)}
-                      title="Tambah / perbarui bukti transfer santri"
-                      className="px-1.5 py-0.5 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300 hover:bg-green-100 rounded-md text-[10px] font-bold flex items-center gap-0.5 transition-colors border border-green-200 dark:border-green-800"
+                      className="py-0.5 px-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-none text-[9.5px] font-bold transition-colors flex items-center gap-0.5 cursor-pointer"
+                      title="Unggah Bukti Transfer Santri"
                     >
-                      <Plus className="w-2.5 h-2.5" /> Bukti
+                      <UploadCloud className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Upload</span>
                     </button>
-                  )}
-                </div>
-              ) : (
-                !isCancelled && (
-                  <button 
-                    type="button"
-                    onClick={() => handleOpenUploadPaymentModal(order)}
-                    className="px-2 py-0.5 bg-green-50 hover:bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-green-200 dark:border-green-800"
-                    title="Unggah bukti pembayaran santri"
-                  >
-                    <UploadCloud className="w-3 h-3 text-green-600 dark:text-green-400" />
-                    <span>+ Bukti Transfer</span>
-                  </button>
-                )
-              )}
 
-              {order.proof_of_purchase && order.proof_of_purchase.length !== 0 && (
-                <button 
-                  onClick={() => {
-                    let proofs = [];
-                    if (Array.isArray(order.proof_of_purchase)) {
-                      proofs = order.proof_of_purchase.map(path => getStorageUrl(path));
-                    } else {
-                      proofs = [getStorageUrl(order.proof_of_purchase)];
-                    }
-                    setSelectedProofs(proofs);
-                  }}
-                  className="px-2 py-0.5 bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 hover:bg-purple-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-800"
-                >
-                  <ImageIcon className="w-3 h-3" /> Struk ({Array.isArray(order.proof_of_purchase) ? order.proof_of_purchase.length : 1})
-                </button>
-              )}
-              {order.proof_of_delivery && order.proof_of_delivery.length !== 0 && (
-                <button 
-                  onClick={() => {
-                    let proofs = [];
-                    if (Array.isArray(order.proof_of_delivery)) {
-                      proofs = order.proof_of_delivery.map(path => getStorageUrl(path));
-                    } else {
-                      proofs = [getStorageUrl(order.proof_of_delivery)];
-                    }
-                    setSelectedProofs(proofs);
-                  }}
-                  className="px-2 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-blue-200 dark:border-blue-800"
-                >
-                  <ImageIcon className="w-3 h-3" /> Serah Terima ({Array.isArray(order.proof_of_delivery) ? order.proof_of_delivery.length : 1})
-                </button>
-              )}
-            </div>
-
-            {/* Payment Validation Bar */}
-            <div className="flex items-center justify-between gap-1.5 p-2 bg-gray-50/80 dark:bg-gray-800/40 rounded-xl border border-gray-200/80 dark:border-gray-700/80 flex-wrap">
-              <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300">
-                💳 Pembayaran:
-              </span>
-
-              {!isCancelled ? (
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenUploadPaymentModal(order)}
-                    className="py-1 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg text-[10px] font-bold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
-                    title="Unggah Bukti Transfer Santri"
-                  >
-                    <UploadCloud className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                    <span>Unggah Bukti</span>
-                  </button>
-
-                  {!isPaid ? (
-                    <button
-                      type="button"
-                      disabled={updatePaymentMutation.isPending}
-                      onClick={() => updatePaymentMutation.mutate({ id: order.id, status: 'paid', canteen_id: order.canteen_id })}
-                      className="py-1 px-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center gap-1 shadow-2xs disabled:opacity-50 cursor-pointer"
-                    >
-                      <CheckCircle className="w-3 h-3" /> Konfirmasi Lunas
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={updatePaymentMutation.isPending}
-                      onClick={() => {
-                        if (window.confirm('Batalkan status lunas dan kembalikan ke Belum Bayar?')) {
-                          updatePaymentMutation.mutate({ id: order.id, status: 'unpaid', canteen_id: order.canteen_id });
-                        }
-                      }}
-                      className="py-0.5 px-2 bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-[10px] font-semibold transition-colors flex items-center gap-1 cursor-pointer"
-                    >
-                      <X className="w-2.5 h-2.5" /> Batal Lunas
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <span className="text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded-md border border-red-200 dark:border-red-900/50">
-                  Pesanan Dibatalkan
-                </span>
-              )}
+                    {!isPaid ? (
+                      <button
+                        type="button"
+                        disabled={updatePaymentMutation.isPending}
+                        onClick={() => updatePaymentMutation.mutate({ id: order.id, status: 'paid', canteen_id: order.canteen_id })}
+                        className="py-0.5 px-1.5 bg-green-600 hover:bg-green-700 text-white rounded-none text-[9.5px] font-bold transition-colors flex items-center gap-0.5 disabled:opacity-50 cursor-pointer"
+                      >
+                        <CheckCircle className="w-2.5 h-2.5" /> Lunas
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={updatePaymentMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm('Batalkan status lunas dan kembalikan ke Belum Bayar?')) {
+                            updatePaymentMutation.mutate({ id: order.id, status: 'unpaid', canteen_id: order.canteen_id });
+                          }
+                        }}
+                        className="py-0.5 px-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-none text-[9px] font-semibold transition-colors flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <X className="w-2.5 h-2.5" /> Batal
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-[9px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-1 py-0.2 rounded-none border border-red-200 dark:border-red-900/50">
+                    Dibatalkan
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Right Column (sm: 7 cols): Items List Box & Courier */}
-          <div className="sm:col-span-7 space-y-2">
-            <div className="bg-gray-50/80 dark:bg-gray-800/50 rounded-xl p-2.5 space-y-1 text-xs border border-gray-200 dark:border-gray-700">
+          {/* Right Column (sm: 7 cols): Items List & Courier */}
+          <div className="sm:col-span-7 space-y-1">
+            <div className="bg-gray-50/80 dark:bg-gray-800/50 rounded-none p-1.5 space-y-0.5 text-xs border border-gray-200 dark:border-gray-700">
               {order.custom_notes && (
-                <div className="text-[11px] sm:text-xs font-medium text-purple-800 dark:text-purple-300 pb-1 border-b border-purple-100 dark:border-purple-900/40">
+                <div className="text-[10px] font-medium text-purple-800 dark:text-purple-300 pb-0.5 border-b border-purple-100 dark:border-purple-900/40">
                   ✨ {order.custom_notes}
                 </div>
               )}
               {order.items && order.items.length > 0 ? (
                 order.items.map(item => (
-                  <div key={item.id} className="flex justify-between items-center text-xs py-0.5">
+                  <div key={item.id} className="flex justify-between items-center text-[11px] sm:text-xs py-0.5 border-b border-gray-200/40 dark:border-gray-700/40 last:border-b-0">
                     <span className="text-gray-800 dark:text-gray-200 truncate pr-2">
                       <strong className="text-gray-900 dark:text-white font-bold">{item.quantity}x</strong> {item.product?.name || 'Produk'}
                       {item.notes && <span className="text-gray-400 italic text-[10px]"> ({item.notes})</span>}
                     </span>
-                    <span className="font-bold text-gray-900 dark:text-white shrink-0">
+                    <span className="font-bold text-gray-900 dark:text-white shrink-0 font-mono text-[11px] sm:text-xs">
                       Rp {formatRupiah(item.subtotal || (parseFloat(item.price) * item.quantity))}
                     </span>
                   </div>
                 ))
               ) : (
-                <div className="flex justify-between items-center text-xs text-gray-500 py-0.5">
+                <div className="flex justify-between items-center text-[11px] text-gray-500 py-0.5">
                   <span>1x Pesanan Khusus</span>
-                  <span className="font-bold text-gray-900 dark:text-white">
+                  <span className="font-bold text-gray-900 dark:text-white font-mono">
                     Rp {formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}
                   </span>
                 </div>
@@ -1248,10 +1276,10 @@ export default function PesananToko() {
 
               {/* Kurir info badge if present */}
               {order.courier && (
-                <div className="pt-1 border-t border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between text-[11px]">
+                <div className="pt-0.5 border-t border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between text-[10px]">
                   <span className="text-gray-500 dark:text-gray-400">Petugas Antar:</span>
-                  <span className="font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
-                    <Truck className="w-3 h-3" /> {order.courier.name}
+                  <span className="font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1 bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded-none border border-blue-200 dark:border-blue-800">
+                    <Truck className="w-2.5 h-2.5" /> {order.courier.name}
                   </span>
                 </div>
               )}
@@ -1259,33 +1287,31 @@ export default function PesananToko() {
           </div>
         </div>
 
-        {/* 6. Footer: Total Price & Canteen Operational Actions */}
-        <div className="pt-2.5 border-t border-gray-200 dark:border-gray-700/80 flex items-center justify-between gap-2 flex-wrap">
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-sm sm:text-base font-black text-green-700 dark:text-green-400 block leading-tight">
-                Rp {formatRupiah(order.total_price)}
-              </span>
-              <div className="text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/80 px-2 py-0.5 rounded-md border border-gray-200/60 dark:border-gray-700/60 flex items-center gap-1.5 flex-wrap">
-                <span>Makanan: <strong className="text-gray-900 dark:text-white">Rp {formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}</strong></span>
-                <span>•</span>
-                <span>Ongkir: <strong className="text-blue-600 dark:text-blue-400">Rp {formatRupiah(order.delivery_fee)}</strong></span>
-              </div>
+        {/* 3. Footer: Total Price & Canteen Operational Actions Segaris */}
+        <div className="pt-1.5 border-t border-gray-200 dark:border-gray-700/80 flex items-center justify-between gap-1 flex-wrap">
+          <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
+            <span className="text-sm font-black text-green-700 dark:text-green-400 leading-tight font-mono">
+              Rp {formatRupiah(order.total_price)}
+            </span>
+            <div className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1">
+              <span>Makanan: <strong className="text-gray-900 dark:text-white font-mono">Rp {formatRupiah(Math.max(0, parseFloat(order.total_price || 0) - parseFloat(order.delivery_fee || 0) - parseFloat(order.admin_fee || 0)))}</strong></span>
+              <span>•</span>
+              <span>Ongkir: <strong className="text-blue-600 dark:text-blue-400 font-mono">Rp {formatRupiah(order.delivery_fee)}</strong></span>
             </div>
             {Boolean(order.is_custom) && parseFloat(order.total_price) === 0 && (
-              <span className="text-[10px] sm:text-xs text-amber-600 font-semibold block">Harga belum diset</span>
+              <span className="text-[9.5px] text-amber-600 font-semibold">Harga belum diset</span>
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+          <div className="flex items-center gap-1 shrink-0 flex-wrap">
             {/* Tombol Cetak Struk */}
             <button 
               onClick={() => handlePrintSingleReceipt(order)}
-              className="p-1.5 sm:px-2.5 sm:py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+              className="py-1 px-1.5 sm:px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-none text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-0.5 cursor-pointer"
               title="Cetak Struk Thermal / A4"
             >
-              <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-              <span className="hidden sm:inline text-[11px]">Cetak</span>
+              <Printer className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+              <span>Cetak</span>
             </button>
 
             {/* Set Harga Khusus */}
@@ -1299,7 +1325,7 @@ export default function PesananToko() {
                   setNewPriceInput(curProductPrice > 0 ? Math.round(curProductPrice).toString() : '');
                   setShowSetPriceModal(true);
                 }}
-                className="py-1 px-2.5 sm:py-1.5 sm:px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] sm:text-xs font-bold transition-colors shadow-2xs"
+                className="py-1 px-1.5 sm:px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-none text-[10px] sm:text-[11px] font-bold transition-colors cursor-pointer"
               >
                 🏷️ {parseFloat(order.total_price) === 0 ? 'Set Harga' : 'Edit'}
               </button>
@@ -1314,11 +1340,11 @@ export default function PesananToko() {
                       cancelOrderMutation.mutate({ id: order.id, canteen_id: order.canteen_id });
                     }
                   }}
-                  className="p-1.5 sm:px-2 sm:py-1 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800 flex items-center gap-1"
+                  className="py-1 px-1.5 sm:px-2 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-none text-[10px] sm:text-[11px] font-bold transition-colors border border-red-200 dark:border-red-800 flex items-center gap-0.5 cursor-pointer"
                   title="Tolak Pesanan"
                 >
-                  <X className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline text-[11px]">Tolak</span>
+                  <X className="w-3 h-3" />
+                  <span>Tolak</span>
                 </button>
 
                 <button 
@@ -1330,9 +1356,9 @@ export default function PesananToko() {
                       updateStatusMutation.mutate({ id: order.id, status: 'processing', canteen_id: order.canteen_id });
                     }
                   }}
-                  className="py-1 px-2.5 sm:py-1.5 sm:px-3 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[11px] sm:text-xs font-bold transition-colors flex items-center gap-1 shadow-2xs disabled:opacity-50"
+                  className="py-1 px-2 sm:px-2.5 bg-green-600 hover:bg-green-700 text-white rounded-none text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
                 >
-                  <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Lanjutkan
+                  <CheckCircle className="w-3 h-3" /> Lanjutkan
                 </button>
               </>
             )}
@@ -1346,9 +1372,9 @@ export default function PesananToko() {
                       setActiveOrderForReceipt(order);
                       setShowReceiptModal(true);
                     }}
-                    className="py-1 px-2.5 sm:py-1.5 sm:px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] sm:text-xs font-bold transition-colors flex items-center gap-1 shadow-2xs"
+                    className="py-1 px-1.5 sm:px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-none text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-0.5 cursor-pointer"
                   >
-                    <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> + Struk
+                    <Upload className="w-3 h-3" /> + Struk
                   </button>
                 )}
                 {!order.courier_id && (
@@ -1358,14 +1384,14 @@ export default function PesananToko() {
                         updateStatusMutation.mutate({ id: order.id, status: 'completed', canteen_id: order.canteen_id });
                       }
                     }}
-                    className="py-1 px-2.5 sm:py-1.5 sm:px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] sm:text-xs font-bold transition-colors flex items-center gap-1 shadow-2xs"
+                    className="py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-none text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
                   >
-                    <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Selesaikan
+                    <CheckCircle className="w-3 h-3" /> Selesaikan
                   </button>
                 )}
                 {order.courier_id && (
-                  <span className="text-[10px] sm:text-xs font-semibold text-blue-700 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300 px-2.5 py-1 rounded-md border border-blue-200 dark:border-blue-800 flex items-center gap-1">
-                    <Truck className="w-3.5 h-3.5" /> {order.courier?.name || 'Kurir'}
+                  <span className="text-[9.5px] sm:text-[10px] font-semibold text-blue-700 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300 px-1.5 py-0.5 rounded-none border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                    <Truck className="w-2.5 h-2.5" /> {order.courier?.name || 'Kurir'}
                   </span>
                 )}
               </>
@@ -1386,33 +1412,7 @@ export default function PesananToko() {
     const isWaiting = group.payment_status === 'waiting_confirmation';
 
     const pOrder = group.primaryOrder;
-    const santriName = pOrder.user?.santri_name || pOrder.user?.name || 'Pembeli';
-    const waliName = pOrder.user?.name || 'Wali';
-    let santriClass = pOrder.user?.santri_class || '';
-    let santriLevel = pOrder.user?.santri_level || '';
-    let santriRoom = pOrder.user?.santri_room || pOrder.delivery_location || group.delivery_location || '';
-
-    if (santriName && santriData?.data) {
-      const sName = santriName.toLowerCase().trim();
-      const match = santriData.data.find(r => {
-        if (!r || !r[1]) return false;
-        const rawName = r[1].toLowerCase().replace(/\s+(laki-laki|perempuan)$/i, '').trim();
-        return rawName === sName || sName.includes(rawName) || rawName.includes(sName);
-      });
-      if (match) {
-        if (!santriLevel && match[4]) santriLevel = match[4];
-        const tingkat = match[5] || '';
-        const rombel = match[6] || '';
-        const program = match[7] && match[7] !== '-' ? match[7] : '';
-        const fullClass = [tingkat, rombel, program].filter(Boolean).join(' ');
-        if (!santriClass || santriClass === tingkat) {
-          santriClass = fullClass || santriClass;
-        }
-        if ((!santriRoom || santriRoom === '-') && match[10]) {
-          santriRoom = match[10];
-        }
-      }
-    }
+    const { santriName, waliName, santriClass, santriLevel, santriRoom } = getSantriMeta(pOrder.user, pOrder.delivery_location || group.delivery_location);
 
     const allPaymentProofs = Array.from(new Set(
       group.orders.flatMap(o => {
@@ -1435,12 +1435,10 @@ export default function PesananToko() {
       }).filter(Boolean)
     ));
 
-    const assignedCouriers = group.orders.map(o => o.courier).filter(Boolean);
-
     return (
       <div 
         key={group.key} 
-        className={`rounded-2xl border shadow-sm hover:shadow-md transition-all p-3.5 sm:p-4.5 flex flex-col justify-between gap-3 col-span-1 lg:col-span-2 ${
+        className={`rounded-none border transition-all p-2 sm:p-2.5 flex flex-col justify-between gap-1.5 col-span-1 lg:col-span-2 ${
           isCompleted 
             ? 'bg-gray-50/70 dark:bg-gray-900/40 border-green-200 dark:border-green-900/50' 
             : isProcessing
@@ -1453,22 +1451,22 @@ export default function PesananToko() {
         }`}
       >
         {/* 1. Header: Multi-Toko Badge, Order IDs, Jam & Status Badges */}
-        <div className="flex items-center justify-between gap-2 border-b border-gray-200 dark:border-gray-700/80 pb-2 flex-wrap">
+        <div className="flex items-center justify-between gap-1 border-b border-gray-200 dark:border-gray-700/80 pb-1 flex-wrap">
           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-            <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 truncate">
+            <span className="text-[10px] sm:text-[11px] font-bold px-1.5 py-0.5 rounded-none bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 truncate">
               📦 {group.orders.length} Toko Pesanan
             </span>
-            <span className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200">
+            <span className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 font-mono">
               #{group.orders.map(o => o.id).join(', #')}
             </span>
-            <span className="text-[10px] sm:text-xs text-gray-400">
+            <span className="text-[10px] text-gray-400">
               • {new Date(group.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
 
           {/* Status Badges */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ${
+          <div className="flex items-center gap-1 shrink-0">
+            <span className={`px-1.5 py-0.5 rounded-none text-[9.5px] sm:text-[10px] font-bold ${
               isPaid
                 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
                 : isWaiting
@@ -1478,7 +1476,7 @@ export default function PesananToko() {
               {isPaid ? 'Lunas' : isWaiting ? 'Verifikasi' : 'COD / Belum'}
             </span>
 
-            <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ${
+            <span className={`px-1.5 py-0.5 rounded-none text-[9.5px] sm:text-[10px] font-bold ${
               isCompleted
                 ? 'bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800'
                 : isProcessing
@@ -1489,184 +1487,176 @@ export default function PesananToko() {
                 ? 'bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800'
                 : 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
             }`}>
-              {isCompleted ? 'Selesai' : isProcessing ? 'Diproses' : isPartial ? 'Sebagian Diproses' : isCancelled ? 'Batal' : 'Pending'}
+              {isCompleted ? 'Selesai' : isProcessing ? 'Diproses' : isPartial ? 'Sebagian' : isCancelled ? 'Batal' : 'Pending'}
             </span>
           </div>
         </div>
 
-        {/* 2-Column Responsive Body for Web: Left info & payment, Right store breakdown */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start flex-1">
+        {/* 2. Responsive Body: Left (Customer & Payment Strip), Right (Stores breakdown) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-1.5 items-start flex-1">
           {/* Left Column (5 of 12 cols on lg+): Santri, Room, Wali, WA, Proofs, Payment */}
-          <div className="lg:col-span-5 space-y-2.5">
-            {/* Customer, Santri & WhatsApp Contact Info */}
-            <div className="text-xs space-y-1 bg-gray-50/70 dark:bg-gray-800/40 p-2.5 rounded-xl border border-gray-200/70 dark:border-gray-700/70">
-              <div className="flex items-center justify-between gap-1">
-                <span className="font-bold text-gray-900 dark:text-white flex items-center gap-1.5 min-w-0">
-                  <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                  <span className="truncate lg:whitespace-normal">{santriName}</span>
-                </span>
-                <span className="text-[11px] text-gray-600 dark:text-gray-300 font-semibold shrink-0">
-                  📍 {santriRoom || '-'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 pt-0.5 flex-wrap gap-1">
+          <div className="lg:col-span-5 space-y-1">
+            <div className="bg-gray-50/80 dark:bg-gray-800/40 p-1.5 rounded-none border border-gray-200/80 dark:border-gray-700/80 text-[11px] space-y-1">
+              {/* Row 1: Santri & Wali Info */}
+              <div className="flex items-center justify-between gap-1 flex-wrap">
                 <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                  <span className="truncate">Wali: {waliName}</span>
+                  <span className="font-bold text-gray-900 dark:text-white flex items-center gap-1">
+                    <User className="w-3 h-3 text-gray-400 shrink-0" />
+                    <span className="truncate">{santriName}</span>
+                  </span>
+                  <span className="text-gray-500 dark:text-gray-400 text-[10px] truncate">
+                    (Wali: {waliName})
+                  </span>
                   {(santriLevel || santriClass) && (
-                    <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 text-[10px] font-bold">
+                    <span className="inline-flex items-center px-1 py-0.2 rounded-none bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 text-[9px] font-bold">
                       🎓 {santriLevel ? `${santriLevel} ` : ''}{santriClass ? `Kelas ${santriClass}` : ''}
                     </span>
                   )}
                 </div>
-                {pOrder.user?.phone && (
-                  <button
-                    type="button"
-                    onClick={() => handleContact(pOrder.user?.phone, pOrder.user?.name)}
-                    className="text-green-600 dark:text-green-400 font-bold hover:underline flex items-center gap-0.5 shrink-0 text-[10px] sm:text-xs"
-                  >
-                    <MessageCircle className="w-3.5 h-3.5" /> WA Pembeli
-                  </button>
-                )}
+                <div className="flex items-center gap-1.5 shrink-0 text-[10px]">
+                  <span className="text-gray-600 dark:text-gray-300 font-semibold">
+                    📍 {santriRoom || '-'}
+                  </span>
+                  {pOrder.user?.phone && (
+                    <button
+                      type="button"
+                      onClick={() => handleContact(pOrder.user?.phone, pOrder.user?.name)}
+                      className="text-green-600 dark:text-green-400 font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <MessageCircle className="w-2.5 h-2.5" /> WA
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Proof Buttons & Quick Upload */}
-            <div className="flex gap-1.5 flex-wrap items-center pt-0.5">
-              {allPaymentProofs.length > 0 ? (
-                <div className="inline-flex items-center gap-1">
-                  <button 
-                    onClick={() => {
-                      setSelectedProofs(allPaymentProofs.map(p => getStorageUrl(p)));
-                    }}
-                    className="px-2 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-indigo-200 dark:border-indigo-800"
-                  >
-                    <ImageIcon className="w-3 h-3" /> Bukti Transfer ({allPaymentProofs.length})
-                  </button>
-                  {!isCancelled && (
+              {/* Row 2: Proofs & Payment Inline Strip */}
+              <div className="flex items-center justify-between gap-1 pt-1 border-t border-gray-200/60 dark:border-gray-700/60 flex-wrap">
+                {/* Proof Badges */}
+                <div className="flex items-center gap-1 flex-wrap">
+                  {allPaymentProofs.length > 0 ? (
+                    <div className="inline-flex items-center gap-0.5">
+                      <button 
+                        onClick={() => setSelectedProofs(allPaymentProofs.map(p => getStorageUrl(p)))}
+                        className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-100 rounded-none text-[9.5px] font-semibold flex items-center gap-1 transition-colors border border-indigo-200 dark:border-indigo-800 cursor-pointer"
+                      >
+                        <ImageIcon className="w-2.5 h-2.5" /> Bukti ({allPaymentProofs.length})
+                      </button>
+                      {!isCancelled && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenUploadPaymentModal({ ...pOrder, _groupOrders: group.orders, _groupGrandTotal: group.grandTotal })}
+                          title="Tambah / perbarui bukti transfer santri"
+                          className="px-1 py-0.5 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300 hover:bg-green-100 rounded-none text-[9.5px] font-bold flex items-center transition-colors border border-green-200 dark:border-green-800 cursor-pointer"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    !isCancelled && (
+                      <button 
+                        type="button"
+                        onClick={() => handleOpenUploadPaymentModal({ ...pOrder, _groupOrders: group.orders, _groupGrandTotal: group.grandTotal })}
+                        className="px-1.5 py-0.5 bg-green-50 hover:bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300 rounded-none text-[9.5px] font-semibold flex items-center gap-1 transition-colors border border-green-200 dark:border-green-800 cursor-pointer"
+                        title="Unggah bukti pembayaran santri"
+                      >
+                        <UploadCloud className="w-2.5 h-2.5 text-green-600 dark:text-green-400" />
+                        <span>+ Bukti</span>
+                      </button>
+                    )
+                  )}
+
+                  {allPurchaseProofs.length > 0 && (
+                    <button 
+                      onClick={() => setSelectedProofs(allPurchaseProofs.map(p => getStorageUrl(p)))}
+                      className="px-1.5 py-0.5 bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 hover:bg-purple-100 rounded-none text-[9.5px] font-semibold flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-800 cursor-pointer"
+                    >
+                      <ImageIcon className="w-2.5 h-2.5" /> Struk ({allPurchaseProofs.length})
+                    </button>
+                  )}
+                  {allDeliveryProofs.length > 0 && (
+                    <button 
+                      onClick={() => setSelectedProofs(allDeliveryProofs.map(p => getStorageUrl(p)))}
+                      className="px-1.5 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100 rounded-none text-[9.5px] font-semibold flex items-center gap-1 transition-colors border border-blue-200 dark:border-blue-800 cursor-pointer"
+                    >
+                      <ImageIcon className="w-2.5 h-2.5" /> Antar ({allDeliveryProofs.length})
+                    </button>
+                  )}
+                </div>
+
+                {/* Payment Actions */}
+                {!isCancelled ? (
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
                       onClick={() => handleOpenUploadPaymentModal({ ...pOrder, _groupOrders: group.orders, _groupGrandTotal: group.grandTotal })}
-                      title="Tambah / perbarui bukti transfer santri"
-                      className="px-1.5 py-0.5 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300 hover:bg-green-100 rounded-md text-[10px] font-bold flex items-center gap-0.5 transition-colors border border-green-200 dark:border-green-800"
+                      className="py-0.5 px-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-none text-[9.5px] font-bold transition-colors flex items-center gap-0.5 cursor-pointer"
+                      title="Unggah Bukti Transfer Santri"
                     >
-                      <Plus className="w-2.5 h-2.5" /> Bukti
+                      <UploadCloud className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Upload</span>
                     </button>
-                  )}
-                </div>
-              ) : (
-                !isCancelled && (
-                  <button 
-                    type="button"
-                    onClick={() => handleOpenUploadPaymentModal({ ...pOrder, _groupOrders: group.orders, _groupGrandTotal: group.grandTotal })}
-                    className="px-2 py-0.5 bg-green-50 hover:bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-green-200 dark:border-green-800"
-                    title="Unggah bukti pembayaran santri"
-                  >
-                    <UploadCloud className="w-3 h-3 text-green-600 dark:text-green-400" />
-                    <span>+ Bukti Transfer</span>
-                  </button>
-                )
-              )}
 
-              {allPurchaseProofs.length > 0 && (
-                <button 
-                  onClick={() => {
-                    setSelectedProofs(allPurchaseProofs.map(p => getStorageUrl(p)));
-                  }}
-                  className="px-2 py-0.5 bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 hover:bg-purple-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-purple-200 dark:border-purple-800"
-                >
-                  <ImageIcon className="w-3 h-3" /> Struk ({allPurchaseProofs.length})
-                </button>
-              )}
-              {allDeliveryProofs.length > 0 && (
-                <button 
-                  onClick={() => {
-                    setSelectedProofs(allDeliveryProofs.map(p => getStorageUrl(p)));
-                  }}
-                  className="px-2 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors border border-blue-200 dark:border-blue-800"
-                >
-                  <ImageIcon className="w-3 h-3" /> Serah Terima ({allDeliveryProofs.length})
-                </button>
-              )}
-            </div>
-
-            {/* Payment Validation Bar */}
-            <div className="flex items-center justify-between gap-1.5 p-2 bg-gray-50/80 dark:bg-gray-800/40 rounded-xl border border-gray-200/80 dark:border-gray-700/80 flex-wrap">
-              <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300">
-                💳 Pembayaran:
-              </span>
-
-              {!isCancelled ? (
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenUploadPaymentModal({ ...pOrder, _groupOrders: group.orders, _groupGrandTotal: group.grandTotal })}
-                    className="py-1 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg text-[10px] font-bold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
-                    title="Unggah Bukti Transfer Santri"
-                  >
-                    <UploadCloud className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                    <span>Unggah Bukti</span>
-                  </button>
-
-                  {!isPaid ? (
-                    <button
-                      type="button"
-                      disabled={updatePaymentMutation.isPending}
-                      onClick={() => {
-                        updatePaymentMutation.mutate({ id: pOrder.id, status: 'paid', canteen_id: pOrder.canteen_id });
-                      }}
-                      className="py-1 px-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center gap-1 shadow-2xs disabled:opacity-50 cursor-pointer"
-                    >
-                      <CheckCircle className="w-3 h-3" /> Konfirmasi Lunas
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={updatePaymentMutation.isPending}
-                      onClick={() => {
-                        if (window.confirm('Batalkan status lunas untuk paket checkout ini dan kembalikan ke Belum Bayar?')) {
-                          updatePaymentMutation.mutate({ id: pOrder.id, status: 'unpaid', canteen_id: pOrder.canteen_id });
-                        }
-                      }}
-                      className="py-0.5 px-2 bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-[10px] font-semibold transition-colors flex items-center gap-1 cursor-pointer"
-                    >
-                      <X className="w-2.5 h-2.5" /> Batal Lunas
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <span className="text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded-md border border-red-200 dark:border-red-900/50">
-                  Pesanan Dibatalkan
-                </span>
-              )}
+                    {!isPaid ? (
+                      <button
+                        type="button"
+                        disabled={updatePaymentMutation.isPending}
+                        onClick={() => {
+                          updatePaymentMutation.mutate({ id: pOrder.id, status: 'paid', canteen_id: pOrder.canteen_id });
+                        }}
+                        className="py-0.5 px-1.5 bg-green-600 hover:bg-green-700 text-white rounded-none text-[9.5px] font-bold transition-colors flex items-center gap-0.5 disabled:opacity-50 cursor-pointer"
+                      >
+                        <CheckCircle className="w-2.5 h-2.5" /> Lunas
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={updatePaymentMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm('Batalkan status lunas untuk paket checkout ini dan kembalikan ke Belum Bayar?')) {
+                            updatePaymentMutation.mutate({ id: pOrder.id, status: 'unpaid', canteen_id: pOrder.canteen_id });
+                          }
+                        }}
+                        className="py-0.5 px-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-none text-[9px] font-semibold transition-colors flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <X className="w-2.5 h-2.5" /> Batal
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-[9px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-1 py-0.2 rounded-none border border-red-200 dark:border-red-900/50">
+                    Dibatalkan
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Right Column (7 of 12 cols on md+): Per-Toko Breakdown Box */}
-          <div className="md:col-span-7 space-y-2">
+          <div className="lg:col-span-7 space-y-1">
             {group.orders.map((o, oIdx) => (
-              <div key={o.id} className="bg-gray-50/80 dark:bg-gray-800/50 rounded-xl p-2.5 space-y-1.5 text-xs border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between pb-1.5 border-b border-gray-200/70 dark:border-gray-700/70">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-bold text-xs sm:text-sm text-gray-900 dark:text-white truncate">
+              <div key={o.id} className="bg-gray-50/80 dark:bg-gray-800/50 rounded-none p-1.5 space-y-0.5 text-xs border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between pb-0.5 border-b border-gray-200/60 dark:border-gray-700/60">
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className="font-bold text-[11px] sm:text-xs text-gray-900 dark:text-white truncate">
                       🏪 {o.canteen?.name || `Toko ${oIdx + 1}`}
                     </span>
-                    <span className="text-[10px] sm:text-xs text-gray-500 font-semibold shrink-0">
+                    <span className="text-[10px] text-gray-500 font-semibold shrink-0 font-mono">
                       #{o.id}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
                     {o.status === 'pending' && (!o.canteen?.couriers || o.canteen.couriers.length === 0) && (
-                      <span className="text-[9px] sm:text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800 flex items-center gap-0.5">
-                        ⚠️ Belum ada kurir
+                      <span className="text-[9px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1 py-0.2 rounded-none border border-amber-200 dark:border-amber-800 flex items-center gap-0.5">
+                        ⚠️ No kurir
                       </span>
                     )}
                     {o.courier && (
-                      <span className="text-[9px] sm:text-[10px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-0.5 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                      <span className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-0.5 bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded-none border border-blue-200 dark:border-blue-800">
                         <Truck className="w-2.5 h-2.5" /> {o.courier.name}
                       </span>
                     )}
-                    <span className={`px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-bold ${
+                    <span className={`px-1 py-0.2 rounded-none text-[9px] font-bold ${
                       o.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
                       o.status === 'processing' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' :
                       o.status === 'cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
@@ -1678,41 +1668,41 @@ export default function PesananToko() {
                 </div>
 
                 {o.custom_notes && (
-                  <div className="text-[11px] sm:text-xs font-medium text-purple-800 dark:text-purple-300 pb-0.5">
+                  <div className="text-[10px] font-medium text-purple-800 dark:text-purple-300 pb-0.5">
                     ✨ {o.custom_notes}
                   </div>
                 )}
 
                 {o.items && o.items.length > 0 ? (
                   o.items.map(item => (
-                    <div key={item.id} className="flex justify-between items-center text-xs py-0.5">
+                    <div key={item.id} className="flex justify-between items-center text-[11px] sm:text-xs py-0.5 border-b border-gray-200/40 dark:border-gray-700/40 last:border-b-0">
                       <span className="text-gray-800 dark:text-gray-200 truncate pr-2">
                         <strong className="text-gray-900 dark:text-white font-bold">{item.quantity}x</strong> {item.product?.name || 'Produk'}
                         {item.notes && <span className="text-gray-400 italic text-[10px]"> ({item.notes})</span>}
                       </span>
-                      <span className="font-bold text-gray-900 dark:text-white shrink-0">
+                      <span className="font-bold text-gray-900 dark:text-white shrink-0 font-mono text-[11px] sm:text-xs">
                         Rp {formatRupiah(item.subtotal || (parseFloat(item.price) * item.quantity))}
                       </span>
                     </div>
                   ))
                 ) : (
-                  <div className="flex justify-between items-center text-xs text-gray-500 py-0.5">
+                  <div className="flex justify-between items-center text-[11px] text-gray-500 py-0.5">
                     <span>1x Pesanan Khusus</span>
-                    <span className="font-bold text-gray-900 dark:text-white">
+                    <span className="font-bold text-gray-900 dark:text-white font-mono">
                       Rp {formatRupiah(Math.max(0, parseFloat(o.total_price || 0) - parseFloat(o.delivery_fee || 0) - parseFloat(o.admin_fee || 0)))}
                     </span>
                   </div>
                 )}
 
-                {/* Produk Toko & Custom Price Setting */}
-                <div className="flex items-center justify-between pt-1 border-t border-gray-200/50 dark:border-gray-700/50 text-[10px] sm:text-xs">
-                  <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 font-semibold">
+                {/* Subtotal Toko & Custom Price Setting */}
+                <div className="flex items-center justify-between pt-0.5 border-t border-gray-200/50 dark:border-gray-700/50 text-[10px]">
+                  <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
                     <span>Produk Toko:</span>
-                    <span className="text-[9.5px] font-normal text-gray-400">
+                    <span className="text-[9.5px] font-normal text-gray-400 font-mono">
                       (Ongkir: Rp {formatRupiah(o.delivery_fee)})
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     {Boolean(o.is_custom) && o.payment_status !== 'paid' && (o.status === 'pending' || o.status === 'processing') && (
                       <button 
                         onClick={() => {
@@ -1723,12 +1713,12 @@ export default function PesananToko() {
                           setNewPriceInput(curProductPrice > 0 ? Math.round(curProductPrice).toString() : '');
                           setShowSetPriceModal(true);
                         }}
-                        className="py-0.5 px-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-[9px] sm:text-[10px] font-bold transition-colors shadow-2xs"
+                        className="py-0.5 px-1 bg-purple-600 hover:bg-purple-700 text-white rounded-none text-[9px] font-bold transition-colors cursor-pointer"
                       >
                         🏷️ {parseFloat(o.total_price) === 0 ? 'Set Harga' : 'Edit'}
                       </button>
                     )}
-                    <span className="font-bold text-gray-900 dark:text-white">
+                    <span className="font-bold text-gray-900 dark:text-white font-mono">
                       Rp {formatRupiah(Math.max(0, parseFloat(o.total_price || 0) - parseFloat(o.delivery_fee || 0) - parseFloat(o.admin_fee || 0)))}
                     </span>
                   </div>
@@ -1738,24 +1728,22 @@ export default function PesananToko() {
           </div>
         </div>
 
-        {/* 6. Footer: Total Price & Actions */}
-        <div className="pt-2.5 border-t border-gray-200 dark:border-gray-700/80 flex items-center justify-between gap-2 flex-wrap">
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span className="text-sm sm:text-base font-black text-green-700 dark:text-green-400 block leading-tight">
-                Rp {formatRupiah(group.grandTotal)}
-              </span>
-              <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-semibold">
-                ({group.orders.length} Toko)
-              </span>
-              <div className="text-[9.5px] sm:text-[10px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/80 px-1.5 py-0.5 rounded border border-gray-200/50 dark:border-gray-700/50 flex items-center gap-1">
-                <span>Ongkir: <strong className="text-blue-600 dark:text-blue-400">Rp {formatRupiah(group.totalDeliveryFee)}</strong></span>
-              </div>
+        {/* 3. Footer: Total Price & Actions Segaris */}
+        <div className="pt-1.5 border-t border-gray-200 dark:border-gray-700/80 flex items-center justify-between gap-1 flex-wrap">
+          <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
+            <span className="text-sm font-black text-green-700 dark:text-green-400 leading-tight font-mono">
+              Rp {formatRupiah(group.grandTotal)}
+            </span>
+            <span className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold">
+              ({group.orders.length} Toko)
+            </span>
+            <div className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1">
+              <span>Ongkir: <strong className="text-blue-600 dark:text-blue-400 font-mono">Rp {formatRupiah(group.totalDeliveryFee)}</strong></span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-            {/* Tombol Cetak Struk Batch untuk Checkout Group */}
+          <div className="flex items-center gap-1 shrink-0 flex-wrap">
+            {/* Tombol Cetak Struk Batch */}
             <button 
               onClick={() => {
                 setReceiptModalConfig({
@@ -1766,11 +1754,11 @@ export default function PesananToko() {
                   title: `Struk Paket Checkout (${group.orders.length} Toko)`
                 });
               }}
-              className="p-1.5 sm:px-2.5 sm:py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+              className="py-1 px-1.5 sm:px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-none text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-0.5 cursor-pointer"
               title="Cetak Struk Semua Toko dalam Paket Ini"
             >
-              <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-              <span className="hidden sm:inline text-[11px]">Cetak Struk</span>
+              <Printer className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+              <span>Cetak Struk</span>
             </button>
 
             {/* Pending & Partial Actions: Tolak / Lanjutkan */}
@@ -1791,11 +1779,11 @@ export default function PesananToko() {
                         }
                       }
                     }}
-                    className="p-1.5 sm:px-2 sm:py-1 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800 disabled:opacity-50 flex items-center gap-1"
+                    className="py-1 px-1.5 sm:px-2 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-none text-[10px] sm:text-[11px] font-bold transition-colors border border-red-200 dark:border-red-800 disabled:opacity-50 flex items-center gap-0.5 cursor-pointer"
                     title="Tolak Semua Pesanan Paket Ini"
                   >
-                    <X className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline text-[11px]">Tolak</span>
+                    <X className="w-3 h-3" />
+                    <span>Tolak</span>
                   </button>
                 )}
 
@@ -1819,9 +1807,9 @@ export default function PesananToko() {
                       });
                     }
                   }}
-                  className="py-1 px-2.5 sm:py-1.5 sm:px-3 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[11px] sm:text-xs font-bold transition-colors flex items-center gap-1 shadow-2xs disabled:opacity-50"
+                  className="py-1 px-2 sm:px-2.5 bg-green-600 hover:bg-green-700 text-white rounded-none text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
                 >
-                  <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> {isPartial ? 'Lanjutkan Sisa' : 'Lanjutkan'}
+                  <CheckCircle className="w-3 h-3" /> {isPartial ? 'Lanjutkan Sisa' : 'Lanjutkan'}
                 </button>
               </>
             )}
@@ -1842,9 +1830,9 @@ export default function PesananToko() {
                     }
                   }
                 }}
-                className="py-1 px-2.5 sm:py-1.5 sm:px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] sm:text-xs font-bold transition-colors flex items-center gap-1 shadow-2xs disabled:opacity-50"
+                className="py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-none text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
               >
-                <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Selesaikan
+                <CheckCircle className="w-3 h-3" /> Selesaikan
               </button>
             )}
           </div>
@@ -1857,64 +1845,67 @@ export default function PesananToko() {
     <div className="bg-gray-50 min-h-screen pb-28 dark:bg-gray-950 font-sans animate-fade-in-up">
       <div className="max-w-7xl mx-auto p-2.5 sm:p-4 space-y-2.5">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-white dark:bg-gray-900 p-2.5 sm:p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
+        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 bg-white dark:bg-gray-900 p-2 sm:p-2.5 rounded-none border border-gray-200 dark:border-gray-800 shadow-xs">
           <div className="flex items-center gap-2">
             <button 
               onClick={() => navigate({ to: '/dashboard' })} 
-              className="p-1.5 -ml-1 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+              className="p-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-none transition-colors border border-gray-200 dark:border-gray-700 cursor-pointer shrink-0"
               title="Kembali ke Dashboard"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-4 h-4" />
             </button>
-            <div>
-              <h1 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+            <div className="min-w-0">
+              <h1 className="text-sm sm:text-base font-black text-gray-900 dark:text-white leading-tight">
                 Pesanan Masuk & Rekap Toko
               </h1>
-              <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
-                Kelola pesanan santri, atur harga pesanan titip beli, dan pantau rekapitulasi omzet toko Anda.
+              <p className="text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 leading-tight">
+                Kelola pesanan santri, atur harga titip beli, dan pantau omzet toko.
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end flex-wrap">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 w-full sm:w-auto">
             <button
               onClick={() => setShowAccountingModal(true)}
-              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs active:scale-95"
+              className="w-full sm:w-auto px-2 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-none text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-xs cursor-pointer"
               title="Lihat Logika & Rumus Akuntansi"
             >
-              <Calculator className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>Akuntansi & Ongkir</span>
+              <Calculator className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span className="truncate">Akuntansi & Ongkir</span>
             </button>
             <button
               onClick={handlePrintBatchReceipt}
-              className="px-2.5 py-1.5 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs active:scale-95"
+              className="w-full sm:w-auto px-2 py-1.5 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-none text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-xs cursor-pointer"
               title="Cetak Rekap Pesanan Toko ke Printer Thermal"
             >
-              <Printer className="w-3.5 h-3.5 text-green-400" /> 🖨️ Cetak Rekap ({orders.length})
+              <Printer className="w-3.5 h-3.5 text-green-400 shrink-0" />
+              <span className="truncate">Cetak Rekap ({orders.length})</span>
             </button>
             <button
               onClick={() => setShowRecapModal(true)}
-              className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+              className="w-full sm:w-auto px-2 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-none text-xs font-bold transition-colors flex items-center justify-center gap-1 shadow-xs border border-gray-200 dark:border-gray-700 cursor-pointer"
             >
-              <ShoppingBag className="w-3.5 h-3.5 text-green-600" /> Rekap per Produk
+              <ShoppingBag className="w-3.5 h-3.5 text-green-600 shrink-0" />
+              <span className="truncate">Rekap per Produk</span>
             </button>
             <button 
               onClick={() => setShowManualModal(true)}
-              className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5"
+              className="w-full sm:w-auto px-2 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-none text-xs font-bold transition-colors shadow-xs flex items-center justify-center gap-1 cursor-pointer"
             >
-              ＋ Pesanan Manual
+              <span className="text-sm leading-none">＋</span>
+              <span className="truncate">Pesanan Manual</span>
             </button>
           </div>
         </div>
 
         {/* UNIFIED GLOBAL FILTER SECTION */}
-        <div className="bg-white dark:bg-gray-900 p-2.5 sm:p-3 rounded-xl border border-green-300/80 dark:border-green-800 shadow-xs space-y-2">
-          <div className="flex items-center justify-between flex-wrap gap-1 border-b border-gray-200 dark:border-gray-700 pb-1.5">
-            <h3 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+        <div className="bg-white dark:bg-gray-900 p-2 sm:p-2.5 rounded-none border border-gray-200 dark:border-gray-800 shadow-xs space-y-1.5">
+          <div className="flex items-center justify-between flex-wrap gap-1 border-b border-gray-100 dark:border-gray-800 pb-1">
+            <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
               <Filter className="w-3.5 h-3.5 text-green-600" />
               Filter Periode
             </h3>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800">
-              📅 Periode Aktif: <strong>{getFilterLabel()}</strong>
+            <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-none bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800">
+              📅 Periode: <strong>{getFilterLabel()}</strong>
             </span>
           </div>
 
@@ -1935,10 +1926,10 @@ export default function PesananToko() {
                     setFilterWeekIndex(getCurrentWeekIndex(filterYear, filterMonth));
                   }
                 }}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-bold whitespace-nowrap transition-all shadow-xs ${
+                className={`px-2 py-0.5 rounded-none text-[11px] font-bold whitespace-nowrap transition-all shadow-xs cursor-pointer ${
                   filterMode === m.id
-                    ? 'bg-green-600 text-white shadow-xs ring-1 ring-green-600/30'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
+                    ? 'bg-green-600 text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
                 }`}
               >
                 {m.label}
@@ -1946,12 +1937,12 @@ export default function PesananToko() {
             ))}
           </div>
 
-          {/* Dynamic Inputs & Filters Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5 pt-0.5">
-            {/* 1. Date Input (Per Tanggal / Datepicker) - KIRI */}
+          {/* Dynamic Inputs & Filters Grid - Kanan-Kiri Padat */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5 pt-0.5">
+            {/* 1. Date Input (Per Tanggal / Datepicker) */}
             {filterMode === 'day' && (
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
+              <div className="col-span-1">
+                <label className="block text-[9.5px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 truncate">
                   PILIH TANGGAL:
                 </label>
                 <div className="relative group">
@@ -1969,21 +1960,21 @@ export default function PesananToko() {
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                     title="Klik untuk memilih hari / tanggal / bulan / tahun"
                   />
-                  <div className="w-full flex items-center justify-between px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-semibold group-hover:border-green-500 group-hover:bg-green-50/20 dark:group-hover:bg-green-950/20 transition-all shadow-xs">
+                  <div className="w-full flex items-center justify-between px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-none text-xs bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-semibold group-hover:border-green-500 transition-all shadow-xs">
                     <span className="truncate">
                       {formatFullDate(filterDate)}
                     </span>
-                    <Calendar className="w-3.5 h-3.5 text-green-600 dark:text-green-400 shrink-0 ml-1.5 group-hover:scale-110 transition-transform" />
+                    <Calendar className="w-3.5 h-3.5 text-green-600 dark:text-green-400 shrink-0 ml-1" />
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Week Mode Inputs */}
+            {/* Week Mode Inputs: Bulan & Tahun Berdampingan */}
             {filterMode === 'week' && (
               <>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
+                <div className="col-span-1">
+                  <label className="block text-[9.5px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 truncate">
                     PILIH BULAN:
                   </label>
                   <select
@@ -1993,7 +1984,7 @@ export default function PesananToko() {
                       setFilterMonth(newMonth);
                       setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
                     }}
-                    className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-medium focus:ring-2 focus:ring-green-500 focus:outline-none"
+                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-none text-xs bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-medium focus:ring-1 focus:ring-green-500"
                   >
                     {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
                       (m, i) => (
@@ -2005,14 +1996,35 @@ export default function PesananToko() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
-                    PILIH RENTANG MINGGU:
+                <div className="col-span-1">
+                  <label className="block text-[9.5px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 truncate">
+                    PILIH TAHUN:
+                  </label>
+                  <select
+                    value={filterYear}
+                    onChange={(e) => {
+                      const newYear = parseInt(e.target.value);
+                      setFilterYear(newYear);
+                      setFilterWeekIndex(getCurrentWeekIndex(newYear, filterMonth));
+                    }}
+                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-none text-xs bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-medium focus:ring-1 focus:ring-green-500"
+                  >
+                    {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="col-span-1">
+                  <label className="block text-[9.5px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 truncate">
+                    RENTANG MINGGU:
                   </label>
                   <select
                     value={filterWeekIndex < getWeeksInMonth(filterYear, filterMonth).length ? filterWeekIndex : 0}
                     onChange={(e) => setFilterWeekIndex(parseInt(e.target.value))}
-                    className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-medium focus:ring-2 focus:ring-green-500 focus:outline-none"
+                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-none text-xs bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-medium focus:ring-1 focus:ring-green-500"
                   >
                     {getWeeksInMonth(filterYear, filterMonth).map((w, i) => (
                       <option key={i} value={i}>
@@ -2026,34 +2038,57 @@ export default function PesananToko() {
 
             {/* Month Mode Input */}
             {filterMode === 'month' && (
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
-                  PILIH BULAN:
-                </label>
-                <select
-                  value={filterMonth}
-                  onChange={(e) => {
-                    const newMonth = parseInt(e.target.value);
-                    setFilterMonth(newMonth);
-                    setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
-                  }}
-                  className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-medium focus:ring-2 focus:ring-green-500 focus:outline-none"
-                >
-                  {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
-                    (m, i) => (
-                      <option key={i} value={i}>
-                        {m}
+              <>
+                <div className="col-span-1">
+                  <label className="block text-[9.5px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 truncate">
+                    PILIH BULAN:
+                  </label>
+                  <select
+                    value={filterMonth}
+                    onChange={(e) => {
+                      const newMonth = parseInt(e.target.value);
+                      setFilterMonth(newMonth);
+                      setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
+                    }}
+                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-none text-xs bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-medium focus:ring-1 focus:ring-green-500"
+                  >
+                    {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
+                      (m, i) => (
+                        <option key={i} value={i}>
+                          {m}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </div>
+
+                <div className="col-span-1">
+                  <label className="block text-[9.5px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 truncate">
+                    PILIH TAHUN:
+                  </label>
+                  <select
+                    value={filterYear}
+                    onChange={(e) => {
+                      const newYear = parseInt(e.target.value);
+                      setFilterYear(newYear);
+                      setFilterWeekIndex(getCurrentWeekIndex(newYear, filterMonth));
+                    }}
+                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-none text-xs bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-medium focus:ring-1 focus:ring-green-500"
+                  >
+                    {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                      <option key={y} value={y}>
+                        {y}
                       </option>
-                    )
-                  )}
-                </select>
-              </div>
+                    ))}
+                  </select>
+                </div>
+              </>
             )}
 
-            {/* Year Mode or Month/Week Year Selector */}
-            {(filterMode === 'week' || filterMode === 'month' || filterMode === 'year') && (
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
+            {/* Year Mode Selector */}
+            {filterMode === 'year' && (
+              <div className="col-span-1">
+                <label className="block text-[9.5px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 truncate">
                   PILIH TAHUN:
                 </label>
                 <select
@@ -2063,7 +2098,7 @@ export default function PesananToko() {
                     setFilterYear(newYear);
                     setFilterWeekIndex(getCurrentWeekIndex(newYear, filterMonth));
                   }}
-                  className="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white font-medium focus:ring-2 focus:ring-green-500 focus:outline-none"
+                  className="w-full px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-none text-xs bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white font-medium focus:ring-1 focus:ring-green-500"
                 >
                   {[2024, 2025, 2026, 2027, 2028].map((y) => (
                     <option key={y} value={y}>
@@ -2073,15 +2108,16 @@ export default function PesananToko() {
                 </select>
               </div>
             )}
+
             {/* Status Filter */}
-            <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
+            <div className="col-span-1">
+              <label className="block text-[9.5px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 truncate">
                 FILTER STATUS:
               </label>
               <select
                 value={selectedStatusFilter}
                 onChange={(e) => setSelectedStatusFilter(e.target.value)}
-                className="w-full px-2.5 py-1.5 border rounded-lg text-xs font-semibold bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-green-500 focus:outline-none"
+                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-none text-xs font-semibold bg-gray-50 text-gray-800 dark:bg-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-green-500"
               >
                 <option value="all">📋 Semua Status</option>
                 <option value="waiting_confirmation">⏳ Menunggu Validasi Bayar</option>
@@ -2094,9 +2130,13 @@ export default function PesananToko() {
               </select>
             </div>
 
-            {/* Search Box */}
-            <div className="sm:col-span-2 lg:col-span-2">
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
+            {/* Search Box - Fleksibel Mengisi Kanan-Kiri Padat */}
+            <div className={
+              filterMode === 'month' || filterMode === 'all'
+                ? 'col-span-1'
+                : 'col-span-2 sm:col-span-2 lg:col-span-2'
+            }>
+              <label className="block text-[9.5px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 truncate">
                 PENCARIAN CEPAT:
               </label>
               <div className="relative">
@@ -2106,7 +2146,7 @@ export default function PesananToko() {
                   placeholder="Ketik nama Santri / Wali / Toko / Order ID..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-2.5 py-1.5 border rounded-lg text-xs bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-white focus:ring-2 focus:ring-green-500 focus:outline-none font-medium"
+                  className="w-full pl-8 pr-2.5 py-1 border border-gray-300 dark:border-gray-700 rounded-none text-xs bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white focus:ring-1 focus:ring-green-500 font-medium"
                 />
               </div>
             </div>
@@ -2114,148 +2154,167 @@ export default function PesananToko() {
         </div>
 
         {/* MAIN TAB SWITCHER */}
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-1.5 flex gap-2 rounded-2xl shadow-xs">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-1 flex gap-1 rounded-none shadow-xs">
           <button
             onClick={() => setActiveTab('orders')}
-            className={`py-2 px-3 sm:px-4 text-xs sm:text-sm font-bold rounded-xl flex items-center gap-2 transition-all ${
+            className={`py-1.5 px-3 text-xs font-bold rounded-none flex items-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'orders'
-                ? 'bg-green-600 text-white shadow-sm ring-2 ring-green-600/30'
+                ? 'bg-green-600 text-white shadow-xs'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800/60'
             }`}
           >
-            <ShoppingBag className="w-4 h-4" />
+            <ShoppingBag className="w-3.5 h-3.5" />
             <span>Daftar Pesanan</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black ${
+            <span className={`px-1.5 py-0.2 rounded-none text-[10px] font-black font-mono ${
               activeTab === 'orders'
                 ? 'bg-white/20 text-white'
                 : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
             }`}>
-              {orders.length}
+              {isLoading && !ordersRes ? '...' : orders.length}
             </span>
+            {isFetching && (
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping inline-block" title="Memperbarui data..."></span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('recap')}
-            className={`py-2 px-3 sm:px-4 text-xs sm:text-sm font-bold rounded-xl flex items-center gap-2 transition-all ${
+            className={`py-1.5 px-3 text-xs font-bold rounded-none flex items-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'recap'
-                ? 'bg-green-600 text-white shadow-sm ring-2 ring-green-600/30'
+                ? 'bg-green-600 text-white shadow-xs'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800/60'
             }`}
           >
-            <FileText className="w-4 h-4" />
+            <FileText className="w-3.5 h-3.5" />
             <span>Tab Rekap & Statistik</span>
+            {recapData?.summary?.total_orders !== undefined && (
+              <span className={`px-1.5 py-0.2 rounded-none text-[10px] font-black font-mono ${
+                activeTab === 'recap'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+              }`}>
+                {isLoadingRecap && !recapData ? '...' : recapData.summary.total_orders}
+              </span>
+            )}
+            {isFetchingRecap && (
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping inline-block" title="Memperbarui rekap..."></span>
+            )}
           </button>
         </div>
 
         {/* TAB CONTENTS */}
         {activeTab === 'recap' ? (
-          <div className="space-y-6">
-            {isLoadingRecap ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+          <div className="space-y-2">
+            {isLoadingRecap && !recapData ? (
+              <div className="bg-white dark:bg-gray-900 rounded-none border border-gray-200 dark:border-gray-800 py-12 flex flex-col items-center justify-center gap-2 text-gray-500">
+                <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-green-600"></div>
+                <span className="text-xs font-semibold">Memuat data rekapitulasi...</span>
               </div>
             ) : (
               <>
                 {/* Banner Logika Akuntansi & Ongkir */}
-                <div className="bg-gradient-to-br from-green-900 via-emerald-900 to-green-950 text-white rounded-2xl p-4 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-green-700/50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-green-500/20 border border-green-400/30 flex items-center justify-center text-green-300 shrink-0">
-                      <Calculator className="w-5 h-5" />
+                <div className="bg-gradient-to-r from-emerald-900 via-green-800 to-teal-950 text-white rounded-none p-2 sm:p-2.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 border border-green-700/60">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-none bg-green-500/20 border border-green-400/30 flex items-center justify-center text-green-300 shrink-0">
+                      <Calculator className="w-4 h-4" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                      <h4 className="font-bold text-xs sm:text-sm text-white flex items-center gap-1.5 leading-tight">
                         Sistem & Logika Akuntansi Toko
-                        <span className="text-[10px] bg-green-500/30 text-green-300 font-extrabold px-2 py-0.5 rounded-full border border-green-400/20">
+                        <span className="text-[9.5px] bg-green-500/30 text-green-300 font-bold px-1.5 py-0.2 rounded-none border border-green-400/20">
                           Transparan
                         </span>
                       </h4>
-                      <p className="text-xs text-green-200/80">
-                        Total Belanja (HPJ) & Laba Bersih adalah hak toko Anda. Ongkir adalah hak petugas kurir pengantar santri.
+                      <p className="text-[10px] sm:text-[11px] text-green-200/80 leading-tight mt-0.5">
+                        Total Belanja (HPJ) & Laba Bersih adalah hak toko Anda. Ongkir adalah hak kurir pengantar santri.
                       </p>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowAccountingModal(true)}
-                    className="py-2 px-3.5 bg-green-600 hover:bg-green-500 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5 shrink-0 active:scale-95"
+                    className="py-1 px-3 bg-green-600 hover:bg-green-500 text-white font-bold text-xs rounded-none transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer shadow-xs"
                   >
-                    <Calculator className="w-4 h-4" />
-                    Panduan & Kalkulator Akuntansi
+                    <Calculator className="w-3.5 h-3.5" />
+                    <span>Panduan & Kalkulator Akuntansi</span>
                   </button>
                 </div>
 
                 {/* Summary Metric Cards (Khusus Kantin: Total Belanja, Total Modal, Laba Toko, Total Ongkir) */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-                  <div className="bg-white dark:bg-gray-900 p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
-                    <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium block mb-0.5">Omzet Menu (HPJ)</span>
-                    <span className="text-base sm:text-lg font-black text-gray-900 dark:text-white">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-2">
+                  <div className="bg-white dark:bg-gray-900 p-2 sm:p-2.5 rounded-none border border-gray-200 dark:border-gray-800 shadow-xs">
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider block">Omzet Menu (HPJ)</span>
+                    <span className="text-sm sm:text-base font-black font-mono text-gray-900 dark:text-white block mt-0.5">
                       Rp {(recapData?.summary?.total_products || 0).toLocaleString('id-ID')}
                     </span>
-                    <span className="text-[10px] text-gray-400 block mt-0.5">Penjualan Makanan</span>
+                    <span className="text-[9.5px] text-gray-400 block mt-0.5">Penjualan Makanan</span>
                   </div>
-                  <div className="bg-amber-50/60 dark:bg-amber-950/20 p-3.5 rounded-xl border border-amber-200/80 dark:border-amber-800/40 shadow-xs">
-                    <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium block mb-0.5">Total Modal (HPP)</span>
-                    <span className="text-base sm:text-lg font-black text-amber-700 dark:text-amber-300">
+                  <div className="bg-amber-50/60 dark:bg-amber-950/20 p-2 sm:p-2.5 rounded-none border border-amber-200/80 dark:border-amber-800/40 shadow-xs">
+                    <span className="text-[10px] text-amber-700 dark:text-amber-400 font-bold uppercase tracking-wider block">Total Modal (HPP)</span>
+                    <span className="text-sm sm:text-base font-black font-mono text-amber-700 dark:text-amber-300 block mt-0.5">
                       Rp {(recapData?.summary?.total_hpp || 0).toLocaleString('id-ID')}
                     </span>
-                    <span className="text-[10px] text-amber-600/80 dark:text-amber-400/80 block mt-0.5">Modal Belanja Riil</span>
+                    <span className="text-[9.5px] text-amber-600/80 dark:text-amber-400/80 block mt-0.5">Modal Belanja Riil</span>
                   </div>
-                  <div className="bg-emerald-50 dark:bg-emerald-950/40 p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/50 shadow-xs">
-                    <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-bold block mb-0.5">Laba Bersih Toko</span>
-                    <span className="text-base sm:text-lg font-black text-emerald-700 dark:text-emerald-300">
+                  <div className="bg-emerald-50 dark:bg-emerald-950/40 p-2 sm:p-2.5 rounded-none border border-emerald-200 dark:border-emerald-800/50 shadow-xs">
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold uppercase tracking-wider block">Laba Bersih Toko</span>
+                    <span className="text-sm sm:text-base font-black font-mono text-emerald-700 dark:text-emerald-300 block mt-0.5">
                       Rp {(recapData?.summary?.total_profit || 0).toLocaleString('id-ID')}
                     </span>
-                    <span className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 block mt-0.5">100% Hak Toko</span>
+                    <span className="text-[9.5px] text-emerald-600/80 dark:text-emerald-400/80 block mt-0.5">100% Hak Toko</span>
                   </div>
-                  <div className="bg-blue-50/60 dark:bg-blue-950/20 p-3.5 rounded-xl border border-blue-200/80 dark:border-blue-800/40 shadow-xs">
-                    <span className="text-[11px] text-blue-700 dark:text-blue-400 font-medium block mb-0.5">Total Ongkir Kurir</span>
-                    <span className="text-base sm:text-lg font-black text-blue-600 dark:text-blue-400">
+                  <div className="bg-blue-50/60 dark:bg-blue-950/20 p-2 sm:p-2.5 rounded-none border border-blue-200/80 dark:border-blue-800/40 shadow-xs">
+                    <span className="text-[10px] text-blue-700 dark:text-blue-400 font-bold uppercase tracking-wider block">Total Ongkir Kurir</span>
+                    <span className="text-sm sm:text-base font-black font-mono text-blue-600 dark:text-blue-400 block mt-0.5">
                       Rp {(recapData?.summary?.total_delivery_fee || 0).toLocaleString('id-ID')}
                     </span>
-                    <span className="text-[10px] text-blue-600/80 dark:text-blue-400/80 block mt-0.5">Hak Driver/Kurir</span>
+                    <span className="text-[9.5px] text-blue-600/80 dark:text-blue-400/80 block mt-0.5">Hak Driver/Kurir</span>
                   </div>
                 </div>
 
                 {/* Rekap Per Toko / Kantin */}
                 {recapData?.canteen_recap && recapData.canteen_recap.length > 0 && (
-                  <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div className="p-3.5 border-b border-gray-200 dark:border-gray-700 bg-blue-50/50 dark:bg-blue-950/20">
-                      <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
-                        <Store className="w-4 h-4 text-blue-600" />
+                  <div className="bg-white dark:bg-gray-900 rounded-none shadow-xs border border-gray-200 dark:border-gray-800 overflow-hidden">
+                    <div className="p-2 sm:p-2.5 border-b border-gray-200 dark:border-gray-800 bg-blue-50/50 dark:bg-blue-950/20 flex items-center justify-between">
+                      <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-1.5">
+                        <Store className="w-3.5 h-3.5 text-blue-600" />
                         Rekapitulasi Per Toko / Kantin
                       </h3>
+                      <span className="text-[10px] font-bold text-gray-500 bg-white dark:bg-gray-800 px-1.5 py-0.2 border border-gray-200 dark:border-gray-700">
+                        {recapData.canteen_recap.length} Toko
+                      </span>
                     </div>
-                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                    <div className="divide-y divide-gray-200 dark:divide-gray-800">
                       {recapData.canteen_recap.map(c => (
-                        <div key={c.canteen_id} className="p-3.5 space-y-2 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                        <div key={c.canteen_id} className="p-2 sm:p-2.5 space-y-1.5 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                             <div>
-                              <h4 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-2">
+                              <h4 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm flex items-center gap-1.5">
                                 🏪 {c.canteen_name}
-                                <span className="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold px-2 py-0.5 rounded capitalize">
+                                <span className="text-[9.5px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold px-1.5 py-0.2 rounded-none capitalize border border-blue-200 dark:border-blue-800">
                                   Zona {c.category}
                                 </span>
                               </h4>
-                              <p className="text-[11px] text-gray-500 mt-0.5">{c.order_count} Total Pesanan</p>
+                              <p className="text-[10px] text-gray-500">{c.order_count} Total Pesanan</p>
                             </div>
-                            <div className="text-xs sm:text-sm font-black text-green-700 dark:text-green-400 self-start sm:self-auto">
+                            <div className="text-xs sm:text-sm font-black font-mono text-green-700 dark:text-green-400 self-start sm:self-auto">
                               Total Belanja: Rp {c.total_products.toLocaleString('id-ID')}
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-semibold">
-                            <div className="bg-gray-50 dark:bg-gray-800/80 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700/60">
-                              <span className="text-[10px] text-gray-400 block mb-0.5">Produk & Modal (HPP)</span>
-                              <div className="text-gray-800 dark:text-gray-200">Rp {c.total_products.toLocaleString('id-ID')}</div>
-                              <div className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">HPP: Rp {(c.total_hpp || 0).toLocaleString('id-ID')}</div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-xs font-semibold">
+                            <div className="bg-gray-50 dark:bg-gray-800/80 p-1.5 rounded-none border border-gray-200/60 dark:border-gray-700/60">
+                              <span className="text-[9.5px] text-gray-400 block">Produk & Modal (HPP)</span>
+                              <div className="text-gray-800 dark:text-gray-200 font-mono">Rp {c.total_products.toLocaleString('id-ID')}</div>
+                              <div className="text-[9.5px] text-amber-600 dark:text-amber-400 font-normal font-mono">HPP: Rp {(c.total_hpp || 0).toLocaleString('id-ID')}</div>
                             </div>
-                            <div className="bg-emerald-50/80 dark:bg-emerald-950/30 p-2 rounded-lg border border-emerald-200/70 dark:border-emerald-800/50">
-                              <span className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 block mb-0.5">Laba Bersih Toko</span>
-                              <div className="text-emerald-700 dark:text-emerald-300 font-black">+Rp {(c.total_profit || 0).toLocaleString('id-ID')}</div>
-                              <div className="text-[10px] text-emerald-600/70 dark:text-emerald-400/70 font-normal">100% Hak Toko</div>
+                            <div className="bg-emerald-50/80 dark:bg-emerald-950/30 p-1.5 rounded-none border border-emerald-200/70 dark:border-emerald-800/50">
+                              <span className="text-[9.5px] text-emerald-600/80 dark:text-emerald-400/80 block">Laba Bersih Toko</span>
+                              <div className="text-emerald-700 dark:text-emerald-300 font-black font-mono">+Rp {(c.total_profit || 0).toLocaleString('id-ID')}</div>
+                              <div className="text-[9.5px] text-emerald-600/70 dark:text-emerald-400/70 font-normal">100% Hak Toko</div>
                             </div>
-                            <div className="bg-blue-50/80 dark:bg-blue-950/30 p-2 rounded-lg border border-blue-200/70 dark:border-blue-800/50">
-                              <span className="text-[10px] text-blue-600/80 dark:text-blue-400/80 block mb-0.5">Ongkir Kurir</span>
-                              <div className="text-blue-700 dark:text-blue-300 font-bold">Rp {c.total_delivery_fee.toLocaleString('id-ID')}</div>
-                              <div className="text-[10px] text-blue-500/80 dark:text-blue-400/70 font-normal">Hak Antar Santri</div>
+                            <div className="bg-blue-50/80 dark:bg-blue-950/30 p-1.5 rounded-none border border-blue-200/70 dark:border-blue-800/50">
+                              <span className="text-[9.5px] text-blue-600/80 dark:text-blue-400/80 block">Ongkir Kurir</span>
+                              <div className="text-blue-700 dark:text-blue-300 font-bold font-mono">Rp {c.total_delivery_fee.toLocaleString('id-ID')}</div>
+                              <div className="text-[9.5px] text-blue-500/80 dark:text-blue-400/70 font-normal">Hak Antar Santri</div>
                             </div>
                           </div>
                         </div>
@@ -2265,32 +2324,34 @@ export default function PesananToko() {
                 )}
 
                 {/* Rekap Per Wali / Santri */}
-                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
-                  <div className="p-3.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
-                    <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
-                      Rekap Per Wali / Santri
-                    </h3>
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                      Format ringkas: Total Belanja | Total Ongkir Kurir
-                    </p>
+                <div className="bg-white dark:bg-gray-900 rounded-none shadow-xs border border-gray-200 dark:border-gray-800 overflow-hidden">
+                  <div className="p-2 sm:p-2.5 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
+                        Rekap Per Wali / Santri
+                      </h3>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                        Format ringkas: Total Belanja | Total Ongkir Kurir
+                      </p>
+                    </div>
                   </div>
-                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                  <div className="divide-y divide-gray-200 dark:divide-gray-800">
                     {(!recapData?.user_recap || recapData.user_recap.length === 0) ? (
-                      <div className="p-6 text-center text-gray-500 text-sm">Belum ada transaksi di periode ini.</div>
+                      <div className="p-4 text-center text-gray-500 text-xs">Belum ada transaksi di periode ini.</div>
                     ) : (
                       recapData.user_recap.map(u => (
-                        <div key={u.user_id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                        <div key={u.user_id} className="p-2 sm:p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
                           <div>
-                            <h4 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">{u.santri_name}</h4>
-                            <p className="text-[11px] text-gray-500">Wali: {u.wali_name} {u.santri_room ? `• ${u.santri_room}` : ''}</p>
+                            <h4 className="font-bold text-gray-900 dark:text-white text-xs">{u.santri_name}</h4>
+                            <p className="text-[10px] text-gray-500">Wali: {u.wali_name} {u.santri_room ? `• ${u.santri_room}` : ''}</p>
                           </div>
                           <div className="flex items-center gap-1.5 flex-wrap text-xs font-semibold">
-                            <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg text-gray-700 dark:text-gray-300">
+                            <span className="bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-none text-gray-700 dark:text-gray-300 font-mono text-[11px] border border-gray-200 dark:border-gray-700">
                               Belanja: Rp {u.total_products.toLocaleString('id-ID')}
                             </span>
                             <span className="text-gray-300 dark:text-gray-600">|</span>
-                            <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-lg">
-                              Ongkir Kurir: Rp {u.total_delivery_fee.toLocaleString('id-ID')}
+                            <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-none font-mono text-[11px] border border-blue-200 dark:border-blue-800">
+                              Ongkir: Rp {u.total_delivery_fee.toLocaleString('id-ID')}
                             </span>
                           </div>
                         </div>
@@ -2300,47 +2361,47 @@ export default function PesananToko() {
                 </div>
 
                 {/* Rekap Per Produk */}
-                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
-                  <div className="p-3.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
+                <div className="bg-white dark:bg-gray-900 rounded-none shadow-xs border border-gray-200 dark:border-gray-800 overflow-hidden">
+                  <div className="p-2 sm:p-2.5 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
                     <h3 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
                       Rekap Kuantitas & Laba Per Produk
                     </h3>
                   </div>
-                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                  <div className="divide-y divide-gray-200 dark:divide-gray-800">
                     {(!recapData?.product_breakdown || recapData.product_breakdown.length === 0) ? (
-                      <div className="p-6 text-center text-gray-500 text-sm">Belum ada produk terjual.</div>
+                      <div className="p-4 text-center text-gray-500 text-xs">Belum ada produk terjual.</div>
                     ) : (
                       recapData.product_breakdown.map(p => (
-                        <div key={p.product_id} className="p-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm">
+                        <div key={p.product_id} className="p-2 sm:p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
                           <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-gray-800 dark:text-gray-200">{p.name}</span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-gray-800 dark:text-gray-200">{p.name}</span>
                               {p.is_custom && (
-                                <span className="text-[10px] bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded font-bold">
+                                <span className="text-[9.5px] bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-1 py-0.2 rounded-none font-bold border border-purple-200 dark:border-purple-800">
                                   Titip Beli
                                 </span>
                               )}
                               {p.canteen_name && (
-                                <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                <span className="text-[9.5px] text-gray-500 dark:text-gray-400 font-normal bg-gray-100 dark:bg-gray-800 px-1 py-0.2 rounded-none border border-gray-200 dark:border-gray-700">
                                   {p.canteen_name}
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-2">
+                            <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1.5 font-mono">
                               <span>HPJ: <strong className="text-gray-700 dark:text-gray-300">Rp {(p.hpj || 0).toLocaleString('id-ID')}</strong></span>
                               <span>•</span>
-                              <span>HPP (Modal): <strong className="text-amber-700 dark:text-amber-400">Rp {(p.hpp || 1000).toLocaleString('id-ID')}</strong></span>
+                              <span>HPP: <strong className="text-amber-700 dark:text-amber-400">Rp {(p.hpp || 1000).toLocaleString('id-ID')}</strong></span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded text-xs">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 px-1.5 py-0.5 rounded-none text-[11px] font-mono border border-green-200 dark:border-green-800">
                               {p.total_quantity}x terjual
                             </span>
-                            <span className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-2 py-0.5 rounded text-xs font-semibold">
-                              Subtotal: Rp {p.total_subtotal.toLocaleString('id-ID')}
+                            <span className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded-none text-[11px] font-semibold font-mono border border-gray-200 dark:border-gray-700">
+                              Rp {p.total_subtotal.toLocaleString('id-ID')}
                             </span>
-                            <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 px-2 py-0.5 rounded text-xs font-bold">
-                              Laba: +Rp {(p.total_profit || 0).toLocaleString('id-ID')}
+                            <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 px-1.5 py-0.5 rounded-none text-[11px] font-bold font-mono">
+                              +Rp {(p.total_profit || 0).toLocaleString('id-ID')}
                             </span>
                           </div>
                         </div>
@@ -2352,12 +2413,17 @@ export default function PesananToko() {
             )}
           </div>
         ) : (
-          <div className="space-y-4">
-            {orders.length === 0 ? (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 text-center py-16 text-gray-500 flex flex-col items-center">
-                <ShoppingBag className="w-14 h-14 mb-3 opacity-20 text-green-600" />
-                <p className="font-semibold text-gray-700 dark:text-gray-300">Belum ada pesanan yang sesuai filter.</p>
-                <p className="text-xs text-gray-400 mt-1">Coba ganti filter tanggal, toko, status, atau kata kunci pencarian.</p>
+          <div className="space-y-2.5">
+            {isLoading && !ordersRes ? (
+              <div className="bg-white dark:bg-gray-900 rounded-none border border-gray-200 dark:border-gray-800 text-center py-12 text-gray-500 flex flex-col items-center justify-center">
+                <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-green-600 mb-2"></div>
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">Memuat daftar pesanan...</p>
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="bg-white dark:bg-gray-900 rounded-none border border-gray-200 dark:border-gray-800 text-center py-8 text-gray-500 flex flex-col items-center">
+                <ShoppingBag className="w-10 h-10 mb-2 opacity-20 text-green-600" />
+                <p className="font-bold text-xs sm:text-sm text-gray-700 dark:text-gray-300">Belum ada pesanan yang sesuai filter.</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">Coba ganti filter tanggal, toko, status, atau kata kunci pencarian.</p>
               </div>
             ) : selectedStatusFilter === 'all' && !searchQuery.trim() ? (
               (() => {
@@ -2365,37 +2431,82 @@ export default function PesananToko() {
                 const completedOrders = orders.filter(o => o.status === 'completed');
                 
                 return (
-                  <div className="space-y-6">
+                  <div className="space-y-3">
                     {activeOrders.length === 0 && completedOrders.length > 0 && (
-                      <div className="p-4 bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 rounded-2xl border border-green-200 dark:border-green-800/50 text-xs font-semibold text-center">
+                      <div className="p-2 sm:p-2.5 bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 rounded-none border border-green-200 dark:border-green-800/50 text-xs font-semibold text-center">
                         Semua pesanan aktif di periode ini telah selesai diproses! 🎉
                       </div>
                     )}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-2.5">
                       {groupOrders(activeOrders).map(group => 
                         group.isMultiStore ? renderBundledOrderCard(group) : renderOrderCard(group.orders[0])
                       )}
                     </div>
                     
                     {completedOrders.length > 0 && (
-                      <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-5">
-                        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">
-                          Riwayat Selesai ({completedOrders.length})
-                        </h2>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-                          {groupOrders(completedOrders).map(group => 
+                      <div className="mt-3 border-t border-gray-200 dark:border-gray-700 pt-3">
+                        <div className="flex items-center justify-between mb-2 px-1">
+                          <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                            Riwayat Selesai ({completedOrders.length})
+                          </h2>
+                          {completedOrders.length > visibleCompletedLimit && (
+                            <span className="text-[10px] text-gray-400">
+                              Menampilkan {Math.min(visibleCompletedLimit, completedOrders.length)} teratas
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-2.5">
+                          {groupOrders(completedOrders.slice(0, visibleCompletedLimit)).map(group => 
                             group.isMultiStore ? renderBundledOrderCard(group) : renderOrderCard(group.orders[0])
                           )}
                         </div>
+                        {completedOrders.length > visibleCompletedLimit && (
+                          <div className="mt-2.5 flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setVisibleCompletedLimit(prev => prev + 50)}
+                              className="px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700 rounded-none text-xs font-bold hover:bg-gray-100 transition-colors cursor-pointer"
+                            >
+                              Tampilkan 50 Lagi ({completedOrders.length - visibleCompletedLimit} tersisa)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setVisibleCompletedLimit(completedOrders.length)}
+                              className="px-3 py-1.5 bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-800 rounded-none text-xs font-bold hover:bg-green-100 transition-colors cursor-pointer"
+                            >
+                              Tampilkan Semua ({completedOrders.length})
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 );
               })()
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-                {groupOrders(orders).map(group => 
-                  group.isMultiStore ? renderBundledOrderCard(group) : renderOrderCard(group.orders[0])
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-2.5">
+                  {groupOrders(orders.slice(0, searchQuery.trim() ? orders.length : visibleCompletedLimit)).map(group => 
+                    group.isMultiStore ? renderBundledOrderCard(group) : renderOrderCard(group.orders[0])
+                  )}
+                </div>
+                {!searchQuery.trim() && orders.length > visibleCompletedLimit && (
+                  <div className="mt-2.5 flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleCompletedLimit(prev => prev + 50)}
+                      className="px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700 rounded-none text-xs font-bold hover:bg-gray-100 transition-colors cursor-pointer"
+                    >
+                      Tampilkan 50 Lagi ({orders.length - visibleCompletedLimit} tersisa)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVisibleCompletedLimit(orders.length)}
+                      className="px-3 py-1.5 bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-800 rounded-none text-xs font-bold hover:bg-green-100 transition-colors cursor-pointer"
+                    >
+                      Tampilkan Semua ({orders.length})
+                    </button>
+                  </div>
                 )}
               </div>
             )}

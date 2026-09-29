@@ -195,67 +195,83 @@ export default function TokoSaya() {
   if (!isStoreSelected) {
     return (
       <div className="bg-gray-50 h-full min-h-screen dark:bg-gray-950">
-        <div className="bg-white dark:bg-gray-900 sticky top-0 z-20 shadow-sm px-4 py-3 flex items-center gap-3">
-          <button onClick={() => window.location.href = '/dashboard'} className="p-2 -ml-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-white">Pilih Toko</h1>
+        <div className="bg-white dark:bg-gray-900 sticky top-0 z-20 shadow-xs px-2.5 sm:px-3 py-2 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => window.location.href = '/dashboard'} 
+              className="p-1 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-none transition-colors border border-gray-200 dark:border-gray-700 cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <h1 className="text-sm sm:text-base font-black text-gray-900 dark:text-white">Pilih Toko</h1>
+          </div>
+          <span className="text-[11px] font-bold text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-none border border-gray-200 dark:border-gray-700">
+            {canteensList.length} Toko
+          </span>
         </div>
         
-        <div className="p-4 max-w-lg mx-auto space-y-3">
+        <div className="p-2 max-w-2xl mx-auto space-y-1.5">
           {!canteensList || canteensList.length === 0 ? (
-             <div className="text-center py-10 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm mt-4">
-               <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                 <Store className="w-8 h-8 text-gray-400" />
+             <div className="text-center py-8 bg-white dark:bg-gray-900 rounded-none border border-gray-200 dark:border-gray-700 shadow-xs mt-2">
+               <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-none flex items-center justify-center mx-auto mb-2">
+                 <Store className="w-6 h-6 text-gray-400" />
                </div>
-               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Belum Ada Toko</h3>
-               <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 px-4">Anda belum memiliki toko. Silakan buat toko baru melalui halaman Profil Anda.</p>
+               <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-1">Belum Ada Toko</h3>
+               <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 px-4">Anda belum memiliki toko. Silakan buat toko baru melalui halaman Profil Anda.</p>
                <button 
                  onClick={() => navigate({ to: '/dashboard/profile' })}
-                 className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-full shadow-sm hover:shadow transition-all inline-flex items-center gap-2"
+                 className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-none shadow-xs transition-all inline-flex items-center gap-1.5 cursor-pointer"
                >
-                 <Plus className="w-5 h-5" />
+                 <Plus className="w-4 h-4" />
                  Buat Toko Baru
                </button>
              </div>
           ) : (
             canteensList.map(c => (
-              <div key={c.id} className="flex flex-col p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm gap-3 relative">
-                
-                {/* Toko Info (Click to enter) */}
-                <div onClick={() => { setActiveCanteenId(c.id); setIsStoreSelected(true); }} className="flex items-center justify-between cursor-pointer group">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center overflow-hidden shrink-0 relative">
+              <div 
+                key={c.id} 
+                onClick={() => { setActiveCanteenId(c.id); setIsStoreSelected(true); }}
+                className="p-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-green-500 dark:hover:border-green-600 rounded-none shadow-xs flex flex-col gap-1.5 cursor-pointer transition-all group"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-9 h-9 rounded-none bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 flex items-center justify-center overflow-hidden shrink-0 relative">
                       {c.image ? (
                         <img src={getStorageUrl(c.image)} alt={c.name} className="w-full h-full object-cover" />
                       ) : (
-                        <Store className="w-6 h-6 text-green-600" />
+                        <Store className="w-4 h-4 text-green-600 dark:text-green-400" />
                       )}
-                      
-                      {/* Pending Orders Badge on Image */}
                       {c.pending_orders_count > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white dark:border-gray-900 animate-pulse">
+                        <span className="absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[9px] font-black px-1 py-0.2 rounded-none animate-pulse">
                           {c.pending_orders_count}
                         </span>
                       )}
                     </div>
-                    <div>
-                      <h4 className="font-semibold text-gray-900 dark:text-white group-hover:text-green-600 transition-colors">{c.name}</h4>
-                      <p className="text-xs text-gray-500 line-clamp-1">{c.description || 'Toko Hidayah Go'}</p>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-xs sm:text-sm text-gray-900 dark:text-white group-hover:text-green-600 transition-colors truncate">
+                        {c.name}
+                      </h4>
+                      <p className="text-[10px] text-gray-400 truncate leading-none mt-0.5">
+                        {c.description || 'Toko Hidayah Go'}
+                      </p>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-green-500 transition-colors" />
+                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-green-600 transition-colors shrink-0 ml-2" />
                 </div>
 
-                  <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${c.is_open ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                    <span className={`text-xs font-medium ${c.is_open ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800 text-[10px]">
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-1.5 h-1.5 rounded-none ${c.is_open ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    <span className={`font-semibold ${c.is_open ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
                       {c.is_open ? 'Buka' : 'Tutup'} • {c.open_time?.substring(0,5) || '09:00'} - {c.close_time?.substring(0,5) || '17:00'}
                     </span>
                   </div>
+                  {c.category && (
+                    <span className="text-[9px] font-bold uppercase text-gray-500 bg-gray-100 dark:bg-gray-800 px-1 py-0.2 border border-gray-200 dark:border-gray-700">
+                      {c.category}
+                    </span>
+                  )}
                 </div>
-
               </div>
             ))
           )}
@@ -265,9 +281,9 @@ export default function TokoSaya() {
   }
 
   return (
-    <div className="bg-gray-50 h-full pb-24 dark:bg-gray-950 font-sans relative">
+    <div className="bg-gray-50 h-full pb-20 dark:bg-gray-950 font-sans relative">
       {/* HEADER BANNER */}
-      <div className="relative h-48 sm:h-56 bg-gray-200 dark:bg-gray-800">
+      <div className="relative h-36 sm:h-44 bg-gray-200 dark:bg-gray-800">
         {canteen?.image ? (
           <img 
             src={getStorageUrl(canteen.image)} 
@@ -277,67 +293,67 @@ export default function TokoSaya() {
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gradient-to-r from-green-100 to-green-50 dark:from-gray-800 dark:to-gray-900">
-            <Store className="w-12 h-12 mb-2 opacity-50" />
-            <span className="text-sm font-medium text-green-800/50 dark:text-green-200/50">Belum ada foto banner</span>
+            <Store className="w-10 h-10 mb-1 opacity-50" />
+            <span className="text-xs font-medium text-green-800/50 dark:text-green-200/50">Belum ada foto banner</span>
           </div>
         )}
         
         {/* Top Navbar overlay */}
-        <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent">
-          <button onClick={() => setIsStoreSelected(false)} className="w-10 h-10 rounded-full bg-black/40 flex items-center justify-center text-white backdrop-blur-md transition-colors hover:bg-black/60 shadow-sm border border-white/20">
-            <ChevronLeft className="w-6 h-6" />
+        <div className="absolute top-0 left-0 right-0 p-2 sm:p-3 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent">
+          <button onClick={() => setIsStoreSelected(false)} className="w-8 h-8 rounded-none bg-black/50 flex items-center justify-center text-white backdrop-blur-xs transition-colors hover:bg-black/70 shadow-xs border border-white/20 cursor-pointer">
+            <ChevronLeft className="w-5 h-5" />
           </button>
         </div>
       </div>
 
       {/* STORE INFO CARD (Overlapping banner) */}
-      <div className="px-4 md:px-8 max-w-7xl mx-auto -mt-12 relative z-10">
-        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-md p-4 md:p-6 border border-green-300/80 dark:border-green-800">
-          <div className="flex items-center justify-between mb-2">
+      <div className="px-2 sm:px-4 max-w-7xl mx-auto -mt-8 relative z-10">
+        <div className="bg-white dark:bg-gray-900 rounded-none shadow-xs p-2.5 sm:p-3 border border-gray-200 dark:border-gray-800">
+          <div className="flex items-center justify-between mb-1.5">
             <div className="flex-1">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white leading-tight">
+              <h1 className="text-base sm:text-lg font-black text-gray-900 dark:text-white leading-tight">
                 {canteen?.name || 'Toko Saya'}
               </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2 pr-2">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 pr-2">
                 {canteen?.description || 'Belum ada deskripsi.'}
               </p>
 
-              <div className="flex flex-wrap items-center gap-2 mt-3">
-                <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${canteen?.is_open ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-none border ${canteen?.is_open ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-800' : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800'}`}>
                   {canteen?.is_open ? <CheckCircle2 className="w-3 h-3" /> : <X className="w-3 h-3" />}
                   {canteen?.is_open ? 'Buka' : 'Tutup'}
                 </span>
-                <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full flex items-center gap-1 dark:bg-gray-800 dark:text-gray-300">
+                <span className="text-[11px] font-medium text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-none flex items-center gap-1 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300">
                   <Clock className="w-3 h-3" /> {canteen?.open_time?.substring(0,5) || '09:00'} - {canteen?.close_time?.substring(0,5) || '17:00'}
                 </span>
                 <button 
                   onClick={() => navigate({ to: '/dashboard/toko-saya/pesanan' })}
-                  className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 flex items-center gap-1.5 transition-colors"
+                  className="text-[11px] font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-none hover:bg-green-100 dark:bg-green-950/40 dark:border-green-800 dark:text-green-300 flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   <span>Pesanan Masuk</span>
                   {activeOrdersCount > 0 && (
-                    <span className="bg-red-500 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full leading-tight shadow-xs animate-pulse">
+                    <span className="bg-red-500 text-white text-[9px] font-black px-1 py-0.2 rounded-none leading-tight shadow-xs animate-pulse">
                       {activeOrdersCount > 99 ? '99+' : activeOrdersCount}
                     </span>
                   )}
                 </button>
                 <button 
                   onClick={() => window.location.href = '/dashboard/profile'}
-                  className="text-xs font-medium text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300"
+                  className="text-[11px] font-medium text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-none hover:bg-gray-200 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 cursor-pointer"
                 >
-                  Pengaturan Toko (Profil)
+                  Pengaturan (Profil)
                 </button>
               </div>
             </div>
           </div>
           
-          <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
+          <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 pt-1.5 border-t border-gray-100 dark:border-gray-800">
             <div className="flex items-center font-medium">
-              <span className="text-yellow-400 mr-1">★</span>
+              <span className="text-yellow-500 mr-1">★</span>
               4.9 <span className="text-gray-400 ml-1 font-normal">(99+ Penilaian)</span>
             </div>
             <div className="flex items-center">
-              <span className="text-green-500 mr-1">📍</span>
+              <span className="text-green-600 mr-1">📍</span>
               {canteen?.category ? `Zona ${canteen.category.toUpperCase()}` : 'Zona Belum Diatur'}
             </div>
           </div>

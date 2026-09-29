@@ -312,7 +312,36 @@ class OrderController extends Controller
     {
         $canteenId = $request->query('canteen_id') ?? $request->input('canteen_id');
         
-        $query = Order::with(['user', 'items.product', 'courier', 'canteen.couriers:users.id,users.name'])
+        $query = Order::select([
+                'id',
+                'checkout_id',
+                'user_id',
+                'canteen_id',
+                'total_price',
+                'admin_fee',
+                'delivery_fee',
+                'status',
+                'payment_status',
+                'courier_id',
+                'delivery_location',
+                'proof_of_delivery',
+                'proof_of_purchase',
+                'proof_of_payment',
+                'is_courier_paid_by_canteen',
+                'proof_courier_paid',
+                'custom_notes',
+                'is_custom',
+                'created_at',
+                'updated_at',
+            ])
+            ->with([
+                'user:id,name,santri_name,santri_room,santri_class,santri_level,phone',
+                'items:id,order_id,product_id,quantity,price,subtotal,notes,store_status',
+                'items.product:id,name,price,discount_price,hpp,image',
+                'courier:id,name,phone',
+                'canteen:id,name',
+                'canteen.couriers:users.id,users.name'
+            ])
             ->orderBy('created_at', 'desc');
 
         if ($canteenId && $canteenId !== 'all') {
@@ -333,11 +362,14 @@ class OrderController extends Controller
 
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
+        $period = $request->query('period');
         
         if ($startDate && $endDate) {
             $start = \Illuminate\Support\Carbon::parse($startDate, 'Asia/Jakarta')->startOfDay();
             $end = \Illuminate\Support\Carbon::parse($endDate, 'Asia/Jakarta')->endOfDay();
             $query->whereBetween('created_at', [$start, $end]);
+        } elseif ($period && $period !== 'all') {
+            $query->filterPeriod($period);
         }
 
         $orders = $query->get();

@@ -223,11 +223,15 @@ export default function AdminPesanan() {
   const [orderToChangeStatus, setOrderToChangeStatus] = useState(null);
   const [selectedNewStatus, setSelectedNewStatus] = useState('pending');
   const [selectedNewPaymentStatus, setSelectedNewPaymentStatus] = useState('unpaid');
+  const [selectedNewCourierId, setSelectedNewCourierId] = useState('none');
 
   const handleOpenChangeStatusModal = (order) => {
     setOrderToChangeStatus(order);
     setSelectedNewStatus(order.status || 'pending');
-    setSelectedNewPaymentStatus(order.payment_status || 'unpaid');
+    const defaultCourierId = order.courier_id 
+      ? String(order.courier_id) 
+      : (order.canteen?.couriers && order.canteen.couriers.length > 0 ? String(order.canteen.couriers[0].id) : 'none');
+    setSelectedNewCourierId(defaultCourierId);
   };
 
   // Receipt Modal State for Admin
@@ -618,18 +622,21 @@ export default function AdminPesanan() {
     }
   });
 
-  // Mutation Update Order Status & Payment Status
+  // Mutation Update Order Status & Payment Status & Courier
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status, payment_status }) => {
-      const res = await api.put(`/admin/orders/${id}/status`, { status, payment_status });
+    mutationFn: async ({ id, status, payment_status, courier_id }) => {
+      const res = await api.put(`/admin/orders/${id}/status`, { status, payment_status, courier_id });
       return res.data;
     },
     onMutate: async (variables) => {
       setOrderToChangeStatus(null);
+      const selectedCourierObj = couriersList.find((c) => String(c.id) === String(variables.courier_id));
       return await mutateOrderInCaches(queryClient, 'admin_orders', variables.id, (order) => ({
         ...order,
         ...(variables.status ? { status: variables.status } : {}),
-        ...(variables.payment_status ? { payment_status: variables.payment_status } : {})
+        ...(variables.payment_status ? { payment_status: variables.payment_status } : {}),
+        courier_id: variables.courier_id === 'none' ? null : (variables.courier_id ? Number(variables.courier_id) : order.courier_id),
+        courier: variables.courier_id === 'none' ? null : (selectedCourierObj || order.courier)
       }));
     },
     onError: (err, variables, context) => {
@@ -637,7 +644,7 @@ export default function AdminPesanan() {
       toast.error(err.response?.data?.message || 'Gagal mengubah status pesanan');
     },
     onSuccess: (data) => {
-      toast.success(data.message || 'Status pesanan berhasil diperbarui');
+      toast.success(data.message || 'Status dan kurir pesanan berhasil diperbarui');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['admin_orders'] });
@@ -1090,13 +1097,24 @@ export default function AdminPesanan() {
                             )}
                           </div>
                           {order.courier?.name ? (
-                            <span className="text-green-700 dark:text-green-400 font-bold flex items-center gap-1 shrink-0 bg-green-50 dark:bg-green-950/50 px-1.5 py-0.5 rounded-none border border-green-200 dark:border-green-800 text-[10px]">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenChangeStatusModal(order)}
+                              className="text-green-700 dark:text-green-400 font-bold flex items-center gap-1 shrink-0 bg-green-50 dark:bg-green-950/50 hover:bg-green-100 dark:hover:bg-green-900/60 px-1.5 py-0.5 rounded-none border border-green-200 dark:border-green-800 text-[10px] transition-colors cursor-pointer"
+                              title="Klik untuk ubah kurir atau status pesanan"
+                            >
                               <Truck className="w-3 h-3 text-green-600 dark:text-green-400" /> {order.courier.name}
-                            </span>
+                            </button>
                           ) : (
-                            <span className="text-gray-400 dark:text-gray-500 font-medium flex items-center gap-0.5 shrink-0 text-[10px]">
-                              🚫 Tanpa Kurir
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenChangeStatusModal(order)}
+                              className="text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1 shrink-0 text-[10px] bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-1.5 py-0.5 rounded-none border border-amber-200 dark:border-amber-800 transition-colors cursor-pointer"
+                              title="Klik untuk memilih kurir pengantar"
+                            >
+                              <span>🚫 Tanpa Kurir</span>
+                              <span className="font-bold underline text-amber-800 dark:text-amber-300 ml-0.5">(Pilih Kurir)</span>
+                            </button>
                           )}
                         </div>
                       </div>
@@ -2155,6 +2173,48 @@ export default function AdminPesanan() {
               </select>
             </div>
 
+            {/* 3. Dropdown Kurir Pengantar */}
+            <div className="space-y-1 text-left">
+              <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <Truck className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                  <span>Pilih Kurir Pengantar:</span>
+                </span>
+                <span className="text-[10px] font-normal text-gray-400 truncate max-w-[180px]">
+                  {orderToChangeStatus.canteen?.name ? `Toko: ${orderToChangeStatus.canteen.name}` : ''}
+                </span>
+              </label>
+              <select
+                value={selectedNewCourierId}
+                onChange={(e) => setSelectedNewCourierId(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-none border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-xs font-semibold focus:ring-1 focus:ring-green-500 focus:outline-hidden"
+              >
+                <option value="none">🚫 Tanpa Kurir (Antar Sendiri)</option>
+                {couriersList.map((c) => {
+                  const isCanteenCourier = orderToChangeStatus.canteen?.couriers?.some(
+                    (cc) => String(cc.id) === String(c.id)
+                  );
+                  return (
+                    <option key={c.id} value={c.id}>
+                      🛵 {c.name} {isCanteenCourier ? '⭐ (Kurir Toko Ini)' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              {orderToChangeStatus.canteen?.couriers && orderToChangeStatus.canteen.couriers.length > 0 && selectedNewCourierId === 'none' && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1 flex-wrap">
+                  <span>💡 Saran: Toko ini memiliki kurir terdaftar:</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedNewCourierId(String(orderToChangeStatus.canteen.couriers[0].id))}
+                    className="font-bold underline cursor-pointer text-amber-700 dark:text-amber-300 hover:text-green-600"
+                  >
+                    {orderToChangeStatus.canteen.couriers[0].name} (Klik untuk pilih)
+                  </button>
+                </p>
+              )}
+            </div>
+
             {/* Shortcut Unggah Bukti Bayar */}
             <div className="pt-0.5">
               <button
@@ -2185,7 +2245,8 @@ export default function AdminPesanan() {
                 onClick={() => updateStatusMutation.mutate({
                   id: orderToChangeStatus.id,
                   status: selectedNewStatus,
-                  payment_status: selectedNewPaymentStatus
+                  payment_status: selectedNewPaymentStatus,
+                  courier_id: selectedNewCourierId
                 })}
                 disabled={updateStatusMutation.isPending}
                 className="flex-1 py-1.5 rounded-none font-bold text-xs text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1 shadow-xs cursor-pointer"

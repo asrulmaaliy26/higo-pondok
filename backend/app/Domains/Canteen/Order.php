@@ -74,6 +74,21 @@ class Order extends Model
         'canteen_profit',
     ];
 
+    protected static function booted()
+    {
+        static::creating(function (Order $order) {
+            // Otomatis pasangkan kurir toko yang terdaftar jika courier_id belum diisi
+            if (empty($order->courier_id) && !empty($order->canteen_id)) {
+                $assignedCourier = \Illuminate\Support\Facades\DB::table('canteen_couriers')
+                    ->where('canteen_id', $order->canteen_id)
+                    ->value('courier_id');
+                if ($assignedCourier) {
+                    $order->courier_id = $assignedCourier;
+                }
+            }
+        });
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);

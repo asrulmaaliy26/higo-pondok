@@ -224,12 +224,16 @@ export default function AdminPesanan() {
   const [selectedNewStatus, setSelectedNewStatus] = useState('pending');
   const [selectedNewPaymentStatus, setSelectedNewPaymentStatus] = useState('unpaid');
   const [selectedNewCourierId, setSelectedNewCourierId] = useState('');
+  const [selectedOrderDateMode, setSelectedOrderDateMode] = useState('keep'); // 'keep' | 'today' | 'tomorrow' | 'custom'
+  const [selectedOrderCustomDate, setSelectedOrderCustomDate] = useState('');
 
-  const handleOpenChangeStatusModal = (order) => {
+  const handleOpenChangeStatusModal = (order, defaultStatus = null, defaultDateMode = 'keep') => {
     setOrderToChangeStatus(order);
-    setSelectedNewStatus(order.status || 'pending');
+    setSelectedNewStatus(defaultStatus || order.status || 'pending');
     setSelectedNewPaymentStatus(order.payment_status || 'unpaid');
     setSelectedNewCourierId(order.courier_id ? String(order.courier_id) : '');
+    setSelectedOrderDateMode(defaultDateMode);
+    setSelectedOrderCustomDate('');
   };
 
   const handleContinueOrder = (order) => {
@@ -632,10 +636,10 @@ export default function AdminPesanan() {
     }
   });
 
-  // Mutation Update Order Status & Payment Status
+  // Mutation Update Order Status & Payment Status & Schedule Date
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status, payment_status, courier_id }) => {
-      const res = await api.put(`/admin/orders/${id}/status`, { status, payment_status, courier_id });
+    mutationFn: async ({ id, status, payment_status, courier_id, target_date }) => {
+      const res = await api.put(`/admin/orders/${id}/status`, { status, payment_status, courier_id, target_date });
       return res.data;
     },
     onMutate: async (variables) => {
@@ -1229,27 +1233,53 @@ export default function AdminPesanan() {
                       {/* Minimalist Action Buttons */}
                       <div className="flex items-center gap-1 shrink-0">
                         {order.status !== 'cancelled' ? (
-                          <button
-                            onClick={() => {
-                              setOrderToCancel(order);
-                              setCancelReason('');
-                            }}
-                            className="p-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-none text-xs font-bold transition-colors border border-red-200 dark:border-red-800 cursor-pointer"
-                            title={order.status === 'completed' ? 'Batalkan pesanan yang sudah selesai' : 'Batalkan Pesanan'}
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                          <>
+                            <button
+                              onClick={() => {
+                                setOrderToCancel(order);
+                                setCancelReason('');
+                              }}
+                              className="p-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-none text-xs font-bold transition-colors border border-red-200 dark:border-red-800 cursor-pointer"
+                              title={order.status === 'completed' ? 'Batalkan pesanan yang sudah selesai' : 'Batalkan Pesanan'}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                            {order.status === 'pending' && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenChangeStatusModal(order, 'processing', 'tomorrow')}
+                                disabled={updateStatusMutation.isPending}
+                                className="px-1.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-none text-[10.5px] font-bold transition-colors flex items-center gap-0.5 shadow-2xs cursor-pointer"
+                                title="Jadwalkan pesanan ke Besok"
+                              >
+                                <Calendar className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                                <span>Besok</span>
+                              </button>
+                            )}
+                          </>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleContinueOrder(order)}
-                            disabled={updateStatusMutation.isPending}
-                            className="px-2 py-1 bg-green-50 hover:bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300 border border-green-300 dark:border-green-800 rounded-none text-[11px] font-bold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
-                            title="Lanjutkan Pesanan (Otomatis ditugaskan ke Kurir Toko)"
-                          >
-                            <Truck className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
-                            <span>Lanjutkan</span>
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleContinueOrder(order)}
+                              disabled={updateStatusMutation.isPending}
+                              className="px-2 py-1 bg-green-50 hover:bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300 border border-green-300 dark:border-green-800 rounded-none text-[11px] font-bold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                              title="Lanjutkan Pesanan (Otomatis ditugaskan ke Kurir Toko)"
+                            >
+                              <Truck className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                              <span>Lanjutkan</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenChangeStatusModal(order, 'processing', 'tomorrow')}
+                              disabled={updateStatusMutation.isPending}
+                              className="px-1.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-none text-[10.5px] font-bold transition-colors flex items-center gap-0.5 shadow-2xs cursor-pointer"
+                              title="Lanjutkan dan Jadwalkan pesanan ke Besok"
+                            >
+                              <Calendar className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                              <span>Besok</span>
+                            </button>
+                          </div>
                         )}
 
                         <button
@@ -2234,6 +2264,96 @@ export default function AdminPesanan() {
               </div>
             )}
 
+            {/* 3. Pilihan Jadwal / Tanggal Pesanan Dilanjutkan */}
+            <div className="space-y-1.5 text-left border-t border-gray-100 dark:border-gray-800 pt-2">
+              <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                  Jadwalkan / Tanggal Pesanan:
+                </span>
+                <span className="text-[9.5px] text-gray-400 font-mono">
+                  {orderToChangeStatus.created_at ? new Date(orderToChangeStatus.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : ''}
+                </span>
+              </label>
+
+              <div className="grid grid-cols-4 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrderDateMode('keep')}
+                  className={`py-1 px-1 text-[10px] font-bold border rounded-none transition-colors cursor-pointer ${
+                    selectedOrderDateMode === 'keep'
+                      ? 'bg-gray-800 text-white dark:bg-gray-200 dark:text-gray-900 border-gray-800 dark:border-gray-200'
+                      : 'bg-gray-50 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  Asli
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrderDateMode('today')}
+                  className={`py-1 px-1 text-[10px] font-bold border rounded-none transition-colors flex items-center justify-center gap-0.5 cursor-pointer ${
+                    selectedOrderDateMode === 'today'
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300 border-green-200 dark:border-green-800 hover:bg-green-100'
+                  }`}
+                >
+                  ⚡ Hari Ini
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrderDateMode('tomorrow')}
+                  className={`py-1 px-1 text-[10px] font-bold border rounded-none transition-colors flex items-center justify-center gap-0.5 cursor-pointer ${
+                    selectedOrderDateMode === 'tomorrow'
+                      ? 'bg-amber-600 text-white border-amber-600'
+                      : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100'
+                  }`}
+                >
+                  ☀️ Besok
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrderDateMode('custom')}
+                  className={`py-1 px-1 text-[10px] font-bold border rounded-none transition-colors flex items-center justify-center gap-0.5 cursor-pointer ${
+                    selectedOrderDateMode === 'custom'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100'
+                  }`}
+                >
+                  📅 Lainnya
+                </button>
+              </div>
+
+              {selectedOrderDateMode === 'custom' && (
+                <div className="pt-1">
+                  <input
+                    type="date"
+                    value={selectedOrderCustomDate}
+                    onChange={(e) => setSelectedOrderCustomDate(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-none border border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30 text-gray-900 dark:text-white text-xs font-semibold focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                  <p className="text-[9.5px] text-blue-600 dark:text-blue-400 mt-0.5">
+                    Pilih tanggal kapan pesanan ini ingin dilanjutkan dan masuk ke rekap.
+                  </p>
+                </div>
+              )}
+
+              {selectedOrderDateMode === 'tomorrow' && (
+                <p className="text-[9.5px] text-amber-700 dark:text-amber-400">
+                  Pesanan akan dijadwalkan untuk <strong>Besok</strong> ({(() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + 1);
+                    return d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
+                  })()}) dan masuk antrean besok.
+                </p>
+              )}
+
+              {selectedOrderDateMode === 'today' && (
+                <p className="text-[9.5px] text-green-700 dark:text-green-400">
+                  Pesanan akan dipindahkan ke <strong>Hari Ini</strong> ({new Date().toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}).
+                </p>
+              )}
+            </div>
+
             {/* Shortcut Unggah Bukti Bayar */}
             <div className="pt-0.5">
               <button
@@ -2269,11 +2389,25 @@ export default function AdminPesanan() {
                       return;
                     }
                   }
+
+                  let targetDateVal = undefined;
+                  if (selectedOrderDateMode === 'today') {
+                    const d = new Date();
+                    targetDateVal = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  } else if (selectedOrderDateMode === 'tomorrow') {
+                    const d = new Date();
+                    d.setDate(d.getDate() + 1);
+                    targetDateVal = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  } else if (selectedOrderDateMode === 'custom' && selectedOrderCustomDate) {
+                    targetDateVal = selectedOrderCustomDate;
+                  }
+
                   updateStatusMutation.mutate({
                     id: orderToChangeStatus.id,
                     status: selectedNewStatus,
                     payment_status: selectedNewPaymentStatus,
-                    courier_id: selectedNewCourierId ? parseInt(selectedNewCourierId) : undefined
+                    courier_id: selectedNewCourierId ? parseInt(selectedNewCourierId) : undefined,
+                    target_date: targetDateVal
                   });
                 }}
                 disabled={updateStatusMutation.isPending}

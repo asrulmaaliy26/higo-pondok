@@ -542,7 +542,8 @@ export default function PesananToko() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status, canteen_id }) => api.put(`/canteen/orders/${id}/status?canteen_id=${canteen_id}`, { status }),
+    mutationFn: ({ id, status, canteen_id, target_date }) => 
+      api.put(`/canteen/orders/${id}/status?canteen_id=${canteen_id}`, { status, target_date }),
     onMutate: async (variables) => {
       return await mutateOrderInCaches(queryClient, 'canteen_orders', variables.id, (order) => ({
         ...order,
@@ -569,8 +570,8 @@ export default function PesananToko() {
   });
 
   const batchUpdateStatusMutation = useMutation({
-    mutationFn: ({ order_ids, status, canteen_id }) => 
-      api.put(`/canteen/orders/batch-status${canteen_id ? `?canteen_id=${canteen_id}` : ''}`, { order_ids, status }),
+    mutationFn: ({ order_ids, status, canteen_id, target_date }) => 
+      api.put(`/canteen/orders/batch-status${canteen_id ? `?canteen_id=${canteen_id}` : ''}`, { order_ids, status, target_date }),
     onMutate: async (variables) => {
       return await mutateOrderInCaches(queryClient, 'canteen_orders', variables.order_ids, (order) => ({
         ...order,
@@ -651,6 +652,28 @@ export default function PesananToko() {
   const [receiptFiles, setReceiptFiles] = useState([]);
   const [isCompressingReceipt, setIsCompressingReceipt] = useState(false);
   const [expandedOrders, setExpandedOrders] = useState({}); // Track which completed orders are expanded
+
+  // Schedule Order Modal States for Canteen
+  const [scheduleOrderModal, setScheduleOrderModal] = useState(null);
+  const [scheduleDateMode, setScheduleDateMode] = useState('tomorrow'); // 'today' | 'tomorrow' | 'custom'
+  const [scheduleCustomDate, setScheduleCustomDate] = useState('');
+  const [scheduleActionStatus, setScheduleActionStatus] = useState('processing'); // 'processing' | 'pending'
+
+  const handleOpenScheduleModal = (orderOrGroup, defaultMode = 'tomorrow') => {
+    const isGroup = Boolean(orderOrGroup.orders && Array.isArray(orderOrGroup.orders));
+    const targetOrders = isGroup ? orderOrGroup.orders : [orderOrGroup];
+    const primary = isGroup ? (orderOrGroup.primaryOrder || targetOrders[0]) : orderOrGroup;
+
+    setScheduleOrderModal({
+      order: primary,
+      orders: targetOrders,
+      isGroup,
+      title: isGroup ? `Jadwalkan Paket Pesanan (${targetOrders.length} Pesanan)` : `Jadwalkan Pesanan #${primary.id}`
+    });
+    setScheduleDateMode(defaultMode);
+    setScheduleCustomDate('');
+    setScheduleActionStatus('processing');
+  };
 
   const uploadReceiptMutation = useMutation({
     mutationFn: ({ id, formData, canteen_id }) => api.post(`/canteen/orders/${id}/upload-receipt?canteen_id=${canteen_id}`, formData, {
@@ -930,21 +953,21 @@ export default function PesananToko() {
   if (canteensList && canteensList.length === 0) {
     return (
       <div className="bg-gray-50 h-full min-h-screen p-6 flex items-center justify-center dark:bg-gray-950 font-sans">
-        <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 max-w-md w-full border border-gray-200 dark:border-gray-700 shadow-xl text-center space-y-5 animate-in zoom-in-95 duration-200">
-          <div className="w-20 h-20 bg-green-100 dark:bg-green-900/40 text-green-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
-            <Store className="w-10 h-10" />
+        <div className="bg-white dark:bg-gray-900 rounded-none p-6 sm:p-8 max-w-md w-full border border-gray-200 dark:border-gray-700 shadow-xl text-center space-y-4 animate-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 bg-green-50 dark:bg-green-950/50 text-green-600 rounded-none border border-green-200 dark:border-green-800 flex items-center justify-center mx-auto shadow-inner">
+            <Store className="w-8 h-8" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Anda Belum Memiliki Toko</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 leading-relaxed">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Anda Belum Memiliki Toko</h2>
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1.5 leading-relaxed">
               Sebagai Akun Kantin, Anda perlu mendaftarkan nama & profil toko terlebih dahulu sebelum dapat mengelola pesanan.
             </p>
           </div>
           <button
             onClick={() => navigate({ to: '/dashboard/profile' })}
-            className="w-full py-3.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg shadow-green-600/20 transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
+            className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-none shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 text-xs sm:text-sm uppercase tracking-wider cursor-pointer"
           >
-            <Store className="w-5 h-5" />
+            <Store className="w-4 h-4" />
             Buka Profil & Buat Toko
           </button>
         </div>
@@ -1331,7 +1354,7 @@ export default function PesananToko() {
               </button>
             )}
 
-            {/* Pending Actions: Tolak / Lanjutkan */}
+            {/* Pending Actions: Tolak / Jadwalkan / Lanjutkan */}
             {isPending && (
               <>
                 <button 
@@ -1345,6 +1368,17 @@ export default function PesananToko() {
                 >
                   <X className="w-3 h-3" />
                   <span>Tolak</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenScheduleModal(order, 'tomorrow')}
+                  disabled={updateStatusMutation.isPending}
+                  className="py-1 px-1.5 sm:px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-none text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-0.5 shadow-2xs cursor-pointer"
+                  title="Jadwalkan ke Besok atau tanggal lain"
+                >
+                  <Calendar className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                  <span>Jadwalkan</span>
                 </button>
 
                 <button 
@@ -1361,6 +1395,33 @@ export default function PesananToko() {
                   <CheckCircle className="w-3 h-3" /> Lanjutkan
                 </button>
               </>
+            )}
+
+            {/* Cancelled Actions: Lanjutkan / Jadwalkan kembali */}
+            {order.status === 'cancelled' && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleOpenScheduleModal(order, 'tomorrow')}
+                  disabled={updateStatusMutation.isPending}
+                  className="py-1 px-1.5 sm:px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-none text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-0.5 shadow-2xs cursor-pointer"
+                  title="Jadwalkan pesanan batal ini ke Besok"
+                >
+                  <Calendar className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                  <span>Jadwalkan</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={updateStatusMutation.isPending}
+                  onClick={() => {
+                    updateStatusMutation.mutate({ id: order.id, status: 'processing', canteen_id: order.canteen_id });
+                  }}
+                  className="py-1 px-2 bg-green-600 hover:bg-green-700 text-white rounded-none text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                  title="Lanjutkan kembali pesanan yang dibatalkan"
+                >
+                  <RotateCcw className="w-3 h-3" /> Lanjutkan
+                </button>
+              </div>
             )}
 
             {/* Processing Actions */}
@@ -1761,7 +1822,7 @@ export default function PesananToko() {
               <span>Cetak Struk</span>
             </button>
 
-            {/* Pending & Partial Actions: Tolak / Lanjutkan */}
+            {/* Pending & Partial Actions: Tolak / Jadwalkan / Lanjutkan */}
             {(isPending || isPartial) && (
               <>
                 {isPending && (
@@ -1786,6 +1847,17 @@ export default function PesananToko() {
                     <span>Tolak</span>
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenScheduleModal(group, 'tomorrow')}
+                  disabled={batchUpdateStatusMutation.isPending}
+                  className="py-1 px-1.5 sm:px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-none text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-0.5 shadow-2xs cursor-pointer"
+                  title="Jadwalkan semua pesanan paket ini ke Besok atau tanggal lain"
+                >
+                  <Calendar className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                  <span>Jadwalkan</span>
+                </button>
 
                 <button 
                   disabled={batchUpdateStatusMutation.isPending || updatePaymentMutation.isPending}
@@ -1812,6 +1884,37 @@ export default function PesananToko() {
                   <CheckCircle className="w-3 h-3" /> {isPartial ? 'Lanjutkan Sisa' : 'Lanjutkan'}
                 </button>
               </>
+            )}
+
+            {/* Cancelled Bundled Actions: Lanjutkan / Jadwalkan kembali */}
+            {isCancelled && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleOpenScheduleModal(group, 'tomorrow')}
+                  disabled={batchUpdateStatusMutation.isPending}
+                  className="py-1 px-1.5 sm:px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-none text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-0.5 shadow-2xs cursor-pointer"
+                  title="Jadwalkan paket pesanan yang dibatalkan ke Besok"
+                >
+                  <Calendar className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                  <span>Jadwalkan</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={batchUpdateStatusMutation.isPending}
+                  onClick={() => {
+                    batchUpdateStatusMutation.mutate({ 
+                      order_ids: group.orders.map(o => o.id), 
+                      status: 'processing', 
+                      canteen_id: selectedCanteenFilter !== 'all' ? selectedCanteenFilter : undefined 
+                    });
+                  }}
+                  className="py-1 px-2 bg-green-600 hover:bg-green-700 text-white rounded-none text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                  title="Lanjutkan kembali semua pesanan yang dibatalkan"
+                >
+                  <RotateCcw className="w-3 h-3" /> Lanjutkan
+                </button>
+              </div>
             )}
 
             {/* Processing Actions */}
@@ -2693,7 +2796,7 @@ export default function PesananToko() {
                       }
                       e.target.value = '';
                     }}
-                    className="w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-green-900/30 dark:file:text-green-400 dark:text-gray-400 border border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-1 disabled:opacity-60"
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-3 file:rounded-none file:border-0 file:text-xs file:font-bold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-green-900/30 dark:file:text-green-400 dark:text-gray-400 border border-dashed border-gray-300 dark:border-gray-700 rounded-none p-1 disabled:opacity-60"
                   />
                   <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 flex items-center gap-1">
                     <span>✨ Otomatis dikompresi agar hemat ukuran & cepat terunggah.</span>
@@ -2711,13 +2814,13 @@ export default function PesananToko() {
                         const isHeif = isHeifFile(file);
 
                         return (
-                          <div key={idx} className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-2 flex flex-col justify-between group">
+                          <div key={idx} className="relative rounded-none overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-2 flex flex-col justify-between group">
                             {isImg ? (
-                              <div className="aspect-video w-full rounded-lg overflow-hidden bg-black/5 mb-1.5">
+                              <div className="aspect-video w-full rounded-none overflow-hidden bg-black/5 mb-1.5">
                                 <img src={URL.createObjectURL(file)} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
                               </div>
                             ) : (
-                              <div className="aspect-video w-full rounded-lg bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800/40 flex flex-col items-center justify-center text-green-600 dark:text-green-400 mb-1.5">
+                              <div className="aspect-video w-full rounded-none bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800/40 flex flex-col items-center justify-center text-green-600 dark:text-green-400 mb-1.5">
                                 <FileText className="w-6 h-6" />
                                 <span className="text-[10px] font-mono font-bold mt-0.5 uppercase">
                                   {isPdf ? 'PDF' : isHeif ? 'HEIF' : file.name.split('.').pop() || 'FILE'}
@@ -3216,6 +3319,211 @@ export default function PesananToko() {
                 className="w-full py-1.5 px-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-none border border-gray-200 dark:border-gray-700 text-xs font-semibold transition-colors cursor-pointer"
               >
                 Batal
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL JADWALKAN PESANAN KANTIN (BESOK / TANGGAL LAIN) */}
+      {scheduleOrderModal && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-none max-w-md w-full p-3.5 sm:p-4 border border-gray-200 dark:border-gray-800 shadow-2xl space-y-3 animate-in zoom-in-95 duration-150 my-auto">
+            <div className="w-9 h-9 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-none flex items-center justify-center mx-auto border border-amber-300 dark:border-amber-800">
+              <Calendar className="w-4 h-4" />
+            </div>
+
+            <div className="text-center space-y-0.5">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                {scheduleOrderModal.title}
+              </h3>
+              <p className="text-[11px] text-gray-500 font-medium">
+                {scheduleOrderModal.order.user?.santri_name || scheduleOrderModal.order.user?.name}
+                {scheduleOrderModal.order.canteen?.name ? ` • ${scheduleOrderModal.order.canteen.name}` : ''}
+              </p>
+            </div>
+
+            {/* Info Tanggal Pesanan Saat Ini */}
+            <div className="bg-gray-50 dark:bg-gray-800/80 p-2 rounded-none border border-gray-200 dark:border-gray-700/60 flex items-center justify-between text-xs">
+              <span className="text-gray-500 text-[10px] uppercase font-bold tracking-wider">Tanggal Saat Ini:</span>
+              <span className="font-bold text-gray-800 dark:text-gray-200 font-mono text-[11px]">
+                {scheduleOrderModal.order.created_at ? new Date(scheduleOrderModal.order.created_at).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+              </span>
+            </div>
+
+            {/* Pilihan Target Tanggal */}
+            <div className="space-y-1.5 text-left">
+              <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 block">
+                Pilih Jadwal Pesanan Dilanjutkan:
+              </label>
+
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setScheduleDateMode('tomorrow')}
+                  className={`py-2 px-2 text-xs font-bold border rounded-none transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                    scheduleDateMode === 'tomorrow'
+                      ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                      : 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100'
+                  }`}
+                >
+                  <span className="text-[11px]">☀️ Besok</span>
+                  <span className="text-[9.5px] font-normal opacity-90">
+                    {(() => {
+                      const d = new Date();
+                      d.setDate(d.getDate() + 1);
+                      return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+                    })()}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setScheduleDateMode('today')}
+                  className={`py-2 px-2 text-xs font-bold border rounded-none transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                    scheduleDateMode === 'today'
+                      ? 'bg-green-600 text-white border-green-600 shadow-xs'
+                      : 'bg-green-50 text-green-800 dark:bg-green-950/40 dark:text-green-300 border-green-200 dark:border-green-800 hover:bg-green-100'
+                  }`}
+                >
+                  <span className="text-[11px]">⚡ Hari Ini</span>
+                  <span className="text-[9.5px] font-normal opacity-90">
+                    {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setScheduleDateMode('custom')}
+                  className={`py-2 px-2 text-xs font-bold border rounded-none transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                    scheduleDateMode === 'custom'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100'
+                  }`}
+                >
+                  <span className="text-[11px]">📅 Tanggal Lain</span>
+                  <span className="text-[9.5px] font-normal opacity-90">Pilih kalender</span>
+                </button>
+              </div>
+
+              {scheduleDateMode === 'custom' && (
+                <div className="pt-1">
+                  <input
+                    type="date"
+                    value={scheduleCustomDate}
+                    onChange={(e) => setScheduleCustomDate(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-none border border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30 text-gray-900 dark:text-white text-xs font-semibold focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                  <p className="text-[9.5px] text-blue-600 dark:text-blue-400 mt-0.5">
+                    Pilih tanggal target pesanan ini dimasukkan dan direkap.
+                  </p>
+                </div>
+              )}
+
+              {scheduleDateMode === 'tomorrow' && (
+                <p className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 p-1.5 border border-amber-200 dark:border-amber-800">
+                  Pesanan akan otomatis masuk ke daftar pesanan dan rekap toko pada <strong>Besok Pagi</strong>.
+                </p>
+              )}
+
+              {scheduleDateMode === 'today' && (
+                <p className="text-[10px] text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 p-1.5 border border-green-200 dark:border-green-800">
+                  Pesanan akan diproses untuk antrean <strong>Hari Ini</strong>.
+                </p>
+              )}
+            </div>
+
+            {/* Pilihan Tindakan Status */}
+            <div className="space-y-1 text-left">
+              <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 block">
+                Status Pesanan:
+              </label>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setScheduleActionStatus('processing')}
+                  className={`py-1.5 px-2 text-xs font-bold border rounded-none transition-colors flex items-center justify-center gap-1 cursor-pointer ${
+                    scheduleActionStatus === 'processing'
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'bg-gray-50 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  <Truck className="w-3.5 h-3.5" />
+                  <span>Langsung Proses</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleActionStatus('pending')}
+                  className={`py-1.5 px-2 text-xs font-bold border rounded-none transition-colors flex items-center justify-center gap-1 cursor-pointer ${
+                    scheduleActionStatus === 'pending'
+                      ? 'bg-gray-800 text-white dark:bg-gray-200 dark:text-gray-900 border-gray-800 dark:border-gray-200'
+                      : 'bg-gray-50 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Tetap Pending</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+              <button
+                type="button"
+                onClick={() => setScheduleOrderModal(null)}
+                disabled={updateStatusMutation.isPending || batchUpdateStatusMutation.isPending}
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={updateStatusMutation.isPending || batchUpdateStatusMutation.isPending}
+                onClick={() => {
+                  let targetDateVal = undefined;
+                  if (scheduleDateMode === 'today') {
+                    const d = new Date();
+                    targetDateVal = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  } else if (scheduleDateMode === 'tomorrow') {
+                    const d = new Date();
+                    d.setDate(d.getDate() + 1);
+                    targetDateVal = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  } else if (scheduleDateMode === 'custom' && scheduleCustomDate) {
+                    targetDateVal = scheduleCustomDate;
+                  }
+
+                  const targetOrders = scheduleOrderModal.orders;
+                  if (targetOrders.length === 1) {
+                    updateStatusMutation.mutate({
+                      id: targetOrders[0].id,
+                      status: scheduleActionStatus,
+                      canteen_id: targetOrders[0].canteen_id,
+                      target_date: targetDateVal
+                    });
+                  } else if (targetOrders.length > 1) {
+                    batchUpdateStatusMutation.mutate({
+                      order_ids: targetOrders.map(o => o.id),
+                      status: scheduleActionStatus,
+                      canteen_id: selectedCanteenFilter !== 'all' ? selectedCanteenFilter : undefined,
+                      target_date: targetDateVal
+                    });
+                  }
+                  setScheduleOrderModal(null);
+                }}
+                className="flex-1 py-1.5 rounded-none font-bold text-xs text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+              >
+                {updateStatusMutation.isPending || batchUpdateStatusMutation.isPending ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>Simpan & Jadwalkan</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

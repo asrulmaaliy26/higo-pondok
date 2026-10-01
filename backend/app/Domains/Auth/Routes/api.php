@@ -53,6 +53,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/orders/recap', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'recap']);
         Route::put('/admin/orders/{id}/cancel', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'cancel']);
         Route::put('/admin/orders/{id}/status', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'updateStatus']);
+        Route::put('/admin/orders/{id}/reschedule', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'reschedule']);
         Route::post('/admin/orders/{id}/payment-proof', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'uploadPaymentProof']);
         Route::delete('/admin/orders/{id}/proof', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'deleteProof']);
         Route::get('/admin/orders/trash', [\App\Domains\Admin\Controllers\AdminOrderController::class, 'trash']);

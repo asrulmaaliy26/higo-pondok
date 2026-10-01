@@ -373,7 +373,8 @@ class AdminOrderController extends Controller
         $request->validate([
             'status' => 'nullable|in:pending,processing,completed,cancelled',
             'payment_status' => 'nullable|in:unpaid,waiting_confirmation,paid',
-            'courier_id' => 'nullable|integer'
+            'courier_id' => 'nullable|integer',
+            'target_date' => 'nullable|date',
         ]);
 
         return DB::transaction(function () use ($request, $id) {
@@ -387,7 +388,7 @@ class AdminOrderController extends Controller
             $canteenName = $canteen ? $canteen->name : "Kantin #{$order->canteen_id}";
             $customerName = $order->user ? $order->user->name : "User #{$order->user_id}";
 
-            if ($prevStatus === $newStatus && $prevPaymentStatus === $newPaymentStatus && !$request->has('courier_id')) {
+            if ($prevStatus === $newStatus && $prevPaymentStatus === $newPaymentStatus && !$request->has('courier_id') && !$request->filled('target_date')) {
                 return response()->json([
                     'message' => 'Status pesanan tidak berubah',
                     'order' => $order
@@ -530,9 +531,8 @@ class AdminOrderController extends Controller
             if ($newPaymentStatus && $prevPaymentStatus !== $newPaymentStatus) {
                 $order->payment_status = $newPaymentStatus;
 
-                // Jika status pembayaran berubah ke paid atau waiting_confirmation, pindahkan created_at ke hari pembayaran jika sebelumnya dibuat di hari lain
-                $isNotToday = !\Illuminate\Support\Carbon::parse($order->created_at, 'Asia/Jakarta')->isToday();
-                if (in_array($newPaymentStatus, ['paid', 'waiting_confirmation']) && ($prevPaymentStatus === 'unpaid' || $isNotToday)) {
+                // Jika status pembayaran berubah dari unpaid menjadi paid atau waiting_confirmation, pindahkan created_at ke hari pembayaran
+                if ($prevPaymentStatus === 'unpaid' && in_array($newPaymentStatus, ['paid', 'waiting_confirmation'])) {
                     $now = now('Asia/Jakarta');
                     $order->created_at = $now;
                     $order->items()->update(['created_at' => $now]);
@@ -545,11 +545,35 @@ class AdminOrderController extends Controller
                         ->get();
                     foreach ($linkedOrders as $linked) {
                         $linked->payment_status = $newPaymentStatus;
-                        if (in_array($newPaymentStatus, ['paid', 'waiting_confirmation']) && ($prevPaymentStatus === 'unpaid' || $isNotToday)) {
+                        if ($prevPaymentStatus === 'unpaid' && in_array($newPaymentStatus, ['paid', 'waiting_confirmation'])) {
                             $linked->created_at = $order->created_at;
                             $linked->items()->update(['created_at' => $order->created_at]);
                         }
                         $linked->save();
+                    }
+                }
+            }
+
+            // Perubahan tanggal pesanan (jadwalkan ke besok atau tanggal tertentu)
+            $dateChangeMsg = '';
+            if ($request->filled('target_date')) {
+                $targetDate = Carbon::parse($request->target_date, 'Asia/Jakarta');
+                if (strlen($request->target_date) <= 10) {
+                    $targetDate = $targetDate->setTime(Carbon::now('Asia/Jakarta')->hour, Carbon::now('Asia/Jakarta')->minute, Carbon::now('Asia/Jakarta')->second);
+                }
+                $order->created_at = $targetDate;
+                $order->items()->update(['created_at' => $targetDate]);
+                $formattedDate = $targetDate->translatedFormat('d M Y');
+                $dateChangeMsg = " Dijadwalkan ke tanggal: {$formattedDate}.";
+
+                if ($order->checkout_id) {
+                    $linkedOrders = Order::where('checkout_id', $order->checkout_id)
+                        ->where('id', '!=', $order->id)
+                        ->get();
+                    foreach ($linkedOrders as $linked) {
+                        $linked->created_at = $targetDate;
+                        $linked->save();
+                        $linked->items()->update(['created_at' => $targetDate]);
                     }
                 }
             }
@@ -569,11 +593,11 @@ class AdminOrderController extends Controller
                 'action' => 'update_order_status',
                 'model_type' => Order::class,
                 'model_id' => $orderId,
-                'description' => "Admin {$request->user()->name} memperbarui pesanan #{$orderId} ({$canteenName} - {$customerName}): Status [{$prevStatus} -> {$newStatus}], Bayar [{$prevPaymentStatus} -> {$newPaymentStatus}].{$courierAssignedMsg}",
+                'description' => "Admin {$request->user()->name} memperbarui pesanan #{$orderId} ({$canteenName} - {$customerName}): Status [{$prevStatus} -> {$newStatus}], Bayar [{$prevPaymentStatus} -> {$newPaymentStatus}].{$courierAssignedMsg}{$dateChangeMsg}",
             ]);
 
             return response()->json([
-                'message' => "Status pesanan #{$orderId} berhasil diperbarui.{$courierAssignedMsg}",
+                'message' => "Status pesanan #{$orderId} berhasil diperbarui.{$courierAssignedMsg}{$dateChangeMsg}",
                 'order' => $order->load(['user', 'canteen.couriers:users.id,users.name', 'courier', 'items.product'])
             ]);
         });

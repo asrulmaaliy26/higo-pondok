@@ -519,13 +519,14 @@ class OrderController extends Controller
         ]);
     }
 
-    // For Canteen: Batch Update order status (Lanjutkan Semua / Selesaikan Semua / Tolak Semua)
+    // For Canteen: Batch Update order status (Lanjutkan Semua / Selesaikan Semua / Tolak Semua / Jadwalkan Besok)
     public function batchUpdateOrderStatus(Request $request)
     {
         $request->validate([
             'order_ids' => 'required|array|min:1',
             'order_ids.*' => 'integer',
             'status' => 'required|in:pending,processing,completed,cancelled',
+            'target_date' => 'nullable|date',
         ]);
 
         $user = $request->user();
@@ -547,6 +548,14 @@ class OrderController extends Controller
             $orders = $query->get();
             $updatedOrders = [];
             $skippedOrders = [];
+
+            $targetDate = null;
+            if ($request->filled('target_date')) {
+                $targetDate = \Illuminate\Support\Carbon::parse($request->target_date, 'Asia/Jakarta');
+                if (strlen($request->target_date) <= 10) {
+                    $targetDate = $targetDate->setTime(\Illuminate\Support\Carbon::now('Asia/Jakarta')->hour, \Illuminate\Support\Carbon::now('Asia/Jakarta')->minute, \Illuminate\Support\Carbon::now('Asia/Jakarta')->second);
+                }
+            }
 
             foreach ($orders as $order) {
                 if ($status === 'processing') {
@@ -571,10 +580,34 @@ class OrderController extends Controller
                     }
                 }
 
-                $order->update([
+                $prevStatus = $order->status;
+                if ($prevStatus === 'cancelled' && in_array($status, ['processing', 'completed'])) {
+                    foreach ($order->items as $item) {
+                        if ($item->product) {
+                            $item->product->decrement('stock', $item->quantity);
+                            $item->product->increment('sold_count', $item->quantity);
+                        }
+                    }
+                } elseif ($prevStatus === 'processing' && $status === 'cancelled') {
+                    foreach ($order->items as $item) {
+                        if ($item->product) {
+                            $item->product->increment('stock', $item->quantity);
+                            $item->product->decrement('sold_count', $item->quantity);
+                        }
+                    }
+                }
+
+                $updateData = [
                     'status' => $status,
                     'courier_id' => $order->courier_id
-                ]);
+                ];
+
+                if ($targetDate) {
+                    $updateData['created_at'] = $targetDate;
+                    $order->items()->update(['created_at' => $targetDate]);
+                }
+
+                $order->update($updateData);
 
                 $updatedOrders[] = $order->load(['canteen.couriers:users.id,users.name', 'user', 'items.product', 'courier']);
             }
@@ -604,11 +637,12 @@ class OrderController extends Controller
         });
     }
 
-    // For Canteen: Update order status (Lanjutkan / Process / Cancel)
+    // For Canteen: Update order status (Lanjutkan / Process / Cancel / Jadwalkan Besok)
     public function updateOrderStatus(Request $request, $id)
     {
         $request->validate([
             'status' => 'required|in:pending,processing,completed,cancelled',
+            'target_date' => 'nullable|date',
         ]);
 
         return DB::transaction(function () use ($id, $request) {
@@ -651,13 +685,33 @@ class OrderController extends Controller
                 }
             }
 
-            $order->update([
-                'status' => $request->status,
-                'courier_id' => $order->courier_id
-            ]);
+            $dateMsg = '';
+            if ($request->filled('target_date')) {
+                $targetDate = \Illuminate\Support\Carbon::parse($request->target_date, 'Asia/Jakarta');
+                if (strlen($request->target_date) <= 10) {
+                    $targetDate = $targetDate->setTime(\Illuminate\Support\Carbon::now('Asia/Jakarta')->hour, \Illuminate\Support\Carbon::now('Asia/Jakarta')->minute, \Illuminate\Support\Carbon::now('Asia/Jakarta')->second);
+                }
+                $order->created_at = $targetDate;
+                $order->items()->update(['created_at' => $targetDate]);
+                $formattedDate = $targetDate->translatedFormat('d M Y');
+                $dateMsg = " dan dijadwalkan ke tanggal {$formattedDate}";
+
+                if (!empty($order->checkout_id)) {
+                    $linkedOrders = Order::where('checkout_id', $order->checkout_id)->where('id', '!=', $order->id)->get();
+                    foreach ($linkedOrders as $linked) {
+                        $linked->created_at = $targetDate;
+                        $linked->save();
+                        $linked->items()->update(['created_at' => $targetDate]);
+                    }
+                }
+            }
+
+            $order->status = $request->status;
+            $order->courier_id = $order->courier_id;
+            $order->save();
 
             return response()->json([
-                'message' => 'Status pesanan berhasil diperbarui',
+                'message' => "Status pesanan berhasil diperbarui{$dateMsg}!",
                 'order' => $order->load(['canteen.couriers:users.id,users.name', 'user', 'items.product', 'courier'])
             ]);
         });

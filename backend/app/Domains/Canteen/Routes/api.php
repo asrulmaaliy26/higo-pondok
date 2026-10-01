@@ -38,6 +38,7 @@ Route::middleware(['auth:sanctum', 'impersonate'])->group(function () {
         Route::post('/canteen/orders/{id}/payment-proof', [\App\Domains\Canteen\Controllers\OrderController::class, 'uploadPaymentProofByCanteen']);
         Route::delete('/canteen/orders/{id}/proof', [\App\Domains\Canteen\Controllers\OrderController::class, 'deleteProofPhoto']);
         Route::put('/canteen/orders/{id}/courier', [\App\Domains\Canteen\Controllers\OrderController::class, 'assignCourier']);
+        Route::put('/canteen/orders/{id}/reschedule', [\App\Domains\Canteen\Controllers\OrderController::class, 'rescheduleOrder']);
         Route::put('/canteen/orders/{id}/cancel', [\App\Domains\Canteen\Controllers\OrderController::class, 'cancelOrder']);
         
         Route::get('/canteen/santri-list', [\App\Domains\Canteen\Controllers\OrderController::class, 'getSantriList']);

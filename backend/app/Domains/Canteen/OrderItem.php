@@ -15,6 +15,7 @@ class OrderItem extends Model
         'price',
         'subtotal',
         'notes',
+        'created_at',
     ];
 
     protected $casts = [

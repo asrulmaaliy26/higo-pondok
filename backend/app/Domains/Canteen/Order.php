@@ -56,6 +56,9 @@ class Order extends Model
         'proof_courier_paid',
         'custom_notes',
         'is_custom',
+        'voucher_id',
+        'voucher_discount',
+        'created_at',
     ];
 
     protected $casts = [
@@ -65,6 +68,7 @@ class Order extends Model
         'total_price' => 'float',
         'admin_fee' => 'float',
         'delivery_fee' => 'float',
+        'voucher_discount' => 'float',
         'is_courier_paid_by_canteen' => 'boolean',
         'is_custom' => 'boolean',
     ];
@@ -74,21 +78,6 @@ class Order extends Model
         'canteen_profit',
     ];
 
-    protected static function booted()
-    {
-        static::creating(function (Order $order) {
-            // Otomatis pasangkan kurir toko yang terdaftar jika courier_id belum diisi
-            if (empty($order->courier_id) && !empty($order->canteen_id)) {
-                $assignedCourier = \Illuminate\Support\Facades\DB::table('canteen_couriers')
-                    ->where('canteen_id', $order->canteen_id)
-                    ->value('courier_id');
-                if ($assignedCourier) {
-                    $order->courier_id = $assignedCourier;
-                }
-            }
-        });
-    }
-
     public function user()
     {
         return $this->belongsTo(User::class);
@@ -97,6 +86,11 @@ class Order extends Model
     public function canteen()
     {
         return $this->belongsTo(Canteen::class);
+    }
+
+    public function voucher()
+    {
+        return $this->belongsTo(Voucher::class);
     }
 
     public function items()

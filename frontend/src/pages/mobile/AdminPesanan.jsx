@@ -223,15 +223,25 @@ export default function AdminPesanan() {
   const [orderToChangeStatus, setOrderToChangeStatus] = useState(null);
   const [selectedNewStatus, setSelectedNewStatus] = useState('pending');
   const [selectedNewPaymentStatus, setSelectedNewPaymentStatus] = useState('unpaid');
-  const [selectedNewCourierId, setSelectedNewCourierId] = useState('none');
+  const [selectedNewCourierId, setSelectedNewCourierId] = useState('');
 
   const handleOpenChangeStatusModal = (order) => {
     setOrderToChangeStatus(order);
     setSelectedNewStatus(order.status || 'pending');
-    const defaultCourierId = order.courier_id 
-      ? String(order.courier_id) 
-      : (order.canteen?.couriers && order.canteen.couriers.length > 0 ? String(order.canteen.couriers[0].id) : 'none');
-    setSelectedNewCourierId(defaultCourierId);
+    setSelectedNewPaymentStatus(order.payment_status || 'unpaid');
+    setSelectedNewCourierId(order.courier_id ? String(order.courier_id) : '');
+  };
+
+  const handleContinueOrder = (order) => {
+    const couriers = order.canteen?.couriers || [];
+    if (couriers.length === 0) {
+      toast.error(`Toko "${order.canteen?.name || 'ini'}" belum ada kurirnya! Silakan tugaskan kurir ke toko ini terlebih dahulu.`);
+      return;
+    }
+    updateStatusMutation.mutate({
+      id: order.id,
+      status: 'processing'
+    });
   };
 
   // Receipt Modal State for Admin
@@ -622,7 +632,7 @@ export default function AdminPesanan() {
     }
   });
 
-  // Mutation Update Order Status & Payment Status & Courier
+  // Mutation Update Order Status & Payment Status
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, payment_status, courier_id }) => {
       const res = await api.put(`/admin/orders/${id}/status`, { status, payment_status, courier_id });
@@ -630,13 +640,11 @@ export default function AdminPesanan() {
     },
     onMutate: async (variables) => {
       setOrderToChangeStatus(null);
-      const selectedCourierObj = couriersList.find((c) => String(c.id) === String(variables.courier_id));
       return await mutateOrderInCaches(queryClient, 'admin_orders', variables.id, (order) => ({
         ...order,
         ...(variables.status ? { status: variables.status } : {}),
         ...(variables.payment_status ? { payment_status: variables.payment_status } : {}),
-        courier_id: variables.courier_id === 'none' ? null : (variables.courier_id ? Number(variables.courier_id) : order.courier_id),
-        courier: variables.courier_id === 'none' ? null : (selectedCourierObj || order.courier)
+        ...(variables.courier_id ? { courier_id: variables.courier_id } : {})
       }));
     },
     onError: (err, variables, context) => {
@@ -644,13 +652,14 @@ export default function AdminPesanan() {
       toast.error(err.response?.data?.message || 'Gagal mengubah status pesanan');
     },
     onSuccess: (data) => {
-      toast.success(data.message || 'Status dan kurir pesanan berhasil diperbarui');
+      toast.success(data.message || 'Status pesanan berhasil diperbarui');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['admin_orders'] });
       queryClient.invalidateQueries({ queryKey: ['admin_orders_recap'] });
       queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
       queryClient.invalidateQueries({ queryKey: ['courier_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['canteen_orders'] });
     }
   });
 
@@ -704,86 +713,85 @@ export default function AdminPesanan() {
   };
 
   return (
-    <div className="space-y-1.5 pb-20 animate-fade-in-up font-sans max-w-7xl mx-auto">
-      {/* ULTRA COMPACT TOP PANEL (2 BARIS TERPADU, SUPER PADAT & MAKSIMALKAN RUANG) */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-none shadow-xs divide-y divide-gray-200 dark:divide-gray-800">
+    <div className="space-y-2 pb-20 animate-fade-in-up font-sans max-w-7xl mx-auto">
+      {/* GOJEK / GOBIZ STYLE UNIFIED TOP PANEL */}
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-none shadow-xs">
         
-        {/* Baris 1: Tab Navigasi Utama + Mode Filter + Action Buttons */}
-        <div className="px-2 py-1 flex items-center justify-between gap-1.5 flex-wrap bg-gray-50/70 dark:bg-gray-950/50">
-          {/* Sisi Kiri: Tab Utama */}
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-            <button
-              onClick={() => setActiveTab('orders')}
-              className={`py-1 px-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors cursor-pointer ${
-                activeTab === 'orders'
-                  ? 'border-green-600 text-green-700 dark:text-green-400 bg-white dark:bg-gray-900 shadow-2xs'
-                  : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
-              }`}
-            >
-              <ShoppingBag className="w-3.5 h-3.5 text-green-600" />
-              <span>Pesanan ({orders.length})</span>
-            </button>
+        {/* Baris 1: Segmented Navigasi Utama */}
+        <div className="grid grid-cols-3 w-full bg-gray-100 dark:bg-gray-800/80 p-0.5 border-b border-gray-200 dark:border-gray-800">
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`py-2 px-2 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'orders'
+                ? 'bg-white dark:bg-gray-900 text-green-700 dark:text-green-400 shadow-xs border-b-2 border-green-600'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <ShoppingBag className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+            <span className="truncate">Pesanan ({orders.length})</span>
+          </button>
 
-            <button
-              onClick={() => setActiveTab('recap')}
-              className={`py-1 px-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors cursor-pointer ${
-                activeTab === 'recap'
-                  ? 'border-green-600 text-green-700 dark:text-green-400 bg-white dark:bg-gray-900 shadow-2xs'
-                  : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5 text-blue-600" />
-              <span>Rekap & Statistik</span>
-            </button>
+          <button
+            onClick={() => setActiveTab('recap')}
+            className={`py-2 px-2 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'recap'
+                ? 'bg-white dark:bg-gray-900 text-green-700 dark:text-green-400 shadow-xs border-b-2 border-green-600'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+            <span className="truncate">Rekap & Laporan</span>
+          </button>
 
-            <button
-              onClick={() => setActiveTab('trash')}
-              className={`py-1 px-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors cursor-pointer ${
-                activeTab === 'trash'
-                  ? 'border-amber-600 text-amber-700 dark:text-amber-400 bg-white dark:bg-gray-900 shadow-2xs'
-                  : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
-              }`}
-            >
-              <Trash2 className="w-3.5 h-3.5 text-amber-600" />
-              <span>Sampah ({trashedOrders.length})</span>
-            </button>
+          <button
+            onClick={() => setActiveTab('trash')}
+            className={`py-2 px-2 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'trash'
+                ? 'bg-white dark:bg-gray-900 text-amber-600 dark:text-amber-400 shadow-xs border-b-2 border-amber-500'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <Trash2 className="w-3.5 h-3.5 text-amber-500" />
+            <span className="truncate">Sampah ({trashedOrders.length})</span>
+          </button>
+        </div>
+
+        {/* Baris 2: Period Switcher & Aksi Cepat */}
+        <div className="px-2.5 py-1.5 flex items-center justify-between gap-1.5 bg-gray-50/70 dark:bg-gray-950/50 border-b border-gray-200 dark:border-gray-800">
+          {/* Mode Switcher Buttons */}
+          <div className="inline-flex border border-gray-200 dark:border-gray-700 divide-x divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
+            {[
+              { id: 'day', label: 'Hari' },
+              { id: 'week', label: 'Minggu' },
+              { id: 'month', label: 'Bulan' },
+              { id: 'year', label: 'Tahun' },
+              { id: 'all', label: 'Semua' }
+            ].map((m) => (
+              <button
+                key={m.id}
+                onClick={() => {
+                  setFilterMode(m.id);
+                  if (m.id === 'week') {
+                    setFilterWeekIndex(getCurrentWeekIndex(filterYear, filterMonth));
+                  }
+                }}
+                className={`px-2.5 py-1 text-[10px] font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                  filterMode === m.id
+                    ? 'bg-green-600 text-white'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
           </div>
 
-          {/* Sisi Kanan: Segmented Mode Selector & Quick Actions */}
-          <div className="flex items-center gap-1 shrink-0 ml-auto">
-            {/* Mode Switcher Buttons */}
-            <div className="inline-flex border border-gray-200 dark:border-gray-700 divide-x divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
-              {[
-                { id: 'day', label: 'Hari' },
-                { id: 'week', label: 'Minggu' },
-                { id: 'month', label: 'Bulan' },
-                { id: 'year', label: 'Tahun' },
-                { id: 'all', label: 'Semua' }
-              ].map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => {
-                    setFilterMode(m.id);
-                    if (m.id === 'week') {
-                      setFilterWeekIndex(getCurrentWeekIndex(filterYear, filterMonth));
-                    }
-                  }}
-                  className={`px-2 py-0.5 text-[10px] font-bold whitespace-nowrap transition-colors cursor-pointer ${
-                    filterMode === m.id
-                      ? 'bg-green-600 text-white'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-
+          <div className="flex items-center gap-1.5 shrink-0">
             {/* Print Batch Button (Thermal) */}
             {activeTab === 'orders' && orders.length > 0 && (
               <button
                 onClick={handlePrintBatchReceipt}
-                className="py-1 px-2 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-none text-[11px] font-bold transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
+                className="py-1 px-2.5 bg-gray-900 hover:bg-black text-white dark:bg-gray-800 dark:hover:bg-gray-700 rounded-none text-[11px] font-bold transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
                 title="Cetak Rekap Seluruh Pesanan ke Printer Thermal"
               >
                 <Printer className="w-3 h-3 text-green-400" />
@@ -799,19 +807,19 @@ export default function AdminPesanan() {
                 else if (activeTab === 'trash') refetchTrash();
               }}
               title="Perbarui Data"
-              className="p-1 text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 cursor-pointer"
+              className="p-1 text-gray-600 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isFetchingOrders || isFetchingRecap || isFetchingTrash ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
 
-        {/* Baris 2: Toolbar Filter Horizontal Super Ramping (Single Dense Row) */}
-        <div className="p-1.5 bg-white dark:bg-gray-900">
-          <div className="flex flex-wrap sm:flex-nowrap items-center gap-1 text-xs">
-            {/* 1. Date Selector (Per Tanggal) */}
+        {/* Baris 3: Toolbar Filter Terstruktur (Gojek Admin Style) */}
+        <div className="p-2 bg-white dark:bg-gray-900 space-y-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-xs">
+            {/* 1. Date / Period Selector */}
             {filterMode === 'day' && (
-              <div className="relative group shrink-0 w-full sm:w-auto min-w-[170px]">
+              <div className="relative group w-full">
                 <input
                   type="date"
                   value={filterDate}
@@ -826,7 +834,7 @@ export default function AdminPesanan() {
                   className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                   title="Klik untuk memilih hari / tanggal"
                 />
-                <div className="flex items-center justify-between h-7 px-2 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-semibold group-hover:border-green-500 transition-colors">
+                <div className="flex items-center justify-between h-8 px-2.5 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-bold group-hover:border-green-500 transition-colors">
                   <span className="truncate text-[11px]">
                     📅 {formatFullDate(filterDate)}
                   </span>
@@ -837,7 +845,7 @@ export default function AdminPesanan() {
 
             {/* Week Mode Inputs */}
             {filterMode === 'week' && (
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="grid grid-cols-2 gap-1 w-full">
                 <select
                   value={filterMonth}
                   onChange={(e) => {
@@ -845,7 +853,7 @@ export default function AdminPesanan() {
                     setFilterMonth(newMonth);
                     setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
                   }}
-                  className="h-7 px-1.5 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:outline-none"
+                  className="h-8 px-1.5 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-bold focus:outline-none"
                 >
                   {['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'].map(
                     (m, i) => (
@@ -859,7 +867,7 @@ export default function AdminPesanan() {
                 <select
                   value={filterWeekIndex < getWeeksInMonth(filterYear, filterMonth).length ? filterWeekIndex : 0}
                   onChange={(e) => setFilterWeekIndex(parseInt(e.target.value))}
-                  className="h-7 px-1.5 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:outline-none max-w-[130px] truncate"
+                  className="h-8 px-1.5 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-bold focus:outline-none truncate"
                 >
                   {getWeeksInMonth(filterYear, filterMonth).map((w, i) => (
                     <option key={i} value={i}>
@@ -872,7 +880,7 @@ export default function AdminPesanan() {
 
             {/* Month Mode Input */}
             {filterMode === 'month' && (
-              <div className="shrink-0">
+              <div className="w-full">
                 <select
                   value={filterMonth}
                   onChange={(e) => {
@@ -880,7 +888,7 @@ export default function AdminPesanan() {
                     setFilterMonth(newMonth);
                     setFilterWeekIndex(getCurrentWeekIndex(filterYear, newMonth));
                   }}
-                  className="h-7 px-2 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:outline-none"
+                  className="w-full h-8 px-2 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-bold focus:outline-none"
                 >
                   {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(
                     (m, i) => (
@@ -894,8 +902,8 @@ export default function AdminPesanan() {
             )}
 
             {/* Year Mode */}
-            {(filterMode === 'week' || filterMode === 'month' || filterMode === 'year') && (
-              <div className="shrink-0">
+            {filterMode === 'year' && (
+              <div className="w-full">
                 <select
                   value={filterYear}
                   onChange={(e) => {
@@ -903,23 +911,29 @@ export default function AdminPesanan() {
                     setFilterYear(newYear);
                     setFilterWeekIndex(getCurrentWeekIndex(newYear, filterMonth));
                   }}
-                  className="h-7 px-1.5 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-semibold focus:outline-none"
+                  className="w-full h-8 px-2 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white font-bold focus:outline-none"
                 >
                   {[2024, 2025, 2026, 2027, 2028].map((y) => (
                     <option key={y} value={y}>
-                      {y}
+                      Tahun: {y}
                     </option>
                   ))}
                 </select>
               </div>
             )}
 
+            {filterMode === 'all' && (
+              <div className="h-8 px-2.5 flex items-center bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300">
+                Semua Waktu Transaksi
+              </div>
+            )}
+
             {/* Status Filter */}
-            <div className="shrink-0 w-[130px] sm:w-[145px]">
+            <div className="w-full">
               <select
                 value={selectedStatusFilter}
                 onChange={(e) => setSelectedStatusFilter(e.target.value)}
-                className="w-full h-7 px-1.5 border rounded-none text-[11px] font-semibold bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:outline-none"
+                className="w-full h-8 px-2 border rounded-none text-xs font-bold bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:outline-none"
               >
                 <option value="all">📋 Semua Status</option>
                 <option value="waiting_confirmation">⏳ Verifikasi Bayar</option>
@@ -933,11 +947,11 @@ export default function AdminPesanan() {
             </div>
 
             {/* Courier Filter */}
-            <div className="shrink-0 w-[120px] sm:w-[135px]">
+            <div className="w-full">
               <select
                 value={selectedCourierFilter}
                 onChange={(e) => setSelectedCourierFilter(e.target.value)}
-                className="w-full h-7 px-1.5 border rounded-none text-[11px] font-semibold bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:outline-none"
+                className="w-full h-8 px-2 border rounded-none text-xs font-bold bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 focus:outline-none"
               >
                 <option value="all">🚚 Semua Kurir</option>
                 <option value="unassigned">🚫 Antar Sendiri</option>
@@ -948,18 +962,18 @@ export default function AdminPesanan() {
                 ))}
               </select>
             </div>
+          </div>
 
-            {/* Search Box (Expands to fill remaining space) */}
-            <div className="flex-1 min-w-[150px] relative">
-              <Search className="w-3 h-3 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Cari Santri / Wali / Toko / Order ID..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-7 pl-6 pr-2 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white focus:ring-1 focus:ring-green-500 focus:outline-none font-medium placeholder:text-gray-400"
-              />
-            </div>
+          {/* Search Box */}
+          <div className="relative w-full">
+            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Cari Santri / Wali / Toko / Order ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-8 pl-8 pr-3 border rounded-none text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white focus:ring-1 focus:ring-green-500 focus:outline-none font-medium placeholder:text-gray-400"
+            />
           </div>
         </div>
       </div>
@@ -1097,24 +1111,13 @@ export default function AdminPesanan() {
                             )}
                           </div>
                           {order.courier?.name ? (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenChangeStatusModal(order)}
-                              className="text-green-700 dark:text-green-400 font-bold flex items-center gap-1 shrink-0 bg-green-50 dark:bg-green-950/50 hover:bg-green-100 dark:hover:bg-green-900/60 px-1.5 py-0.5 rounded-none border border-green-200 dark:border-green-800 text-[10px] transition-colors cursor-pointer"
-                              title="Klik untuk ubah kurir atau status pesanan"
-                            >
+                            <span className="text-green-700 dark:text-green-400 font-bold flex items-center gap-1 shrink-0 bg-green-50 dark:bg-green-950/50 px-1.5 py-0.5 rounded-none border border-green-200 dark:border-green-800 text-[10px]">
                               <Truck className="w-3 h-3 text-green-600 dark:text-green-400" /> {order.courier.name}
-                            </button>
+                            </span>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenChangeStatusModal(order)}
-                              className="text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1 shrink-0 text-[10px] bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-1.5 py-0.5 rounded-none border border-amber-200 dark:border-amber-800 transition-colors cursor-pointer"
-                              title="Klik untuk memilih kurir pengantar"
-                            >
-                              <span>🚫 Tanpa Kurir</span>
-                              <span className="font-bold underline text-amber-800 dark:text-amber-300 ml-0.5">(Pilih Kurir)</span>
-                            </button>
+                            <span className="text-gray-400 dark:text-gray-500 font-medium flex items-center gap-0.5 shrink-0 text-[10px]">
+                              🚫 Tanpa Kurir
+                            </span>
                           )}
                         </div>
                       </div>
@@ -1225,7 +1228,7 @@ export default function AdminPesanan() {
 
                       {/* Minimalist Action Buttons */}
                       <div className="flex items-center gap-1 shrink-0">
-                        {order.status !== 'cancelled' && (
+                        {order.status !== 'cancelled' ? (
                           <button
                             onClick={() => {
                               setOrderToCancel(order);
@@ -1235,6 +1238,17 @@ export default function AdminPesanan() {
                             title={order.status === 'completed' ? 'Batalkan pesanan yang sudah selesai' : 'Batalkan Pesanan'}
                           >
                             <X className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleContinueOrder(order)}
+                            disabled={updateStatusMutation.isPending}
+                            className="px-2 py-1 bg-green-50 hover:bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300 border border-green-300 dark:border-green-800 rounded-none text-[11px] font-bold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                            title="Lanjutkan Pesanan (Otomatis ditugaskan ke Kurir Toko)"
+                          >
+                            <Truck className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                            <span>Lanjutkan</span>
                           </button>
                         )}
 
@@ -1659,23 +1673,28 @@ export default function AdminPesanan() {
       {/* TAB 3: KOTAK SAMPAH / RECYCLE BIN */}
       {activeTab === 'trash' && (
         <div className="space-y-2 animate-fade-in-up">
-          {/* Header Bar */}
-          <div className="bg-amber-50 dark:bg-amber-950/40 p-3 sm:p-3.5 rounded-none border border-amber-200 dark:border-amber-800/60 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          {/* Header Notice Card */}
+          <div className="bg-white dark:bg-gray-900 p-2.5 sm:p-3 rounded-none border border-gray-200 dark:border-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 shadow-xs">
             <div>
-              <h3 className="text-xs sm:text-sm font-bold text-amber-900 dark:text-amber-200 flex items-center gap-2">
-                <Trash2 className="w-4 h-4 text-amber-600" />
-                Kotak Sampah / Recycle Bin ({trashedOrders.length} Pesanan)
-              </h3>
-              <p className="text-[11px] text-amber-700 dark:text-amber-300/90 mt-0.5">
+              <div className="flex items-center gap-2">
+                <span className="px-1.5 py-0.2 bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[10px] font-bold uppercase tracking-wider rounded-none">
+                  Recycle Bin
+                </span>
+                <h3 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                  <Trash2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  Kotak Sampah ({trashedOrders.length} Pesanan)
+                </h3>
+              </div>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 leading-snug">
                 Pesanan yang dihapus sementara tersimpan di sini. Anda dapat memulihkannya kapan saja atau menghapusnya secara permanen.
               </p>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto justify-end">
               <button
                 type="button"
                 onClick={() => refetchTrash()}
-                className="px-2.5 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 font-bold text-xs rounded-none flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 font-bold text-xs rounded-none flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isFetchingTrash ? 'animate-spin' : ''}`} /> Refresh
               </button>
@@ -1696,15 +1715,15 @@ export default function AdminPesanan() {
           {/* Trashed Orders List */}
           {isLoadingTrash ? (
             <div className="flex justify-center items-center py-20">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
             </div>
           ) : trashedOrders.length === 0 ? (
-            <div className="bg-white dark:bg-gray-900 rounded-none p-8 text-center border border-gray-200 dark:border-gray-700 shadow-xs space-y-2">
-              <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 flex items-center justify-center mx-auto">
-                <Trash2 className="w-5 h-5" />
+            <div className="bg-white dark:bg-gray-900 rounded-none p-10 text-center border border-gray-200 dark:border-gray-800 shadow-xs space-y-2">
+              <div className="w-12 h-12 rounded-none bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 text-gray-400 flex items-center justify-center mx-auto mb-2">
+                <Trash2 className="w-5 h-5 text-gray-400" />
               </div>
-              <h4 className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200">Kotak Sampah Kosong</h4>
-              <p className="text-xs text-gray-500 max-w-sm mx-auto">
+              <h4 className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200">Kotak Sampah Bersih</h4>
+              <p className="text-xs text-gray-400 max-w-sm mx-auto">
                 Tidak ada pesanan yang tersimpan di dalam kotak sampah saat ini.
               </p>
             </div>
@@ -2173,47 +2192,47 @@ export default function AdminPesanan() {
               </select>
             </div>
 
-            {/* 3. Dropdown Kurir Pengantar */}
-            <div className="space-y-1 text-left">
-              <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
-                <span className="flex items-center gap-1">
-                  <Truck className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
-                  <span>Pilih Kurir Pengantar:</span>
-                </span>
-                <span className="text-[10px] font-normal text-gray-400 truncate max-w-[180px]">
-                  {orderToChangeStatus.canteen?.name ? `Toko: ${orderToChangeStatus.canteen.name}` : ''}
-                </span>
-              </label>
-              <select
-                value={selectedNewCourierId}
-                onChange={(e) => setSelectedNewCourierId(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-none border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-xs font-semibold focus:ring-1 focus:ring-green-500 focus:outline-hidden"
-              >
-                <option value="none">🚫 Tanpa Kurir (Antar Sendiri)</option>
-                {couriersList.map((c) => {
-                  const isCanteenCourier = orderToChangeStatus.canteen?.couriers?.some(
-                    (cc) => String(cc.id) === String(c.id)
-                  );
-                  return (
-                    <option key={c.id} value={c.id}>
-                      🛵 {c.name} {isCanteenCourier ? '⭐ (Kurir Toko Ini)' : ''}
-                    </option>
-                  );
-                })}
-              </select>
-              {orderToChangeStatus.canteen?.couriers && orderToChangeStatus.canteen.couriers.length > 0 && selectedNewCourierId === 'none' && (
-                <p className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1 flex-wrap">
-                  <span>💡 Saran: Toko ini memiliki kurir terdaftar:</span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedNewCourierId(String(orderToChangeStatus.canteen.couriers[0].id))}
-                    className="font-bold underline cursor-pointer text-amber-700 dark:text-amber-300 hover:text-green-600"
-                  >
-                    {orderToChangeStatus.canteen.couriers[0].name} (Klik untuk pilih)
-                  </button>
-                </p>
-              )}
-            </div>
+            {/* Courier info / assignment box if status is processing */}
+            {selectedNewStatus === 'processing' && (
+              <div className="pt-0.5">
+                {orderToChangeStatus.canteen?.couriers && orderToChangeStatus.canteen.couriers.length > 0 ? (
+                  <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-left text-xs space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-emerald-800 dark:text-emerald-300">
+                      <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Kurir Toko ({orderToChangeStatus.canteen?.name}):</span>
+                    </div>
+                    {orderToChangeStatus.canteen.couriers.length === 1 ? (
+                      <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                        Pesanan otomatis akan diterima oleh kurir <strong>{orderToChangeStatus.canteen.couriers[0].name}</strong>.
+                      </p>
+                    ) : (
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-emerald-700 dark:text-emerald-300 block">Pilih Kurir Toko:</label>
+                        <select
+                          value={selectedNewCourierId || orderToChangeStatus.canteen.couriers[0]?.id}
+                          onChange={(e) => setSelectedNewCourierId(e.target.value)}
+                          className="w-full px-2 py-1 rounded-none border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-gray-800 text-xs font-semibold text-gray-900 dark:text-white"
+                        >
+                          {orderToChangeStatus.canteen.couriers.map((k) => (
+                            <option key={k.id} value={k.id}>🛵 {k.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-left text-xs space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Toko Belum Ada Kurirnya!</span>
+                    </div>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-snug">
+                      Toko <strong>{orderToChangeStatus.canteen?.name}</strong> belum memiliki kurir yang ditugaskan. Pesanan tidak dapat dilanjutkan sebelum ada kurir di toko ini.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Shortcut Unggah Bukti Bayar */}
             <div className="pt-0.5">
@@ -2242,12 +2261,21 @@ export default function AdminPesanan() {
               </button>
               <button
                 type="button"
-                onClick={() => updateStatusMutation.mutate({
-                  id: orderToChangeStatus.id,
-                  status: selectedNewStatus,
-                  payment_status: selectedNewPaymentStatus,
-                  courier_id: selectedNewCourierId
-                })}
+                onClick={() => {
+                  if (selectedNewStatus === 'processing') {
+                    const couriers = orderToChangeStatus.canteen?.couriers || [];
+                    if (couriers.length === 0) {
+                      toast.error(`Toko "${orderToChangeStatus.canteen?.name || 'ini'}" belum ada kurirnya. Silakan tugaskan kurir ke toko ini terlebih dahulu.`);
+                      return;
+                    }
+                  }
+                  updateStatusMutation.mutate({
+                    id: orderToChangeStatus.id,
+                    status: selectedNewStatus,
+                    payment_status: selectedNewPaymentStatus,
+                    courier_id: selectedNewCourierId ? parseInt(selectedNewCourierId) : undefined
+                  });
+                }}
                 disabled={updateStatusMutation.isPending}
                 className="flex-1 py-1.5 rounded-none font-bold text-xs text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1 shadow-xs cursor-pointer"
               >

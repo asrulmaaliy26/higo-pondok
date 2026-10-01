@@ -18,7 +18,7 @@ class AdminOrderController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Order::with(['user', 'canteen.couriers:users.id,users.name', 'courier', 'items.product'])
+        $query = Order::with(['user', 'canteen.couriers:users.id,users.name', 'canteen', 'courier', 'items.product'])
             ->orderBy('created_at', 'desc');
 
         // Filter by Canteen / Toko
@@ -373,79 +373,48 @@ class AdminOrderController extends Controller
         $request->validate([
             'status' => 'nullable|in:pending,processing,completed,cancelled',
             'payment_status' => 'nullable|in:unpaid,waiting_confirmation,paid',
-            'courier_id' => 'nullable'
+            'courier_id' => 'nullable|integer'
         ]);
 
         return DB::transaction(function () use ($request, $id) {
-            $order = Order::with(['items.product', 'canteen.couriers:users.id,users.name', 'user', 'courier'])->findOrFail($id);
+            $order = Order::with(['items.product', 'canteen.couriers:users.id,users.name', 'user'])->findOrFail($id);
             $orderId = $order->id;
             $prevStatus = $order->status;
             $prevPaymentStatus = $order->payment_status;
-            $prevCourierId = $order->courier_id;
-            $prevCourierName = $order->courier ? $order->courier->name : 'Tanpa Kurir';
-
             $newStatus = $request->input('status', $prevStatus);
             $newPaymentStatus = $request->input('payment_status', $prevPaymentStatus);
-            
-            // Periksa perubahan kurir
-            $courierChanged = false;
-            if ($request->has('courier_id')) {
-                $rawCourierId = $request->input('courier_id');
-                $newCourierId = ($rawCourierId === 'none' || $rawCourierId === '' || $rawCourierId === null || $rawCourierId === 0 || $rawCourierId === '0') ? null : (int)$rawCourierId;
-                if ($order->courier_id !== $newCourierId) {
-                    $order->courier_id = $newCourierId;
-                    $courierChanged = true;
-                }
-            } elseif ($newStatus === 'processing' && empty($order->courier_id)) {
-                // Auto assign kurir default toko jika status berubah ke processing tapi belum ada kurir
-                $assignedCourier = DB::table('canteen_couriers')
-                    ->where('canteen_id', $order->canteen_id)
-                    ->value('courier_id');
-                if ($assignedCourier) {
-                    $order->courier_id = $assignedCourier;
-                    $courierChanged = true;
-                }
-            }
-
-            $canteenName = $order->canteen ? $order->canteen->name : "Kantin #{$order->canteen_id}";
+            $canteen = $order->canteen;
+            $canteenName = $canteen ? $canteen->name : "Kantin #{$order->canteen_id}";
             $customerName = $order->user ? $order->user->name : "User #{$order->user_id}";
 
-            if ($prevStatus === $newStatus && $prevPaymentStatus === $newPaymentStatus && !$courierChanged) {
+            if ($prevStatus === $newStatus && $prevPaymentStatus === $newPaymentStatus && !$request->has('courier_id')) {
                 return response()->json([
-                    'message' => 'Status dan kurir pesanan tidak berubah',
+                    'message' => 'Status pesanan tidak berubah',
                     'order' => $order
                 ]);
             }
 
-            // Jika pesanan sudah completed dan kurir diubah, sesuaikan saldo ongkir
-            if ($prevStatus === 'completed' && $newStatus === 'completed' && $courierChanged) {
-                $deliveryFee = (float) $order->delivery_fee;
-                if ($deliveryFee > 0) {
-                    if ($prevCourierId) {
-                        $oldCourierUser = \App\Domains\Auth\User::find($prevCourierId);
-                        if ($oldCourierUser) {
-                            $oldCourierUser->decrement('balance', min((float)$oldCourierUser->balance, $deliveryFee));
-                            \App\Domains\Admin\PaymentLog::create([
-                                'user_id' => $oldCourierUser->id,
-                                'order_id' => $orderId,
-                                'amount' => $deliveryFee,
-                                'type' => 'courier_fee_reversal',
-                                'description' => "Pembalikan ongkir kurir pesanan #{$orderId} karena kurir diganti oleh Admin",
-                            ]);
-                        }
-                    }
-                    if ($order->courier_id) {
-                        $newCourierUser = \App\Domains\Auth\User::find($order->courier_id);
-                        if ($newCourierUser) {
-                            $newCourierUser->increment('balance', $deliveryFee);
-                            \App\Domains\Admin\PaymentLog::create([
-                                'user_id' => $newCourierUser->id,
-                                'order_id' => $orderId,
-                                'amount' => $deliveryFee,
-                                'type' => 'courier_fee',
-                                'description' => "Penerimaan ongkir pesanan #{$orderId} karena ditugaskan oleh Admin",
-                            ]);
-                        }
+            // Validasi & penugasan kurir otomatis jika status diubah menjadi processing (atau dilanjutkan dari cancelled/pending)
+            if ($newStatus === 'processing') {
+                $assignedCouriers = DB::table('canteen_couriers')
+                    ->where('canteen_id', $order->canteen_id)
+                    ->pluck('courier_id')
+                    ->toArray();
+
+                if (empty($assignedCouriers)) {
+                    return response()->json([
+                        'message' => "Toko \"{$canteenName}\" belum memiliki kurir yang ditugaskan. Silakan tugaskan kurir ke toko ini terlebih dahulu sebelum melanjutkan pesanan.",
+                        'error_code' => 'NO_COURIER_ASSIGNED',
+                        'canteen_id' => $order->canteen_id,
+                        'canteen_name' => $canteenName,
+                    ], 422);
+                }
+
+                if ($request->filled('courier_id') && in_array((int)$request->courier_id, array_map('intval', $assignedCouriers))) {
+                    $order->courier_id = (int)$request->courier_id;
+                } else {
+                    if (!$order->courier_id || !in_array((int)$order->courier_id, array_map('intval', $assignedCouriers))) {
+                        $order->courier_id = $assignedCouriers[0];
                     }
                 }
             }
@@ -454,7 +423,6 @@ class AdminOrderController extends Controller
             if ($newStatus && $prevStatus !== $newStatus) {
                 if ($newStatus === 'completed' && $prevStatus !== 'completed') {
                     // 1. Kredit laba bersih ke kantin
-                    $canteen = $order->canteen;
                     if ($canteen) {
                         $canteenNet = (float) $order->canteen_income;
                         \App\Domains\Canteen\CanteenBalanceLedger::record(
@@ -498,7 +466,6 @@ class AdminOrderController extends Controller
                     }
                 } elseif ($prevStatus === 'completed' && $newStatus !== 'completed') {
                     // 1. Revert laba bersih kantin
-                    $canteen = $order->canteen;
                     if ($canteen) {
                         $canteenNet = (float) $order->canteen_income;
                         \App\Domains\Canteen\CanteenBalanceLedger::record(
@@ -516,12 +483,12 @@ class AdminOrderController extends Controller
                             'order_id' => $orderId,
                             'amount' => $canteenNet,
                             'type' => 'order_cancel_reversal',
-                            'description' => "Pembalikan saldo kantin pesanan #{$orderId} diubah status oleh Admin",
+                            'description' => "Pembalikan laba kantin pesanan #{$orderId} diubah status oleh Admin",
                         ]);
                     }
 
                     // 2. Revert ongkir kurir
-                    $courier = \App\Domains\Auth\User::find($prevCourierId);
+                    $courier = \App\Domains\Auth\User::find($order->courier_id);
                     $deliveryFee = (float) $order->delivery_fee;
                     if ($courier && $deliveryFee > 0) {
                         $courier->decrement('balance', min((float)$courier->balance, $deliveryFee));
@@ -540,6 +507,22 @@ class AdminOrderController extends Controller
                             $item->product->increment('stock', $item->quantity);
                         }
                     }
+                } elseif ($prevStatus === 'cancelled' && in_array($newStatus, ['processing', 'completed'])) {
+                    // Jika pesanan dibatalkan lalu dilanjutkan ke proses: potong stok kembali & tambahkan sold_count
+                    foreach ($order->items as $item) {
+                        if ($item->product) {
+                            $item->product->decrement('stock', $item->quantity);
+                            $item->product->increment('sold_count', $item->quantity);
+                        }
+                    }
+                } elseif ($prevStatus === 'processing' && $newStatus === 'cancelled') {
+                    // Jika pesanan sedang diproses lalu dibatalkan: pulihkan stok & kurangi sold_count
+                    foreach ($order->items as $item) {
+                        if ($item->product) {
+                            $item->product->increment('stock', $item->quantity);
+                            $item->product->decrement('sold_count', $item->quantity);
+                        }
+                    }
                 }
                 $order->status = $newStatus;
             }
@@ -547,30 +530,50 @@ class AdminOrderController extends Controller
             if ($newPaymentStatus && $prevPaymentStatus !== $newPaymentStatus) {
                 $order->payment_status = $newPaymentStatus;
 
+                // Jika status pembayaran berubah ke paid atau waiting_confirmation, pindahkan created_at ke hari pembayaran jika sebelumnya dibuat di hari lain
+                $isNotToday = !\Illuminate\Support\Carbon::parse($order->created_at, 'Asia/Jakarta')->isToday();
+                if (in_array($newPaymentStatus, ['paid', 'waiting_confirmation']) && ($prevPaymentStatus === 'unpaid' || $isNotToday)) {
+                    $now = now('Asia/Jakarta');
+                    $order->created_at = $now;
+                    $order->items()->update(['created_at' => $now]);
+                }
+
                 // Sync payment status to all orders in the same checkout batch
                 if ($order->checkout_id) {
-                    Order::where('checkout_id', $order->checkout_id)
+                    $linkedOrders = Order::where('checkout_id', $order->checkout_id)
                         ->where('id', '!=', $order->id)
-                        ->update(['payment_status' => $newPaymentStatus]);
+                        ->get();
+                    foreach ($linkedOrders as $linked) {
+                        $linked->payment_status = $newPaymentStatus;
+                        if (in_array($newPaymentStatus, ['paid', 'waiting_confirmation']) && ($prevPaymentStatus === 'unpaid' || $isNotToday)) {
+                            $linked->created_at = $order->created_at;
+                            $linked->items()->update(['created_at' => $order->created_at]);
+                        }
+                        $linked->save();
+                    }
                 }
             }
 
             $order->save();
 
-            $newCourier = $order->courier_id ? \App\Domains\Auth\User::find($order->courier_id) : null;
-            $newCourierName = $newCourier ? $newCourier->name : 'Tanpa Kurir';
-            $courierLog = $courierChanged ? ", Kurir [{$prevCourierName} -> {$newCourierName}]" : "";
+            $courierAssignedMsg = '';
+            if ($order->courier_id) {
+                $courierUser = \App\Domains\Auth\User::find($order->courier_id);
+                if ($courierUser) {
+                    $courierAssignedMsg = " Kurir ({$courierUser->name}) otomatis menerima pesanan.";
+                }
+            }
 
             ActivityLog::create([
                 'user_id' => $request->user()->id,
                 'action' => 'update_order_status',
                 'model_type' => Order::class,
                 'model_id' => $orderId,
-                'description' => "Admin {$request->user()->name} memperbarui pesanan #{$orderId} ({$canteenName} - {$customerName}): Status [{$prevStatus} -> {$newStatus}], Bayar [{$prevPaymentStatus} -> {$newPaymentStatus}]{$courierLog}",
+                'description' => "Admin {$request->user()->name} memperbarui pesanan #{$orderId} ({$canteenName} - {$customerName}): Status [{$prevStatus} -> {$newStatus}], Bayar [{$prevPaymentStatus} -> {$newPaymentStatus}].{$courierAssignedMsg}",
             ]);
 
             return response()->json([
-                'message' => "Status dan data pesanan #{$orderId} berhasil diperbarui.",
+                'message' => "Status pesanan #{$orderId} berhasil diperbarui.{$courierAssignedMsg}",
                 'order' => $order->load(['user', 'canteen.couriers:users.id,users.name', 'courier', 'items.product'])
             ]);
         });
@@ -600,24 +603,34 @@ class AdminOrderController extends Controller
             }
 
             $existingProofs = is_array($order->proof_of_payment) ? $order->proof_of_payment : ($order->proof_of_payment ? [$order->proof_of_payment] : []);
-            $mergedPaths = array_merge($existingProofs, $paths);
+            $mergedPaths = array_values(array_unique(array_merge($existingProofs, $paths)));
 
             // Default payment status to 'paid' when admin uploads, or accept admin's choice
             $newPaymentStatus = $request->input('payment_status', 'paid');
+            $now = now('Asia/Jakarta');
 
-            $order->update([
-                'proof_of_payment' => $mergedPaths,
-                'payment_status' => $newPaymentStatus,
-            ]);
+            // Pindahkan tanggal pesanan otomatis ke hari pembayaran saat bukti bayar diunggah (bukan saat checkout)
+            $order->created_at = $now;
+            $order->proof_of_payment = $mergedPaths;
+            $order->payment_status = $newPaymentStatus;
+            $order->save();
+            $order->items()->update(['created_at' => $now]);
 
-            // Sync payment proof and payment status to all orders in the same checkout batch
+            // Sync payment proof, payment status, dan tanggal created_at ke seluruh pesanan dalam checkout batch yang sama
             if ($order->checkout_id) {
-                Order::where('checkout_id', $order->checkout_id)
+                $linkedOrders = Order::where('checkout_id', $order->checkout_id)
                     ->where('id', '!=', $order->id)
-                    ->update([
-                        'proof_of_payment' => $mergedPaths,
-                        'payment_status' => $newPaymentStatus,
-                    ]);
+                    ->lockForUpdate()
+                    ->get();
+                foreach ($linkedOrders as $linked) {
+                    $linkedExisting = is_array($linked->proof_of_payment) ? $linked->proof_of_payment : ($linked->proof_of_payment ? [$linked->proof_of_payment] : []);
+                    $linkedMerged = array_values(array_unique(array_merge($linkedExisting, $paths)));
+                    $linked->created_at = $now;
+                    $linked->proof_of_payment = $linkedMerged;
+                    $linked->payment_status = $newPaymentStatus;
+                    $linked->save();
+                    $linked->items()->update(['created_at' => $now]);
+                }
             }
 
             $canteenName = $order->canteen ? $order->canteen->name : "Kantin #{$order->canteen_id}";

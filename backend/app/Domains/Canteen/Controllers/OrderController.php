@@ -132,13 +132,55 @@ class OrderController extends Controller
                 $product->increment('stock', $item['quantity']);
             }
 
+            // Cek dan terapkan voucher jika diklaim user
+            $appliedVoucherId = $request->voucher_id ?? null;
+            $voucherDiscount = 0;
+            $userVoucherRecord = null;
+
+            if ($appliedVoucherId) {
+                $userVoucher = \App\Domains\Canteen\UserVoucher::with('voucher')
+                    ->where('user_id', $user->id)
+                    ->where('voucher_id', $appliedVoucherId)
+                    ->where('is_used', false)
+                    ->first();
+
+                if ($userVoucher && $userVoucher->voucher && $userVoucher->voucher->is_active && !$userVoucher->voucher->isExpired()) {
+                    $voucher = $userVoucher->voucher;
+                    if ($subtotal_items >= $voucher->min_purchase) {
+                        if (!$voucher->canteen_id || $voucher->canteen_id === $canteen->id) {
+                            if ($voucher->discount_type === 'admin_fee') {
+                                $voucherDiscount = min($admin_fee, $voucher->discount_amount);
+                                $admin_fee -= $voucherDiscount;
+                            } elseif ($voucher->discount_type === 'delivery_fee') {
+                                $voucherDiscount = min($delivery_fee, $voucher->discount_amount);
+                                $delivery_fee -= $voucherDiscount;
+                            } elseif ($voucher->discount_type === 'product_discount') {
+                                $voucherDiscount = min($subtotal_items, $voucher->discount_amount);
+                                $subtotal_items -= $voucherDiscount;
+                            }
+                            $userVoucherRecord = $userVoucher;
+                        }
+                    }
+                }
+            }
+
             $total_price = $subtotal_items + $delivery_fee + $admin_fee;
 
             $order->update([
                 'total_price' => $total_price,
                 'admin_fee' => $admin_fee,
-                'delivery_fee' => $delivery_fee
+                'delivery_fee' => $delivery_fee,
+                'voucher_id' => $userVoucherRecord ? $userVoucherRecord->voucher_id : null,
+                'voucher_discount' => $voucherDiscount,
             ]);
+
+            if ($userVoucherRecord) {
+                $userVoucherRecord->update([
+                    'is_used' => true,
+                    'used_at' => now(),
+                    'order_id' => $order->id,
+                ]);
+            }
 
             DB::commit();
 
@@ -153,7 +195,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Pesanan berhasil dibuat',
-                'order' => $order->load('items.product'),
+                'order' => $order->load(['items.product', 'voucher']),
                 'wa_url' => $wa_url
             ], 201);
 
@@ -189,6 +231,7 @@ class OrderController extends Controller
         $checkoutId = 'CHK-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(6));
         $createdOrders = [];
         $grandTotal = 0;
+        $appliedVoucherIds = [];
 
         DB::beginTransaction();
         try {
@@ -249,15 +292,59 @@ class OrderController extends Controller
                     $product->increment('stock', $item['quantity']);
                 }
 
+                // Cek dan terapkan voucher jika diklaim user
+                $appliedVoucherId = $cData['voucher_id'] ?? $request->voucher_id ?? null;
+                $voucherDiscount = 0;
+                $userVoucherRecord = null;
+
+                if ($appliedVoucherId && !in_array($appliedVoucherId, $appliedVoucherIds)) {
+                    $userVoucher = \App\Domains\Canteen\UserVoucher::with('voucher')
+                        ->where('user_id', $user->id)
+                        ->where('voucher_id', $appliedVoucherId)
+                        ->where('is_used', false)
+                        ->first();
+
+                    if ($userVoucher && $userVoucher->voucher && $userVoucher->voucher->is_active && !$userVoucher->voucher->isExpired()) {
+                        $voucher = $userVoucher->voucher;
+                        if ($subtotal_items >= $voucher->min_purchase) {
+                            if (!$voucher->canteen_id || $voucher->canteen_id === $canteen->id) {
+                                if ($voucher->discount_type === 'admin_fee') {
+                                    $voucherDiscount = min($admin_fee, $voucher->discount_amount);
+                                    $admin_fee -= $voucherDiscount;
+                                } elseif ($voucher->discount_type === 'delivery_fee') {
+                                    $voucherDiscount = min($delivery_fee, $voucher->discount_amount);
+                                    $delivery_fee -= $voucherDiscount;
+                                } elseif ($voucher->discount_type === 'product_discount') {
+                                    $voucherDiscount = min($subtotal_items, $voucher->discount_amount);
+                                    $subtotal_items -= $voucherDiscount;
+                                }
+                                $userVoucherRecord = $userVoucher;
+                                $appliedVoucherIds[] = $appliedVoucherId;
+                            }
+                        }
+                    }
+                }
+
                 $orderTotal = $subtotal_items + $delivery_fee + $admin_fee;
                 $order->update([
                     'total_price' => $orderTotal,
                     'delivery_fee' => $delivery_fee,
                     'admin_fee' => $admin_fee,
+                    'voucher_id' => $userVoucherRecord ? $userVoucherRecord->voucher_id : null,
+                    'voucher_discount' => $voucherDiscount,
                 ]);
+
+                if ($userVoucherRecord) {
+                    $userVoucherRecord->update([
+                        'is_used' => true,
+                        'used_at' => now(),
+                        'order_id' => $order->id,
+                    ]);
+                }
+
                 $grandTotal += $orderTotal;
 
-                $createdOrders[] = $order->load(['canteen', 'items.product']);
+                $createdOrders[] = $order->load(['canteen', 'items.product', 'voucher']);
             }
 
             DB::commit();
@@ -391,11 +478,33 @@ class OrderController extends Controller
         ]);
 
         $paymentStatus = $request->payment_status;
-        $order->update(['payment_status' => $paymentStatus]);
+        $prevPaymentStatus = $order->payment_status;
+        $now = now('Asia/Jakarta');
+
+        $order->payment_status = $paymentStatus;
+        if (in_array($paymentStatus, ['paid', 'waiting_confirmation'])) {
+            $isNotToday = !\Illuminate\Support\Carbon::parse($order->created_at, 'Asia/Jakarta')->isToday();
+            if ($prevPaymentStatus === 'unpaid' || $isNotToday) {
+                $order->created_at = $now;
+                $order->items()->update(['created_at' => $now]);
+            }
+        }
+        $order->save();
 
         // Jika memiliki checkout_id, sinkronkan status ke semua order lain dalam checkout yang sama
         if (!empty($order->checkout_id)) {
-            Order::where('checkout_id', $order->checkout_id)->update(['payment_status' => $paymentStatus]);
+            $linkedOrders = Order::where('checkout_id', $order->checkout_id)->where('id', '!=', $order->id)->get();
+            foreach ($linkedOrders as $linked) {
+                $linked->payment_status = $paymentStatus;
+                if (in_array($paymentStatus, ['paid', 'waiting_confirmation'])) {
+                    $isLinkedNotToday = !\Illuminate\Support\Carbon::parse($linked->created_at, 'Asia/Jakarta')->isToday();
+                    if ($prevPaymentStatus === 'unpaid' || $isLinkedNotToday) {
+                        $linked->created_at = $now;
+                        $linked->items()->update(['created_at' => $now]);
+                    }
+                }
+                $linked->save();
+            }
         }
 
         $msg = $request->payment_status === 'paid' 
@@ -522,6 +631,23 @@ class OrderController extends Controller
 
                 if (!$order->courier_id) {
                     $order->courier_id = $assignedCouriers[0];
+                }
+            }
+
+            $prevStatus = $order->status;
+            if ($prevStatus === 'cancelled' && in_array($request->status, ['processing', 'completed'])) {
+                foreach ($order->items as $item) {
+                    if ($item->product) {
+                        $item->product->decrement('stock', $item->quantity);
+                        $item->product->increment('sold_count', $item->quantity);
+                    }
+                }
+            } elseif ($prevStatus === 'processing' && $request->status === 'cancelled') {
+                foreach ($order->items as $item) {
+                    if ($item->product) {
+                        $item->product->increment('stock', $item->quantity);
+                        $item->product->decrement('sold_count', $item->quantity);
+                    }
                 }
             }
 
@@ -1203,26 +1329,29 @@ class OrderController extends Controller
 
             $existingProofs = is_array($order->proof_of_payment) ? $order->proof_of_payment : [];
             $mergedPaths = array_values(array_unique(array_merge($existingProofs, $paths)));
+            $now = now('Asia/Jakarta');
 
-            // Sinkronkan ke seluruh pesanan dalam checkout_id yang sama jika ada
+            // Pindahkan tanggal pesanan otomatis ke hari pembayaran saat bukti bayar diunggah (bukan saat checkout)
             if (!empty($order->checkout_id)) {
                 $linkedOrders = Order::where('checkout_id', $order->checkout_id)->lockForUpdate()->get();
                 foreach ($linkedOrders as $linked) {
                     $linkedExisting = is_array($linked->proof_of_payment) ? $linked->proof_of_payment : [];
                     $linkedMerged = array_values(array_unique(array_merge($linkedExisting, $paths)));
-                    $linked->update([
-                        'proof_of_payment' => $linkedMerged,
-                        'payment_status' => 'waiting_confirmation',
-                    ]);
+                    $linked->created_at = $now;
+                    $linked->proof_of_payment = $linkedMerged;
+                    $linked->payment_status = 'waiting_confirmation';
+                    $linked->save();
+                    $linked->items()->update(['created_at' => $now]);
                 }
             } else {
-                $order->update([
-                    'proof_of_payment' => $mergedPaths,
-                    'payment_status' => 'waiting_confirmation',
-                ]);
+                $order->created_at = $now;
+                $order->proof_of_payment = $mergedPaths;
+                $order->payment_status = 'waiting_confirmation';
+                $order->save();
+                $order->items()->update(['created_at' => $now]);
             }
 
-            return $order;
+            return !empty($order->checkout_id) ? $order->fresh() : $order;
         });
 
         return response()->json([
@@ -1262,13 +1391,15 @@ class OrderController extends Controller
                 $paths[] = $this->storeOrderProofImage($file, $targetOrder, 'proof');
             }
 
+            $now = now('Asia/Jakarta');
             foreach ($orders as $order) {
                 $existing = is_array($order->proof_of_payment) ? $order->proof_of_payment : [];
                 $merged = array_values(array_unique(array_merge($existing, $paths)));
-                $order->update([
-                    'proof_of_payment' => $merged,
-                    'payment_status' => 'waiting_confirmation',
-                ]);
+                $order->created_at = $now;
+                $order->proof_of_payment = $merged;
+                $order->payment_status = 'waiting_confirmation';
+                $order->save();
+                $order->items()->update(['created_at' => $now]);
             }
 
             return $orders;
@@ -1316,25 +1447,28 @@ class OrderController extends Controller
 
             // Default to 'paid' when canteen uploads payment proof, or accept choice
             $newPaymentStatus = $request->input('payment_status', 'paid');
+            $now = now('Asia/Jakarta');
 
             if (!empty($order->checkout_id)) {
                 $linkedOrders = Order::where('checkout_id', $order->checkout_id)->lockForUpdate()->get();
                 foreach ($linkedOrders as $linked) {
                     $linkedExisting = is_array($linked->proof_of_payment) ? $linked->proof_of_payment : [];
                     $linkedMerged = array_values(array_unique(array_merge($linkedExisting, $paths)));
-                    $linked->update([
-                        'proof_of_payment' => $linkedMerged,
-                        'payment_status' => $newPaymentStatus,
-                    ]);
+                    $linked->created_at = $now;
+                    $linked->proof_of_payment = $linkedMerged;
+                    $linked->payment_status = $newPaymentStatus;
+                    $linked->save();
+                    $linked->items()->update(['created_at' => $now]);
                 }
             } else {
-                $order->update([
-                    'proof_of_payment' => $mergedPaths,
-                    'payment_status' => $newPaymentStatus,
-                ]);
+                $order->created_at = $now;
+                $order->proof_of_payment = $mergedPaths;
+                $order->payment_status = $newPaymentStatus;
+                $order->save();
+                $order->items()->update(['created_at' => $now]);
             }
 
-            return $order;
+            return !empty($order->checkout_id) ? $order->fresh() : $order;
         });
 
         return response()->json([

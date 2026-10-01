@@ -336,7 +336,7 @@ class OrderController extends Controller
             ])
             ->with([
                 'user:id,name,santri_name,santri_room,santri_class,santri_level,phone',
-                'items:id,order_id,product_id,quantity,price,subtotal,notes,store_status',
+                'items:id,order_id,product_id,quantity,price,subtotal,notes',
                 'items.product:id,name,price,discount_price,hpp,image',
                 'courier:id,name,phone',
                 'canteen:id,name',

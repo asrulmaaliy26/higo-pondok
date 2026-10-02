@@ -56,8 +56,6 @@ class Order extends Model
         'proof_courier_paid',
         'custom_notes',
         'is_custom',
-        'voucher_id',
-        'voucher_discount',
         'created_at',
     ];
 
@@ -68,7 +66,6 @@ class Order extends Model
         'total_price' => 'float',
         'admin_fee' => 'float',
         'delivery_fee' => 'float',
-        'voucher_discount' => 'float',
         'is_courier_paid_by_canteen' => 'boolean',
         'is_custom' => 'boolean',
     ];
@@ -86,11 +83,6 @@ class Order extends Model
     public function canteen()
     {
         return $this->belongsTo(Canteen::class);
-    }
-
-    public function voucher()
-    {
-        return $this->belongsTo(Voucher::class);
     }
 
     public function items()

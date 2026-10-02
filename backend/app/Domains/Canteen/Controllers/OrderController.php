@@ -132,55 +132,13 @@ class OrderController extends Controller
                 $product->increment('stock', $item['quantity']);
             }
 
-            // Cek dan terapkan voucher jika diklaim user
-            $appliedVoucherId = $request->voucher_id ?? null;
-            $voucherDiscount = 0;
-            $userVoucherRecord = null;
-
-            if ($appliedVoucherId) {
-                $userVoucher = \App\Domains\Canteen\UserVoucher::with('voucher')
-                    ->where('user_id', $user->id)
-                    ->where('voucher_id', $appliedVoucherId)
-                    ->where('is_used', false)
-                    ->first();
-
-                if ($userVoucher && $userVoucher->voucher && $userVoucher->voucher->is_active && !$userVoucher->voucher->isExpired()) {
-                    $voucher = $userVoucher->voucher;
-                    if ($subtotal_items >= $voucher->min_purchase) {
-                        if (!$voucher->canteen_id || $voucher->canteen_id === $canteen->id) {
-                            if ($voucher->discount_type === 'admin_fee') {
-                                $voucherDiscount = min($admin_fee, $voucher->discount_amount);
-                                $admin_fee -= $voucherDiscount;
-                            } elseif ($voucher->discount_type === 'delivery_fee') {
-                                $voucherDiscount = min($delivery_fee, $voucher->discount_amount);
-                                $delivery_fee -= $voucherDiscount;
-                            } elseif ($voucher->discount_type === 'product_discount') {
-                                $voucherDiscount = min($subtotal_items, $voucher->discount_amount);
-                                $subtotal_items -= $voucherDiscount;
-                            }
-                            $userVoucherRecord = $userVoucher;
-                        }
-                    }
-                }
-            }
-
             $total_price = $subtotal_items + $delivery_fee + $admin_fee;
 
             $order->update([
                 'total_price' => $total_price,
                 'admin_fee' => $admin_fee,
                 'delivery_fee' => $delivery_fee,
-                'voucher_id' => $userVoucherRecord ? $userVoucherRecord->voucher_id : null,
-                'voucher_discount' => $voucherDiscount,
             ]);
-
-            if ($userVoucherRecord) {
-                $userVoucherRecord->update([
-                    'is_used' => true,
-                    'used_at' => now(),
-                    'order_id' => $order->id,
-                ]);
-            }
 
             DB::commit();
 
@@ -195,7 +153,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Pesanan berhasil dibuat',
-                'order' => $order->load(['items.product', 'voucher']),
+                'order' => $order->load(['items.product']),
                 'wa_url' => $wa_url
             ], 201);
 
@@ -231,7 +189,6 @@ class OrderController extends Controller
         $checkoutId = 'CHK-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(6));
         $createdOrders = [];
         $grandTotal = 0;
-        $appliedVoucherIds = [];
 
         DB::beginTransaction();
         try {
@@ -292,59 +249,16 @@ class OrderController extends Controller
                     $product->increment('stock', $item['quantity']);
                 }
 
-                // Cek dan terapkan voucher jika diklaim user
-                $appliedVoucherId = $cData['voucher_id'] ?? $request->voucher_id ?? null;
-                $voucherDiscount = 0;
-                $userVoucherRecord = null;
-
-                if ($appliedVoucherId && !in_array($appliedVoucherId, $appliedVoucherIds)) {
-                    $userVoucher = \App\Domains\Canteen\UserVoucher::with('voucher')
-                        ->where('user_id', $user->id)
-                        ->where('voucher_id', $appliedVoucherId)
-                        ->where('is_used', false)
-                        ->first();
-
-                    if ($userVoucher && $userVoucher->voucher && $userVoucher->voucher->is_active && !$userVoucher->voucher->isExpired()) {
-                        $voucher = $userVoucher->voucher;
-                        if ($subtotal_items >= $voucher->min_purchase) {
-                            if (!$voucher->canteen_id || $voucher->canteen_id === $canteen->id) {
-                                if ($voucher->discount_type === 'admin_fee') {
-                                    $voucherDiscount = min($admin_fee, $voucher->discount_amount);
-                                    $admin_fee -= $voucherDiscount;
-                                } elseif ($voucher->discount_type === 'delivery_fee') {
-                                    $voucherDiscount = min($delivery_fee, $voucher->discount_amount);
-                                    $delivery_fee -= $voucherDiscount;
-                                } elseif ($voucher->discount_type === 'product_discount') {
-                                    $voucherDiscount = min($subtotal_items, $voucher->discount_amount);
-                                    $subtotal_items -= $voucherDiscount;
-                                }
-                                $userVoucherRecord = $userVoucher;
-                                $appliedVoucherIds[] = $appliedVoucherId;
-                            }
-                        }
-                    }
-                }
-
                 $orderTotal = $subtotal_items + $delivery_fee + $admin_fee;
                 $order->update([
                     'total_price' => $orderTotal,
                     'delivery_fee' => $delivery_fee,
                     'admin_fee' => $admin_fee,
-                    'voucher_id' => $userVoucherRecord ? $userVoucherRecord->voucher_id : null,
-                    'voucher_discount' => $voucherDiscount,
                 ]);
-
-                if ($userVoucherRecord) {
-                    $userVoucherRecord->update([
-                        'is_used' => true,
-                        'used_at' => now(),
-                        'order_id' => $order->id,
-                    ]);
-                }
 
                 $grandTotal += $orderTotal;
 
-                $createdOrders[] = $order->load(['canteen', 'items.product', 'voucher']);
+                $createdOrders[] = $order->load(['canteen', 'items.product']);
             }
 
             DB::commit();

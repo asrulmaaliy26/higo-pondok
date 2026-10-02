@@ -29,6 +29,7 @@ class ProductResource extends JsonResource
             'sold_count' => $this->sold_count,
             'rating' => $this->rating,
             'rating_count' => $this->rating_count,
+            'variant_config' => $this->variant_config,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

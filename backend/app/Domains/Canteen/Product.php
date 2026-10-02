@@ -23,7 +23,8 @@ class Product extends Model
         'rating',
         'rating_count',
         'image',
-        'is_available'
+        'is_available',
+        'variant_config',
     ];
 
     protected $appends = ['hpj'];
@@ -36,6 +37,7 @@ class Product extends Model
             'discount_price' => 'float',
             'stock' => 'integer',
             'is_available' => 'boolean',
+            'variant_config' => 'array',
         ];
     }
 

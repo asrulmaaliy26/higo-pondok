@@ -37,6 +37,13 @@ class UpdateProductRequest extends FormRequest
             $calcPrice = (float)$hpp + 1000;
             $this->merge(['price' => $calcPrice, 'hpj' => $calcPrice]);
         }
+
+        if ($this->has('variant_config') && is_string($this->variant_config)) {
+            $decoded = json_decode($this->variant_config, true);
+            if (is_array($decoded)) {
+                $this->merge(['variant_config' => $decoded]);
+            }
+        }
     }
 
     public function rules(): array
@@ -45,6 +52,7 @@ class UpdateProductRequest extends FormRequest
             'name' => 'required|string',
             'category' => 'nullable|string',
             'description' => 'nullable|string',
+            'variant_config' => 'nullable|array',
             'price' => 'required_without:hpj|numeric|min:0',
             'hpj' => 'nullable|numeric|min:0',
             'hpp' => 'nullable|numeric|min:0',
